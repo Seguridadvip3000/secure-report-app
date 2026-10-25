@@ -4,6 +4,9 @@ import { initialReports } from '../data/initialData';
 import { v4 as uuidv4 } from 'uuid';
 import { getStorageMode } from '../config/appConfig';
 import { reportService } from '../services/reportService';
+import { storageService } from '../services/storageService';
+import { emailService } from '../services/emailService';
+import { generateReportPDF } from '../utils/pdfGenerator';
 
 interface ReportContextType {
   reports: Report[];
@@ -97,19 +100,37 @@ export function ReportProvider({ children }: { children: ReactNode }) {
   const addReport = async (report: Omit<Report, 'id' | 'createdAt' | 'visibleForClient'>) => {
     if (storageMode === 'supabase') {
       try {
+        // 1. Crear el reporte primero para obtener el ID
+        const newReportId = uuidv4();
+        
+        // 2. Subir imágenes a Supabase Storage
+        let uploadedEvidenceUrls: string[] = [];
+        if (report.evidencias && report.evidencias.length > 0) {
+          console.log('📸 Subiendo evidencias a Supabase Storage...');
+          uploadedEvidenceUrls = await storageService.uploadImagesFromBase64(
+            report.evidencias,
+            newReportId
+          );
+          console.log(`✅ ${uploadedEvidenceUrls.length} evidencias subidas`);
+        }
+
+        // 3. Crear el reporte con las URLs de las evidencias
         await reportService.createReport({
           fechaHora: report.fechaHora,
           proyecto: report.proyecto,
           tituloNovedad: report.tituloNovedad,
           desarrollo: report.desarrollo,
-          evidencias: report.evidencias,
+          evidencias: uploadedEvidenceUrls,
           ubicacionGPS: report.ubicacionGPS,
           quienReporta: report.quienReporta,
           createdBy: report.createdBy,
         });
+
+        console.log('✅ Reporte creado exitosamente en Supabase');
         await refreshReports();
       } catch (error) {
         console.error('Error creating report:', error);
+        throw error;
       }
     } else {
       const newReport: Report = {
@@ -140,11 +161,12 @@ export function ReportProvider({ children }: { children: ReactNode }) {
   const approveForClient = async (id: string, userId: string) => {
     if (storageMode === 'supabase') {
       try {
-        // Find client user for this project
         const report = reports.find(r => r.id === id);
         if (!report) return;
 
+        // 1. Buscar cliente para este proyecto
         let clientEmail: string | undefined;
+        let clientName: string = 'Cliente';
         try {
           const usersData = localStorage.getItem('securereport_users');
           if (usersData) {
@@ -152,15 +174,47 @@ export function ReportProvider({ children }: { children: ReactNode }) {
             const clientUser = users.find(
               (u: any) => u.role === 'cliente' && u.proyectos?.includes(report.proyecto)
             );
-            clientEmail = clientUser?.email;
+            if (clientUser) {
+              clientEmail = clientUser.email;
+              clientName = clientUser.name;
+            }
           }
         } catch {}
 
-        await reportService.approveReport(id, userId, clientEmail);
+        // 2. Generar PDF del reporte
+        let pdfUrl: string | undefined;
+        try {
+          console.log('📄 Generando PDF del reporte...');
+          const pdfData = await generateReportPDF(report);
+          
+          // 3. Subir PDF a Supabase Storage
+          console.log('📤 Subiendo PDF a Supabase Storage...');
+          pdfUrl = await storageService.uploadPDF(pdfData, report.id, report.proyecto);
+          console.log('✅ PDF subido:', pdfUrl);
+        } catch (error) {
+          console.error('Error generando/subiendo PDF:', error);
+        }
+
+        // 4. Aprobar el reporte en la base de datos
+        await reportService.approveReport(id, userId, clientEmail, pdfUrl);
         await refreshReports();
 
+        // 5. Enviar email al cliente
         if (clientEmail) {
-          console.log(`📧 Email enviado a ${clientEmail}: Nuevo reporte aprobado para ${report.proyecto}`);
+          console.log(`📧 Enviando email a ${clientEmail}...`);
+          const emailSent = await emailService.sendReportApprovalEmail({
+            clientEmail,
+            clientName,
+            reportTitle: report.tituloNovedad,
+            reportProject: report.proyecto,
+            reportDate: new Date(report.fechaHora).toLocaleString('es-ES'),
+            reportDescription: report.desarrollo.substring(0, 200) + '...',
+            reportUrl: pdfUrl,
+          });
+
+          if (emailSent) {
+            console.log(`✅ Email enviado exitosamente a ${clientEmail}`);
+          }
         }
       } catch (error) {
         console.error('Error approving report:', error);

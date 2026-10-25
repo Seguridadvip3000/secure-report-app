@@ -61,7 +61,7 @@ export const reportService = {
   },
 
   // Aprobar reporte para cliente
-  async approveReport(reportId: string, approvedBy: string, clientEmail?: string): Promise<void> {
+  async approveReport(reportId: string, approvedBy: string, clientEmail?: string, pdfUrl?: string): Promise<void> {
     const { error } = await supabase
       .from('reports')
       .update({
@@ -71,6 +71,7 @@ export const reportService = {
         approved_at_operaciones: new Date().toISOString(),
         email_enviado_a: clientEmail,
         email_enviado_at: clientEmail ? new Date().toISOString() : null,
+        pdf_url: pdfUrl,
       })
       .eq('id', reportId);
 

@@ -173,14 +173,29 @@ export default function ReportDetail() {
                   Evidencias ({report.evidencias.length} fotos)
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
-                  {report.evidencias.map((img, index) => (
-                    <img
-                      key={index}
-                      src={img}
-                      alt={`Evidencia ${index + 1}`}
-                      className="w-full h-32 object-cover rounded-lg border border-slate-200"
-                    />
-                  ))}
+                  {report.evidencias.map((img, index) => {
+                    // Verificar si es una URL de Supabase o base64
+                    const isUrl = img.startsWith('http://') || img.startsWith('https://');
+                    
+                    return (
+                      <div key={index} className="relative group">
+                        <img
+                          src={img}
+                          alt={`Evidencia ${index + 1}`}
+                          className="w-full h-32 object-cover rounded-lg border border-slate-200 cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => window.open(img, '_blank')}
+                        />
+                        <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                          Foto {index + 1}
+                        </div>
+                        {isUrl && (
+                          <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                            ✓ En la nube
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
