@@ -21,8 +21,7 @@ interface RegisterData {
   email: string;
   phone: string;
   role: UserRole;
-  company?: string;
-  position?: string;
+  proyectos?: string[];
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -100,8 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       phone: data.phone,
       role: data.role,
       status: 'pendiente',
-      company: data.company,
-      position: data.position,
+      proyectos: data.proyectos,
       createdAt: new Date().toISOString(),
     };
 

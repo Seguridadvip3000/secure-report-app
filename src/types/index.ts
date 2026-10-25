@@ -10,9 +10,7 @@ export interface User {
   phone: string;
   role: UserRole;
   status: UserStatus;
-  company?: string;
-  position?: string;
-  proyectos?: string[]; // Proyectos asignados al usuario (para clientes)
+  proyectos?: string[]; // Proyectos asignados (solo para lider y cliente)
   createdAt: string;
   approvedAt?: string;
   approvedBy?: string;

@@ -3,13 +3,15 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ReportProvider } from './context/ReportContext';
 import Sidebar from './components/Sidebar';
 import AuthPage from './pages/AuthPage';
-import LiderDashboard from './pages/LiderDashboard';
-import OperacionesDashboard from './pages/OperacionesDashboard';
+import LiderHome from './pages/LiderHome';
 import ClienteDashboard from './pages/ClienteDashboard';
-import DirectivaDashboard from './pages/DirectivaDashboard';
+import OperacionesHome from './pages/OperacionesHome';
+import DirectivaHome from './pages/DirectivaHome';
 import NewReport from './pages/NewReport';
 import ReportList from './pages/ReportList';
 import ReportDetail from './pages/ReportDetail';
+import AprobacionesPage from './pages/AprobacionesPage';
+import ConfiguracionPage from './pages/ConfiguracionPage';
 import { ReactNode } from 'react';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -44,41 +46,41 @@ function AppRoutes() {
       <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
         <div className="max-w-6xl mx-auto pt-12 lg:pt-0">
           <Routes>
-            {/* Home - role-based dashboard */}
+            {/* Home - role-based routing */}
             <Route path="/" element={
               <ProtectedRoute>
-                {currentUser.role === 'lider' && <LiderDashboard />}
-                {currentUser.role === 'operaciones' && <OperacionesDashboard />}
+                {currentUser.role === 'lider' && <LiderHome />}
+                {currentUser.role === 'operaciones' && <OperacionesHome />}
                 {currentUser.role === 'cliente' && <ClienteDashboard />}
-                {currentUser.role === 'directiva' && <DirectivaDashboard />}
+                {currentUser.role === 'directiva' && <DirectivaHome />}
               </ProtectedRoute>
             } />
 
-            {/* New Report - Lider only */}
+            {/* New Report - Lider, Operaciones, Directiva */}
             <Route path="/nuevo" element={
-              <RoleRoute roles={['lider']}>
+              <RoleRoute roles={['lider', 'operaciones', 'directiva']}>
                 <NewReport />
               </RoleRoute>
             } />
 
-            {/* My Reports - Lider */}
-            <Route path="/mis-reportes" element={
-              <RoleRoute roles={['lider']}>
-                <ReportList />
-              </RoleRoute>
-            } />
-
-            {/* All Reports - Operaciones & Directiva */}
+            {/* Report List - Operaciones, Directiva */}
             <Route path="/reportes" element={
               <RoleRoute roles={['operaciones', 'directiva']}>
                 <ReportList />
               </RoleRoute>
             } />
 
-            {/* Users - Directiva only */}
-            <Route path="/usuarios" element={
+            {/* Aprobaciones - Directiva only */}
+            <Route path="/aprobaciones" element={
               <RoleRoute roles={['directiva']}>
-                <DirectivaDashboard />
+                <AprobacionesPage />
+              </RoleRoute>
+            } />
+
+            {/* Configuración - Directiva only */}
+            <Route path="/configuracion" element={
+              <RoleRoute roles={['directiva']}>
+                <ConfiguracionPage />
               </RoleRoute>
             } />
 

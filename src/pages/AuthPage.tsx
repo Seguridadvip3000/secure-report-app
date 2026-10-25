@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole, ROLE_LABELS } from '../types';
-import { Shield, Phone, Mail, User, Building, Briefcase, ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
+import { PROYECTOS } from '../data/constants';
+import { Shield, Phone, Mail, User, ArrowRight, ArrowLeft, CheckCircle, Building } from 'lucide-react';
 
 type View = 'login' | 'register' | 'success';
 
@@ -9,19 +10,19 @@ export default function AuthPage() {
   const { login, register } = useAuth();
   const [view, setView] = useState<View>('login');
   const [error, setError] = useState('');
-  const [step, setStep] = useState(1);
 
   // Login form
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPhone, setLoginPhone] = useState('');
 
-  // Register form
+  // Register form - paso 1
+  const [regRole, setRegRole] = useState<UserRole | ''>('');
   const [regName, setRegName] = useState('');
-  const [regEmail, setRegEmail] = useState('');
   const [regPhone, setRegPhone] = useState('');
-  const [regRole, setRegRole] = useState<UserRole>('lider');
-  const [regCompany, setRegCompany] = useState('');
-  const [regPosition, setRegPosition] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  
+  // Register form - paso 2 (solo para lider y cliente)
+  const [regProyectos, setRegProyectos] = useState<string[]>([]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,32 +41,36 @@ export default function AuthPage() {
     e.preventDefault();
     setError('');
 
-    if (step === 1) {
-      if (!regName || !regPhone) {
-        setError('Complete todos los campos');
-        return;
-      }
-      setStep(2);
+    // Validaciones básicas
+    if (!regRole) {
+      setError('Seleccione un rol');
+      return;
+    }
+    if (!regName.trim()) {
+      setError('Ingrese su nombre completo');
+      return;
+    }
+    if (!regPhone.trim()) {
+      setError('Ingrese su número de teléfono');
+      return;
+    }
+    if (!regEmail.trim()) {
+      setError('Ingrese su correo electrónico');
       return;
     }
 
-    if (step === 2) {
-      if (!regEmail) {
-        setError('El email es requerido');
-        return;
-      }
-      setStep(3);
+    // Para lider y cliente, validar proyectos
+    if ((regRole === 'lider' || regRole === 'cliente') && regProyectos.length === 0) {
+      setError('Seleccione al menos un proyecto');
       return;
     }
 
-    // Step 3 - submit
     const result = register({
       name: regName,
       email: regEmail,
       phone: regPhone,
       role: regRole,
-      company: regCompany,
-      position: regPosition,
+      proyectos: (regRole === 'lider' || regRole === 'cliente') ? regProyectos : undefined,
     });
 
     if (result.success) {
@@ -73,6 +78,14 @@ export default function AuthPage() {
     } else {
       setError(result.message);
     }
+  };
+
+  const toggleProyecto = (proyecto: string) => {
+    setRegProyectos(prev => 
+      prev.includes(proyecto) 
+        ? prev.filter(p => p !== proyecto)
+        : [...prev, proyecto]
+    );
   };
 
   if (view === 'success') {
@@ -90,7 +103,7 @@ export default function AuthPage() {
             ⏳ Tiempo estimado de aprobación: 24-48 horas
           </div>
           <button
-            onClick={() => { setView('login'); setStep(1); setError(''); }}
+            onClick={() => { setView('login'); setError(''); setRegRole(''); setRegName(''); setRegPhone(''); setRegEmail(''); setRegProyectos([]); }}
             className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
           >
             Volver al Inicio de Sesión
@@ -129,7 +142,7 @@ export default function AuthPage() {
               Iniciar Sesión
             </button>
             <button
-              onClick={() => { setView('register'); setStep(1); setError(''); }}
+              onClick={() => { setView('register'); setError(''); }}
               className={`flex-1 py-4 text-sm font-medium transition-colors ${
                 view === 'register'
                   ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
@@ -173,7 +186,7 @@ export default function AuthPage() {
                     type="tel"
                     value={loginPhone}
                     onChange={e => setLoginPhone(e.target.value)}
-                    placeholder="+57 300 000 0000"
+                    placeholder="+58 414 000 0000"
                     className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   />
                 </div>
@@ -198,140 +211,113 @@ export default function AuthPage() {
             {/* REGISTER */}
             {view === 'register' && (
               <form onSubmit={handleRegister} className="space-y-4">
-                {/* Progress */}
-                <div className="flex items-center gap-2 mb-4">
-                  {[1, 2, 3].map(s => (
-                    <div key={s} className="flex-1">
-                      <div className={`h-1.5 rounded-full ${s <= step ? 'bg-blue-600' : 'bg-slate-200'}`} />
-                    </div>
-                  ))}
+                {/* a) Rol */}
+                <div>
+                  <label className="text-sm font-medium text-slate-700 mb-2 block">
+                    a) Tipo de Usuario *
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['lider', 'cliente', 'operaciones', 'directiva'] as UserRole[]).map(role => (
+                      <button
+                        key={role}
+                        type="button"
+                        onClick={() => { setRegRole(role); setRegProyectos([]); }}
+                        className={`p-3 border-2 rounded-lg text-sm font-medium transition-all text-left ${
+                          regRole === role
+                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                            : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="text-lg mb-1">
+                          {role === 'lider' ? '🛡️' : role === 'cliente' ? '👤' : role === 'operaciones' ? '📊' : '👑'}
+                        </div>
+                        {ROLE_LABELS[role]}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <p className="text-xs text-slate-500 text-center mb-2">Paso {step} de 3</p>
 
-                {step === 1 && (
-                  <>
-                    <div>
-                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                        <User size={16} />
-                        Nombre completo *
-                      </label>
-                      <input
-                        type="text"
-                        value={regName}
-                        onChange={e => setRegName(e.target.value)}
-                        placeholder="Ej: Juan Pérez"
-                        className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                        <Phone size={16} />
-                        Teléfono *
-                      </label>
-                      <input
-                        type="tel"
-                        value={regPhone}
-                        onChange={e => setRegPhone(e.target.value)}
-                        placeholder="+57 300 000 0000"
-                        className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                      />
-                    </div>
-                  </>
-                )}
+                {/* b) Nombre completo */}
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
+                    <User size={16} />
+                    b) Nombre Completo *
+                  </label>
+                  <input
+                    type="text"
+                    value={regName}
+                    onChange={e => setRegName(e.target.value)}
+                    placeholder="Ej: Juan Pérez"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  />
+                </div>
 
-                {step === 2 && (
+                {/* c) Teléfono */}
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
+                    <Phone size={16} />
+                    c) Número de Teléfono *
+                  </label>
+                  <input
+                    type="tel"
+                    value={regPhone}
+                    onChange={e => setRegPhone(e.target.value)}
+                    placeholder="+58 414 000 0000"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  />
+                </div>
+
+                {/* d) Email */}
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
+                    <Mail size={16} />
+                    d) Correo Electrónico *
+                  </label>
+                  <input
+                    type="email"
+                    value={regEmail}
+                    onChange={e => setRegEmail(e.target.value)}
+                    placeholder="usuario@empresa.com"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    A este correo se enviarán los reportes autorizados
+                  </p>
+                </div>
+
+                {/* e) Proyectos (solo para lider y cliente) */}
+                {(regRole === 'lider' || regRole === 'cliente') && (
                   <div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                      <Mail size={16} />
-                      Correo electrónico *
+                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
+                      <Building size={16} />
+                      e) Proyectos *
                     </label>
-                    <input
-                      type="email"
-                      value={regEmail}
-                      onChange={e => setRegEmail(e.target.value)}
-                      placeholder="usuario@empresa.com"
-                      className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    />
+                    <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-lg p-3 space-y-2">
+                      {PROYECTOS.map(proyecto => (
+                        <label key={proyecto} className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1 rounded">
+                          <input
+                            type="checkbox"
+                            checked={regProyectos.includes(proyecto)}
+                            onChange={() => toggleProyecto(proyecto)}
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-slate-700">{proyecto}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Seleccione los proyectos a los que tendrá acceso ({regProyectos.length} seleccionados)
+                    </p>
                   </div>
                 )}
 
-                {step === 3 && (
-                  <>
-                    <div>
-                      <label className="text-sm font-medium text-slate-700 mb-2 block">
-                        Tipo de usuario *
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {(['lider', 'cliente', 'operaciones'] as UserRole[]).map(role => (
-                          <button
-                            key={role}
-                            type="button"
-                            onClick={() => setRegRole(role)}
-                            className={`p-3 border-2 rounded-lg text-sm font-medium transition-all text-left ${
-                              regRole === role
-                                ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                            }`}
-                          >
-                            <div className="text-lg mb-1">
-                              {role === 'lider' ? '🛡️' : role === 'cliente' ? '👤' : '📊'}
-                            </div>
-                            {ROLE_LABELS[role]}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                        <Building size={16} />
-                        Empresa
-                      </label>
-                      <input
-                        type="text"
-                        value={regCompany}
-                        onChange={e => setRegCompany(e.target.value)}
-                        placeholder="Nombre de la empresa"
-                        className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                        <Briefcase size={16} />
-                        Cargo
-                      </label>
-                      <input
-                        type="text"
-                        value={regPosition}
-                        onChange={e => setRegPosition(e.target.value)}
-                        placeholder="Ej: Líder de Turno"
-                        className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                      />
-                    </div>
-                  </>
-                )}
-
-                <div className="flex gap-3">
-                  {step > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => setStep(step - 1)}
-                      className="flex-1 border border-slate-200 text-slate-600 py-3 rounded-lg font-medium hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <ArrowLeft size={18} />
-                      Atrás
-                    </button>
-                  )}
-                  <button
-                    type="submit"
-                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    {step < 3 ? (
-                      <>Siguiente <ArrowRight size={18} /></>
-                    ) : (
-                      'Registrarse'
-                    )}
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  Registrarse
+                  <ArrowRight size={18} />
+                </button>
               </form>
             )}
           </div>

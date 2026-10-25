@@ -10,6 +10,7 @@ import {
   Users,
   LogOut,
   UserCheck,
+  Settings,
 } from 'lucide-react';
 import { useState } from 'react';
 import { ROLE_LABELS, ROLE_COLORS } from '../types';
@@ -25,24 +26,26 @@ export default function Sidebar() {
     switch (currentUser.role) {
       case 'lider':
         return [
-          { to: '/', icon: LayoutDashboard, label: 'Mi Panel' },
-          { to: '/nuevo', icon: FilePlus, label: 'Nuevo Reporte' },
-          { to: '/mis-reportes', icon: List, label: 'Mis Reportes' },
+          { to: '/', icon: LayoutDashboard, label: 'Inicio' },
+          { to: '/nuevo', icon: FilePlus, label: 'Crear Reporte' },
         ];
       case 'operaciones':
         return [
-          { to: '/', icon: LayoutDashboard, label: 'Panel Operaciones' },
-          { to: '/reportes', icon: List, label: 'Todos los Reportes' },
+          { to: '/', icon: LayoutDashboard, label: 'Inicio' },
+          { to: '/nuevo', icon: FilePlus, label: 'Crear Reporte' },
+          { to: '/reportes', icon: List, label: 'Lista de Reportes' },
         ];
       case 'cliente':
         return [
-          { to: '/', icon: LayoutDashboard, label: 'Mis Reportes' },
+          { to: '/', icon: LayoutDashboard, label: 'Mis Novedades' },
         ];
       case 'directiva':
         return [
-          { to: '/', icon: LayoutDashboard, label: 'Directiva' },
-          { to: '/usuarios', icon: Users, label: 'Autorizar Usuarios' },
-          { to: '/reportes', icon: List, label: 'Reportes' },
+          { to: '/', icon: LayoutDashboard, label: 'Inicio' },
+          { to: '/nuevo', icon: FilePlus, label: 'Crear Reporte' },
+          { to: '/reportes', icon: List, label: 'Lista de Reportes' },
+          { to: '/aprobaciones', icon: UserCheck, label: 'Aprobaciones' },
+          { to: '/configuracion', icon: Settings, label: 'Configuración' },
         ];
       default:
         return [];
@@ -55,7 +58,7 @@ export default function Sidebar() {
     lider: '🛡️',
     operaciones: '📊',
     cliente: '👤',
-    administrador: '👑',
+    directiva: '👑',
   };
 
   return (

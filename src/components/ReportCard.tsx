@@ -3,19 +3,40 @@ import { Report } from '../types';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { getStatusColor, getStatusLabel, getReportIcon } from '../utils/helpers';
-import { MapPin, Calendar, User } from 'lucide-react';
+import { Calendar, User, CheckCircle, Mail } from 'lucide-react';
 
 interface ReportCardProps {
   report: Report;
-  showActions?: boolean;
-  onApprove?: () => void;
+  showCheckbox?: boolean;
+  onToggleApproval?: () => void;
   onReject?: () => void;
 }
 
-export default function ReportCard({ report, showActions, onApprove, onReject }: ReportCardProps) {
+export default function ReportCard({ report, showCheckbox, onToggleApproval, onReject }: ReportCardProps) {
+  const isApproved = report.visibleForClient;
+
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all p-4 sm:p-5">
+    <div className={`bg-white rounded-xl border shadow-sm hover:shadow-md transition-all p-4 sm:p-5 ${
+      isApproved ? 'border-green-200 bg-green-50/30' : 'border-slate-200'
+    }`}>
       <div className="flex items-start gap-3">
+        {/* Checkbox for Operaciones/Directiva */}
+        {showCheckbox && (
+          <div className="flex-shrink-0 pt-1">
+            <label className="relative flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isApproved}
+                onChange={onToggleApproval}
+                className="w-6 h-6 rounded border-2 border-slate-300 text-green-600 focus:ring-green-500 focus:ring-2 cursor-pointer"
+              />
+              {isApproved && (
+                <CheckCircle size={14} className="absolute left-1 top-1 text-green-600 pointer-events-none" />
+              )}
+            </label>
+          </div>
+        )}
+
         <span className="text-2xl sm:text-3xl flex-shrink-0">{getReportIcon(report.tituloNovedad)}</span>
         <div className="flex-1 min-w-0">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
@@ -26,10 +47,16 @@ export default function ReportCard({ report, showActions, onApprove, onReject }:
               {getStatusLabel(report.status)}
             </span>
           </div>
-          <div className="mt-1">
+          <div className="mt-1 flex flex-wrap gap-1">
             <span className="inline-block bg-slate-100 text-slate-700 text-xs px-2 py-0.5 rounded font-medium">
               {report.proyecto}
             </span>
+            {isApproved && (
+              <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded font-medium">
+                <CheckCircle size={10} />
+                Visible para Cliente
+              </span>
+            )}
           </div>
           <p className="text-slate-500 text-sm mt-2 line-clamp-2">{report.desarrollo}</p>
           <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-slate-400">
@@ -43,19 +70,22 @@ export default function ReportCard({ report, showActions, onApprove, onReject }:
             </span>
           </div>
 
-          {showActions && (report.status === 'pendiente' || report.status === 'en_proceso') && (
-            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
-              <button
-                onClick={onApprove}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 text-xs rounded-lg hover:bg-green-200 font-medium transition-colors"
-              >
-                ✓ Aprobar
-              </button>
+          {/* Email notification info */}
+          {report.emailEnviadoA && (
+            <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
+              <Mail size={12} />
+              Email enviado a: {report.emailEnviadoA}
+            </div>
+          )}
+
+          {/* Reject button for pending reports */}
+          {showCheckbox && !isApproved && (report.status === 'pendiente' || report.status === 'en_proceso') && onReject && (
+            <div className="mt-3 pt-3 border-t border-slate-100">
               <button
                 onClick={onReject}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 text-red-700 text-xs rounded-lg hover:bg-red-200 font-medium transition-colors"
               >
-                ✗ Rechazar
+                ✗ Rechazar Reporte
               </button>
             </div>
           )}

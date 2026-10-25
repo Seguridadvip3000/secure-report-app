@@ -45,6 +45,13 @@ export default function ReportList() {
   const activeFilters = statusFilter !== 'todos' ? 1 : 0;
   const canApprove = currentUser?.role === 'operaciones' || currentUser?.role === 'directiva';
 
+  const handleToggleApproval = (reportId: string) => {
+    const report = reports.find(r => r.id === reportId);
+    if (report && !report.visibleForClient) {
+      approveForClient(reportId, currentUser!.id);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -57,6 +64,11 @@ export default function ReportList() {
         <p className="text-slate-500">
           {filteredReports.length} de {visibleReports.length} reportes
         </p>
+        {canApprove && (
+          <p className="text-xs text-blue-600 mt-1">
+            ✓ Marque la casilla para hacer visible el reporte al cliente
+          </p>
+        )}
       </div>
 
       {/* Search & Filters */}
@@ -108,8 +120,8 @@ export default function ReportList() {
           <ReportCard
             key={report.id}
             report={report}
-            showActions={canApprove && (report.status === 'pendiente' || report.status === 'en_proceso')}
-            onApprove={() => approveForClient(report.id, currentUser!.id)}
+            showCheckbox={canApprove}
+            onToggleApproval={() => handleToggleApproval(report.id)}
             onReject={() => rejectReport(report.id)}
           />
         ))}

@@ -87,8 +87,8 @@ export default function OperacionesDashboard() {
               <ReportCard
                 key={report.id}
                 report={report}
-                showActions
-                onApprove={() => approveForClient(report.id, currentUser!.id)}
+                showCheckbox
+                onToggleApproval={() => approveForClient(report.id, currentUser!.id)}
                 onReject={() => rejectReport(report.id)}
               />
             ))}
@@ -142,8 +142,8 @@ export default function OperacionesDashboard() {
             <ReportCard
               key={report.id}
               report={report}
-              showActions={report.status === 'pendiente' || report.status === 'en_proceso'}
-              onApprove={() => approveForClient(report.id, currentUser!.id)}
+              showCheckbox={report.status === 'pendiente' || report.status === 'en_proceso'}
+              onToggleApproval={() => approveForClient(report.id, currentUser!.id)}
               onReject={() => rejectReport(report.id)}
             />
           ))}

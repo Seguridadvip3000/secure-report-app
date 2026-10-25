@@ -394,7 +394,7 @@ export default function NewReport() {
           <div className="bg-slate-50 rounded-lg p-4">
             <p className="text-xs text-slate-500">Quien Reporta</p>
             <p className="text-sm font-medium text-slate-700">{currentUser?.name}</p>
-            <p className="text-xs text-slate-500 mt-1">{currentUser?.position} - {currentUser?.company}</p>
+            <p className="text-xs text-slate-500 mt-1">{currentUser?.email}</p>
           </div>
         </div>
 
