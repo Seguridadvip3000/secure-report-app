@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, UserRole, UserStatus } from '../types';
-import { initialUsers, defaultAdmin } from '../data/initialData';
+import { initialUsers } from '../data/initialData';
 import { v4 as uuidv4 } from 'uuid';
 
 interface AuthContextType {

@@ -6,7 +6,7 @@ import AuthPage from './pages/AuthPage';
 import LiderDashboard from './pages/LiderDashboard';
 import OperacionesDashboard from './pages/OperacionesDashboard';
 import ClienteDashboard from './pages/ClienteDashboard';
-import AdminDashboard from './pages/AdminDashboard';
+import DirectivaDashboard from './pages/DirectivaDashboard';
 import NewReport from './pages/NewReport';
 import ReportList from './pages/ReportList';
 import ReportDetail from './pages/ReportDetail';
@@ -50,7 +50,7 @@ function AppRoutes() {
                 {currentUser.role === 'lider' && <LiderDashboard />}
                 {currentUser.role === 'operaciones' && <OperacionesDashboard />}
                 {currentUser.role === 'cliente' && <ClienteDashboard />}
-                {currentUser.role === 'administrador' && <AdminDashboard />}
+                {currentUser.role === 'directiva' && <DirectivaDashboard />}
               </ProtectedRoute>
             } />
 
@@ -68,17 +68,17 @@ function AppRoutes() {
               </RoleRoute>
             } />
 
-            {/* All Reports - Operaciones & Admin */}
+            {/* All Reports - Operaciones & Directiva */}
             <Route path="/reportes" element={
-              <RoleRoute roles={['operaciones', 'administrador']}>
+              <RoleRoute roles={['operaciones', 'directiva']}>
                 <ReportList />
               </RoleRoute>
             } />
 
-            {/* Users - Admin only */}
+            {/* Users - Directiva only */}
             <Route path="/usuarios" element={
-              <RoleRoute roles={['administrador']}>
-                <AdminDashboard />
+              <RoleRoute roles={['directiva']}>
+                <DirectivaDashboard />
               </RoleRoute>
             } />
 

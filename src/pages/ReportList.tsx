@@ -74,7 +74,7 @@ export default function ReportList() {
   );
 
   const activeFilters = [statusFilter, priorityFilter, categoryFilter].filter(f => f !== 'todos').length;
-  const canApprove = currentUser?.role === 'operaciones' || currentUser?.role === 'administrador';
+  const canApprove = currentUser?.role === 'operaciones' || currentUser?.role === 'directiva';
 
   return (
     <div className="space-y-6">

@@ -38,10 +38,10 @@ export default function Sidebar() {
         return [
           { to: '/', icon: LayoutDashboard, label: 'Mis Reportes' },
         ];
-      case 'administrador':
+      case 'directiva':
         return [
-          { to: '/', icon: LayoutDashboard, label: 'Administración' },
-          { to: '/usuarios', icon: Users, label: 'Usuarios' },
+          { to: '/', icon: LayoutDashboard, label: 'Directiva' },
+          { to: '/usuarios', icon: Users, label: 'Autorizar Usuarios' },
           { to: '/reportes', icon: List, label: 'Reportes' },
         ];
       default:

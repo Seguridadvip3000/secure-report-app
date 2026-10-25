@@ -1,4 +1,4 @@
-export type UserRole = 'lider' | 'cliente' | 'operaciones' | 'administrador';
+export type UserRole = 'lider' | 'cliente' | 'operaciones' | 'directiva';
 export type UserStatus = 'pendiente' | 'aprobado' | 'rechazado';
 export type ReportStatus = 'pendiente' | 'en_proceso' | 'resuelto' | 'aprobado' | 'rechazado';
 export type ReportPriority = 'baja' | 'media' | 'alta' | 'critica';
@@ -41,12 +41,12 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   lider: 'Líder de Seguridad',
   cliente: 'Cliente',
   operaciones: 'Operaciones',
-  administrador: 'Administrador',
+  directiva: 'Directiva',
 };
 
 export const ROLE_COLORS: Record<UserRole, string> = {
   lider: 'bg-blue-100 text-blue-800 border-blue-200',
   cliente: 'bg-green-100 text-green-800 border-green-200',
   operaciones: 'bg-purple-100 text-purple-800 border-purple-200',
-  administrador: 'bg-red-100 text-red-800 border-red-200',
+  directiva: 'bg-red-100 text-red-800 border-red-200',
 };

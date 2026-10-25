@@ -1,22 +1,22 @@
 import { Report, User } from '../types';
 
 // Admin por defecto (credenciales de prueba)
-export const defaultAdmin: User = {
-  id: 'admin-001',
-  name: 'Administrador Sistema',
-  email: 'admin@seguridad.com',
+export const defaultDirectiva: User = {
+  id: 'directiva-001',
+  name: 'Directiva Principal',
+  email: 'directiva@seguridad.com',
   phone: '+57 300 000 0000',
-  role: 'administrador',
+  role: 'directiva',
   status: 'aprobado',
   company: 'SecureReport',
-  position: 'Admin',
+  position: 'Director General',
   createdAt: '2026-01-01T00:00:00',
   approvedAt: '2026-01-01T00:00:00',
 };
 
 // Usuarios de ejemplo
 export const initialUsers: User[] = [
-  defaultAdmin,
+  defaultDirectiva,
   {
     id: 'user-002',
     name: 'Carlos Martínez',
@@ -28,7 +28,7 @@ export const initialUsers: User[] = [
     position: 'Líder Turno A',
     createdAt: '2026-01-05T08:00:00',
     approvedAt: '2026-01-05T09:00:00',
-    approvedBy: 'admin-001',
+    approvedBy: 'directiva-001',
   },
   {
     id: 'user-003',

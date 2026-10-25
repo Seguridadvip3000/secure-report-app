@@ -84,7 +84,7 @@ export default function AuthPage() {
           </div>
           <h2 className="text-2xl font-bold text-slate-800">¡Registro Exitoso!</h2>
           <p className="text-slate-500">
-            Su solicitud ha sido enviada al administrador. Recibirá una notificación cuando su cuenta sea aprobada.
+            Su solicitud ha sido enviada a la Directiva. Recibirá una notificación cuando su cuenta sea autorizada.
           </p>
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">
             ⏳ Tiempo estimado de aprobación: 24-48 horas
@@ -187,7 +187,7 @@ export default function AuthPage() {
 
                 <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-500 space-y-1">
                   <p className="font-medium text-slate-600">Cuentas de prueba:</p>
-                  <p>👑 Admin: admin@seguridad.com</p>
+                  <p>👑 Directiva: directiva@seguridad.com</p>
                   <p>🛡️ Líder: carlos@seguridad.com</p>
                   <p>📊 Operaciones: roberto@operaciones.com</p>
                   <p>👤 Cliente: ana@cliente.com</p>

@@ -61,7 +61,7 @@ export default function ReportDetail() {
 
   // Check access permissions
   const canView = () => {
-    if (currentUser.role === 'administrador') return true;
+    if (currentUser.role === 'directiva') return true;
     if (currentUser.role === 'operaciones') return true;
     if (currentUser.role === 'lider') return report.createdBy === currentUser.id;
     if (currentUser.role === 'cliente') return report.visibleForClient;
@@ -87,9 +87,9 @@ export default function ReportDetail() {
     );
   }
 
-  const canApprove = currentUser.role === 'operaciones' || currentUser.role === 'administrador';
+  const canApprove = currentUser.role === 'operaciones' || currentUser.role === 'directiva';
   const canAddNotes = currentUser.role !== 'cliente';
-  const canDelete = currentUser.role === 'administrador' || (currentUser.role === 'lider' && report.createdBy === currentUser.id);
+  const canDelete = currentUser.role === 'directiva' || (currentUser.role === 'lider' && report.createdBy === currentUser.id);
 
   const creatorUser = users.find(u => u.id === report.createdBy);
   const approverUser = report.approvedByOperaciones ? users.find(u => u.id === report.approvedByOperaciones) : null;

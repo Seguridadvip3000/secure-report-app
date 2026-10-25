@@ -1,25 +1,22 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useReports } from '../context/ReportContext';
-import { UserStatus, UserRole, ROLE_LABELS, ROLE_COLORS } from '../types';
+import { ROLE_LABELS, ROLE_COLORS } from '../types';
 import {
   Users,
   UserCheck,
-  UserX,
   Clock,
-  Shield,
   CheckCircle,
   XCircle,
   Trash2,
   AlertTriangle,
   FileText,
   ShieldCheck,
-  Eye,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-export default function AdminDashboard() {
+export default function DirectivaDashboard() {
   const { users, pendingUsers, approvedUsers, approveUser, rejectUser, deleteUser } = useAuth();
   const { reports } = useReports();
   const [activeTab, setActiveTab] = useState<'pending' | 'all'>('pending');
@@ -41,10 +38,10 @@ export default function AdminDashboard() {
       <div className="bg-gradient-to-r from-red-600 to-red-700 rounded-xl p-6 text-white">
         <div className="flex items-center gap-3 mb-2">
           <ShieldCheck size={24} />
-          <h1 className="text-xl font-bold">Panel de Administración</h1>
+          <h1 className="text-xl font-bold">Panel de Directiva</h1>
         </div>
         <p className="text-red-100">
-          Gestione usuarios y supervise el sistema de reportes.
+          Autorice registros de usuarios y supervise el sistema de reportes.
         </p>
       </div>
 
@@ -62,14 +59,14 @@ export default function AdminDashboard() {
             <Clock size={20} className="text-yellow-600" />
           </div>
           <p className="text-2xl font-bold text-slate-800">{pendingUsers.length}</p>
-          <p className="text-xs text-slate-500">Pendientes Aprobación</p>
+          <p className="text-xs text-slate-500">Pendientes de Autorización</p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <div className="bg-green-50 w-10 h-10 rounded-lg flex items-center justify-center mb-2">
             <UserCheck size={20} className="text-green-600" />
           </div>
           <p className="text-2xl font-bold text-slate-800">{approvedUsers.length}</p>
-          <p className="text-xs text-slate-500">Usuarios Activos</p>
+          <p className="text-xs text-slate-500">Usuarios Autorizados</p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <div className="bg-purple-50 w-10 h-10 rounded-lg flex items-center justify-center mb-2">
@@ -86,10 +83,10 @@ export default function AdminDashboard() {
           <div className="flex items-center gap-2 mb-1">
             <AlertTriangle size={18} className="text-amber-600" />
             <h2 className="font-semibold text-amber-800">
-              {pendingUsers.length} usuario(s) esperando aprobación
+              {pendingUsers.length} usuario(s) esperando su autorización
             </h2>
           </div>
-          <p className="text-sm text-amber-600">Revise y apruebe los nuevos registros</p>
+          <p className="text-sm text-amber-600">Revise y autorice los nuevos registros para que puedan acceder a la app</p>
         </div>
       )}
 
@@ -161,7 +158,7 @@ export default function AdminDashboard() {
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition-colors font-medium"
                       >
                         <CheckCircle size={14} />
-                        Aprobar
+                        Autorizar Acceso
                       </button>
                       <button
                         onClick={() => setRejectModal({ userId: user.id, name: user.name })}
@@ -181,8 +178,8 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Delete button for non-admin users */}
-              {user.role !== 'administrador' && (
+              {/* Delete button for non-directiva users */}
+              {user.role !== 'directiva' && (
                 <div className="mt-2 flex justify-end">
                   {deleteConfirm === user.id ? (
                     <div className="flex items-center gap-2">
