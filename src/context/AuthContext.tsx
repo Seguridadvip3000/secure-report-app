@@ -2,18 +2,21 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { User, UserRole, UserStatus } from '../types';
 import { initialUsers } from '../data/initialData';
 import { v4 as uuidv4 } from 'uuid';
+import { getStorageMode } from '../config/appConfig';
+import { userService } from '../services/userService';
 
 interface AuthContextType {
   currentUser: User | null;
   users: User[];
   login: (email: string, phone: string) => { success: boolean; message: string };
-  register: (data: RegisterData) => { success: boolean; message: string };
+  register: (data: RegisterData) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
-  approveUser: (userId: string) => void;
-  rejectUser: (userId: string, reason: string) => void;
-  deleteUser: (userId: string) => void;
+  approveUser: (userId: string) => Promise<void>;
+  rejectUser: (userId: string, reason: string) => Promise<void>;
+  deleteUser: (userId: string) => Promise<void>;
   pendingUsers: User[];
   approvedUsers: User[];
+  loading: boolean;
 }
 
 interface RegisterData {
@@ -24,22 +27,10 @@ interface RegisterData {
   proyectos?: string[];
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const STORAGE_KEY = 'securereport_users';
 const SESSION_KEY = 'securereport_session';
+const LOCAL_STORAGE_KEY = 'securereport_users';
 
-function loadUsers(): User[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return initialUsers;
-}
-
-function saveUsers(users: User[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
-}
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function loadSession(): User | null {
   try {
@@ -57,13 +48,59 @@ function saveSession(user: User | null) {
   }
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [users, setUsers] = useState<User[]>(loadUsers);
-  const [currentUser, setCurrentUser] = useState<User | null>(loadSession);
+// LocalStorage functions
+function loadLocalUsers(): User[] {
+  try {
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch {}
+  return initialUsers;
+}
 
+function saveLocalUsers(users: User[]) {
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(users));
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const storageMode = getStorageMode();
+  const [currentUser, setCurrentUser] = useState<User | null>(loadSession);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(storageMode === 'supabase');
+
+  // Load users based on storage mode
   useEffect(() => {
-    saveUsers(users);
-  }, [users]);
+    if (storageMode === 'supabase') {
+      loadUsersFromSupabase();
+    } else {
+      setUsers(loadLocalUsers());
+    }
+  }, [storageMode]);
+
+  const loadUsersFromSupabase = async () => {
+    try {
+      const supabaseUsers = await userService.getAllUsers();
+      setUsers(supabaseUsers);
+    } catch (error) {
+      console.error('Error loading users from Supabase:', error);
+      // Fallback to local data
+      setUsers(initialUsers);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshUsers = async () => {
+    if (storageMode === 'supabase') {
+      await loadUsersFromSupabase();
+    }
+  };
+
+  // Save local users when they change (only in local mode)
+  useEffect(() => {
+    if (storageMode === 'local' && users.length > 0) {
+      saveLocalUsers(users);
+    }
+  }, [users, storageMode]);
 
   useEffect(() => {
     saveSession(currentUser);
@@ -77,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, message: 'Usuario no encontrado. Regístrese primero.' };
     }
     if (user.status === 'pendiente') {
-      return { success: false, message: 'Su cuenta está pendiente de aprobación por el administrador.' };
+      return { success: false, message: 'Su cuenta está pendiente de aprobación por la Directiva.' };
     }
     if (user.status === 'rechazado') {
       return { success: false, message: `Su cuenta fue rechazada. ${user.rejectionReason || ''}` };
@@ -86,53 +123,91 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { success: true, message: 'Inicio de sesión exitoso' };
   };
 
-  const register = (data: RegisterData) => {
+  const register = async (data: RegisterData) => {
     const exists = users.find(u => u.email === data.email || u.phone === data.phone);
     if (exists) {
       return { success: false, message: 'Ya existe un usuario con ese email o teléfono.' };
     }
 
-    const newUser: User = {
-      id: uuidv4(),
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      role: data.role,
-      status: 'pendiente',
-      proyectos: data.proyectos,
-      createdAt: new Date().toISOString(),
-    };
-
-    setUsers(prev => [...prev, newUser]);
-    return { success: true, message: 'Registro exitoso. Espere la aprobación del administrador.' };
+    if (storageMode === 'supabase') {
+      try {
+        await userService.registerUser(data);
+        await refreshUsers();
+        return { success: true, message: 'Registro exitoso. Espere la aprobación de la Directiva.' };
+      } catch (error) {
+        console.error('Error registering user:', error);
+        return { success: false, message: 'Error al registrar. Intente nuevamente.' };
+      }
+    } else {
+      // Local mode
+      const newUser: User = {
+        id: uuidv4(),
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        role: data.role,
+        status: 'pendiente',
+        proyectos: data.proyectos,
+        createdAt: new Date().toISOString(),
+      };
+      setUsers(prev => [...prev, newUser]);
+      return { success: true, message: 'Registro exitoso. Espere la aprobación de la Directiva.' };
+    }
   };
 
   const logout = () => {
     setCurrentUser(null);
   };
 
-  const approveUser = (userId: string) => {
-    setUsers(prev =>
-      prev.map(u =>
-        u.id === userId
-          ? { ...u, status: 'aprobado' as UserStatus, approvedAt: new Date().toISOString(), approvedBy: currentUser?.id }
-          : u
-      )
-    );
+  const approveUser = async (userId: string) => {
+    if (storageMode === 'supabase') {
+      try {
+        await userService.approveUser(userId, currentUser?.id || '');
+        await refreshUsers();
+      } catch (error) {
+        console.error('Error approving user:', error);
+      }
+    } else {
+      setUsers(prev =>
+        prev.map(u =>
+          u.id === userId
+            ? { ...u, status: 'aprobado' as UserStatus, approvedAt: new Date().toISOString(), approvedBy: currentUser?.id }
+            : u
+        )
+      );
+    }
   };
 
-  const rejectUser = (userId: string, reason: string) => {
-    setUsers(prev =>
-      prev.map(u =>
-        u.id === userId
-          ? { ...u, status: 'rechazado' as UserStatus, rejectionReason: reason }
-          : u
-      )
-    );
+  const rejectUser = async (userId: string, reason: string) => {
+    if (storageMode === 'supabase') {
+      try {
+        await userService.rejectUser(userId, reason);
+        await refreshUsers();
+      } catch (error) {
+        console.error('Error rejecting user:', error);
+      }
+    } else {
+      setUsers(prev =>
+        prev.map(u =>
+          u.id === userId
+            ? { ...u, status: 'rechazado' as UserStatus, rejectionReason: reason }
+            : u
+        )
+      );
+    }
   };
 
-  const deleteUser = (userId: string) => {
-    setUsers(prev => prev.filter(u => u.id !== userId));
+  const deleteUser = async (userId: string) => {
+    if (storageMode === 'supabase') {
+      try {
+        await userService.deleteUser(userId);
+        await refreshUsers();
+      } catch (error) {
+        console.error('Error deleting user:', error);
+      }
+    } else {
+      setUsers(prev => prev.filter(u => u.id !== userId));
+    }
   };
 
   const pendingUsers = users.filter(u => u.status === 'pendiente');
@@ -151,6 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         deleteUser,
         pendingUsers,
         approvedUsers,
+        loading,
       }}
     >
       {children}

@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { ReportProvider } from './context/ReportContext';
+import { ReportProvider, useReports } from './context/ReportContext';
 import Sidebar from './components/Sidebar';
 import AuthPage from './pages/AuthPage';
 import LiderHome from './pages/LiderHome';
@@ -29,7 +29,21 @@ function RoleRoute({ roles, children }: { roles: string[]; children: ReactNode }
 }
 
 function AppRoutes() {
-  const { currentUser } = useAuth();
+  const { currentUser, loading: authLoading } = useAuth();
+  const { loading: reportsLoading } = useReports();
+
+  // Show loading screen while data is being fetched
+  if (authLoading || reportsLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white text-lg">Cargando SecureReport...</p>
+          <p className="text-blue-200 text-sm mt-2">Conectando con la base de datos</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentUser || currentUser.status !== 'aprobado') {
     return (

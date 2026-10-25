@@ -128,7 +128,7 @@ export default function NewReport() {
         status: 'pendiente' as const,
       };
 
-      addReport(reportData);
+      await addReport(reportData);
 
       // Generar PDF (simulado - en producción se subiría a la nube)
       // const pdfData = await generateReportPDF({ ...reportData, id: 'temp', createdAt: new Date().toISOString(), visibleForClient: false });

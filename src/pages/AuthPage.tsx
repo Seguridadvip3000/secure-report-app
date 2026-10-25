@@ -37,7 +37,7 @@ export default function AuthPage() {
     }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -65,7 +65,7 @@ export default function AuthPage() {
       return;
     }
 
-    const result = register({
+    const result = await register({
       name: regName,
       email: regEmail,
       phone: regPhone,
