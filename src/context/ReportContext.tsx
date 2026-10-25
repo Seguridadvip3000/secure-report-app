@@ -54,8 +54,30 @@ export function ReportProvider({ children }: { children: ReactNode }) {
   };
 
   const approveForClient = (id: string, userId: string) => {
-    setReports(prev =>
-      prev.map(r =>
+    setReports(prev => {
+      const report = prev.find(r => r.id === id);
+      if (!report) return prev;
+
+      // Find client user for this project (simulated email)
+      // In production, this would send an actual email via backend
+      let clientEmail: string | undefined;
+      try {
+        const usersData = localStorage.getItem('securereport_users');
+        if (usersData) {
+          const users = JSON.parse(usersData);
+          const clientUser = users.find(
+            (u: any) => u.role === 'cliente' && u.proyectos?.includes(report.proyecto)
+          );
+          clientEmail = clientUser?.email;
+        }
+      } catch {}
+
+      // Simulate email notification (console log for demo)
+      if (clientEmail) {
+        console.log(`📧 Email enviado a ${clientEmail}: Nuevo reporte aprobado para ${report.proyecto}`);
+      }
+
+      return prev.map(r =>
         r.id === id
           ? {
               ...r,
@@ -63,10 +85,12 @@ export function ReportProvider({ children }: { children: ReactNode }) {
               approvedByOperaciones: userId,
               approvedAtOperaciones: new Date().toISOString(),
               status: 'aprobado' as ReportStatus,
+              emailEnviadoA: clientEmail,
+              emailEnviadoAt: new Date().toISOString(),
             }
           : r
-      )
-    );
+      );
+    });
   };
 
   const rejectReport = (id: string) => {

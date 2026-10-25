@@ -1,26 +1,4 @@
-import { Report, ReportCategory, ReportPriority, ReportStatus } from '../types';
-
-export function getCategoryLabel(category: ReportCategory): string {
-  const labels: Record<ReportCategory, string> = {
-    incidente: 'Incidente',
-    novedad_rutinaria: 'Novedad Rutinaria',
-    alerta: 'Alerta',
-    mantenimiento: 'Mantenimiento',
-    acceso_no_autorizado: 'Acceso No Autorizado',
-  };
-  return labels[category];
-}
-
-export function getCategoryColor(category: ReportCategory): string {
-  const colors: Record<ReportCategory, string> = {
-    incidente: 'bg-red-100 text-red-800 border-red-200',
-    novedad_rutinaria: 'bg-blue-100 text-blue-800 border-blue-200',
-    alerta: 'bg-amber-100 text-amber-800 border-amber-200',
-    mantenimiento: 'bg-purple-100 text-purple-800 border-purple-200',
-    acceso_no_autorizado: 'bg-rose-100 text-rose-800 border-rose-200',
-  };
-  return colors[category];
-}
+import { Report, ReportStatus } from '../types';
 
 export function getStatusLabel(status: ReportStatus): string {
   const labels: Record<ReportStatus, string> = {
@@ -44,26 +22,6 @@ export function getStatusColor(status: ReportStatus): string {
   return colors[status];
 }
 
-export function getPriorityLabel(priority: ReportPriority): string {
-  const labels: Record<ReportPriority, string> = {
-    baja: 'Baja',
-    media: 'Media',
-    alta: 'Alta',
-    critica: 'Crítica',
-  };
-  return labels[priority];
-}
-
-export function getPriorityColor(priority: ReportPriority): string {
-  const colors: Record<ReportPriority, string> = {
-    baja: 'bg-slate-100 text-slate-700',
-    media: 'bg-blue-100 text-blue-700',
-    alta: 'bg-orange-100 text-orange-700',
-    critica: 'bg-red-100 text-red-700',
-  };
-  return colors[priority];
-}
-
 export function formatDate(dateString: string): string {
   const date = new Date(dateString);
   return date.toLocaleDateString('es-ES', {
@@ -75,13 +33,25 @@ export function formatDate(dateString: string): string {
   });
 }
 
-export function getReportIcon(report: Report): string {
-  const icons: Record<ReportCategory, string> = {
-    incidente: '🚨',
-    novedad_rutinaria: '📋',
-    alerta: '⚠️',
-    mantenimiento: '🔧',
-    acceso_no_autorizado: '🚫',
+export function getReportIcon(tituloNovedad: string): string {
+  const icons: Record<string, string> = {
+    "Hurto": "🚨",
+    "Robo": "🚨",
+    "Sospechoso": "⚠️",
+    "Procedimiento Policial": "👮",
+    "Procedimiento de otras autoridades": "👮",
+    "Daño a las instalaciones": "🔧",
+    "Daños a terceros": "💥",
+    "Presencia de pedigüeños / Venta ambulante": "🚫",
+    "Colisión / Choque vehicular": "🚗",
+    "Atropello": "🚑",
+    "Emergencia médica de empleados": "🏥",
+    "Emergencia médica de terceros (visitantes/clientes)": "🏥",
+    "Falla del sistema de seguridad (CCTV/Alarmas)": "📹",
+    "Fuga de fluidos (Agua/Gas)": "💧",
+    "Fallo de energía": "⚡",
+    "Conato de incendio": "🔥",
+    "OTRA:": "📋",
   };
-  return icons[report.category];
+  return icons[tituloNovedad] || "📋";
 }

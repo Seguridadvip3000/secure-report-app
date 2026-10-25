@@ -2,7 +2,6 @@ export type UserRole = 'lider' | 'cliente' | 'operaciones' | 'directiva';
 export type UserStatus = 'pendiente' | 'aprobado' | 'rechazado';
 export type ReportStatus = 'pendiente' | 'en_proceso' | 'resuelto' | 'aprobado' | 'rechazado';
 export type ReportPriority = 'baja' | 'media' | 'alta' | 'critica';
-export type ReportCategory = 'incidente' | 'novedad_rutinaria' | 'alerta' | 'mantenimiento' | 'acceso_no_autorizado';
 
 export interface User {
   id: string;
@@ -13,6 +12,7 @@ export interface User {
   status: UserStatus;
   company?: string;
   position?: string;
+  proyectos?: string[]; // Proyectos asignados al usuario (para clientes)
   createdAt: string;
   approvedAt?: string;
   approvedBy?: string;
@@ -21,20 +21,23 @@ export interface User {
 
 export interface Report {
   id: string;
-  title: string;
-  description: string;
-  category: ReportCategory;
-  status: ReportStatus;
-  priority: ReportPriority;
-  location: string;
-  guardName: string;
+  fechaHora: string; // ISO string automático
+  proyecto: string; // Proyecto seleccionado
+  tituloNovedad: string; // Título de la novedad seleccionado
+  desarrollo: string; // Texto libre del usuario
+  evidencias: string[]; // Array de base64 de imágenes (mínimo 2)
+  ubicacionGPS: { lat: number; lng: number; address?: string };
+  quienReporta: string; // Nombre del usuario que crea el reporte
   createdBy: string; // userId del líder que lo creó
-  date: string;
+  status: ReportStatus;
   createdAt: string;
   notes?: string;
   approvedByOperaciones?: string;
   approvedAtOperaciones?: string;
   visibleForClient: boolean;
+  pdfUrl?: string; // URL/blob del PDF generado
+  emailEnviadoA?: string; // Email del cliente al que se notificó
+  emailEnviadoAt?: string; // Fecha de envío del email
 }
 
 export const ROLE_LABELS: Record<UserRole, string> = {

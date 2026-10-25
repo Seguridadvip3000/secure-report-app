@@ -1,46 +1,37 @@
 import { useState, useMemo } from 'react';
 import { useReports } from '../context/ReportContext';
 import { useAuth } from '../context/AuthContext';
-import { Link } from 'react-router-dom';
-import {
-  Search,
-  Eye,
-  FileText,
-  CheckCircle,
-  Shield,
-  Calendar,
-  MapPin,
-  User,
-} from 'lucide-react';
+import { Search, FileText, CheckCircle, Calendar, Shield } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import {
-  getCategoryColor,
-  getCategoryLabel,
-  getPriorityColor,
-  getPriorityLabel,
-  getReportIcon,
-} from '../utils/helpers';
+import ReportCard from '../components/ReportCard';
 
 export default function ClienteDashboard() {
   const { reports } = useReports();
   const { currentUser } = useAuth();
   const [search, setSearch] = useState('');
 
-  // Client only sees approved reports
+  // Client only sees approved reports for their projects
   const approvedReports = useMemo(() => {
     return reports
       .filter(r => r.visibleForClient && r.status === 'aprobado')
       .filter(r => {
+        // Filter by client's assigned projects
+        if (currentUser?.proyectos && currentUser.proyectos.length > 0) {
+          return currentUser.proyectos.includes(r.proyecto);
+        }
+        return true; // If no projects assigned, show all
+      })
+      .filter(r => {
         if (search === '') return true;
         return (
-          r.title.toLowerCase().includes(search.toLowerCase()) ||
-          r.description.toLowerCase().includes(search.toLowerCase()) ||
-          r.location.toLowerCase().includes(search.toLowerCase())
+          r.tituloNovedad.toLowerCase().includes(search.toLowerCase()) ||
+          r.desarrollo.toLowerCase().includes(search.toLowerCase()) ||
+          r.proyecto.toLowerCase().includes(search.toLowerCase())
         );
       })
       .sort((a, b) => new Date(b.approvedAtOperaciones || b.createdAt).getTime() - new Date(a.approvedAtOperaciones || a.createdAt).getTime());
-  }, [reports, search]);
+  }, [reports, search, currentUser]);
 
   const totalApproved = reports.filter(r => r.visibleForClient).length;
 
@@ -94,7 +85,7 @@ export default function ClienteDashboard() {
             </div>
             <div>
               <p className="text-2xl font-bold text-slate-800">{approvedReports.length}</p>
-              <p className="text-xs text-slate-500">Disponibles para usted</p>
+              <p className="text-xs text-slate-500">Disponibles</p>
             </div>
           </div>
         </div>
@@ -106,7 +97,7 @@ export default function ClienteDashboard() {
         <div>
           <p className="font-medium text-blue-800 text-sm">Información verificada</p>
           <p className="text-xs text-blue-600 mt-0.5">
-            Todos los reportes mostrados han sido revisados y aprobados por el equipo de Operaciones de seguridad.
+            Todos los reportes mostrados han sido revisados y aprobados por el equipo de Operaciones.
           </p>
         </div>
       </div>
@@ -126,44 +117,7 @@ export default function ClienteDashboard() {
       {/* Reports */}
       <div className="space-y-3">
         {approvedReports.map(report => (
-          <Link
-            key={report.id}
-            to={`/reportes/${report.id}`}
-            className="block bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all p-5"
-          >
-            <div className="flex items-start gap-3">
-              <span className="text-2xl">{getReportIcon(report)}</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-semibold text-slate-800">{report.title}</h3>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium border ${getCategoryColor(report.category)}`}>
-                    {getCategoryLabel(report.category)}
-                  </span>
-                </div>
-                <p className="text-sm text-slate-500 mt-1 line-clamp-2">{report.description}</p>
-                <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-slate-400">
-                  <span className="flex items-center gap-1">
-                    <MapPin size={12} />
-                    {report.location}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <User size={12} />
-                    {report.guardName}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Calendar size={12} />
-                    {format(parseISO(report.date), "dd MMM yyyy, HH:mm", { locale: es })}
-                  </span>
-                </div>
-                {report.approvedAtOperaciones && (
-                  <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
-                    <CheckCircle size={12} />
-                    Verificado el {format(parseISO(report.approvedAtOperaciones), "dd MMM yyyy, HH:mm", { locale: es })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </Link>
+          <ReportCard key={report.id} report={report} />
         ))}
 
         {approvedReports.length === 0 && (

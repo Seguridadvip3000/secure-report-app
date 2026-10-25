@@ -7,15 +7,12 @@ import {
   Clock,
   CheckCircle,
   AlertTriangle,
-  Users,
   FileText,
   ArrowRight,
-  Eye,
-  ShieldCheck,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { getStatusColor, getStatusLabel, getPriorityColor, getPriorityLabel, getReportIcon } from '../utils/helpers';
+import { getStatusColor, getStatusLabel, getReportIcon } from '../utils/helpers';
 
 export default function LiderDashboard() {
   const { currentUser } = useAuth();
@@ -30,7 +27,6 @@ export default function LiderDashboard() {
     total: myReports.length,
     pendientes: myReports.filter(r => r.status === 'pendiente').length,
     aprobados: myReports.filter(r => r.status === 'aprobado').length,
-    criticos: myReports.filter(r => r.priority === 'critica' && r.status !== 'aprobado').length,
   };
 
   return (
@@ -59,11 +55,28 @@ export default function LiderDashboard() {
       </Link>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MiniStat icon={<FileText size={20} />} label="Mis Reportes" value={stats.total} color="text-blue-600" bg="bg-blue-50" />
-        <MiniStat icon={<Clock size={20} />} label="Pendientes" value={stats.pendientes} color="text-yellow-600" bg="bg-yellow-50" />
-        <MiniStat icon={<CheckCircle size={20} />} label="Aprobados" value={stats.aprobados} color="text-green-600" bg="bg-green-50" />
-        <MiniStat icon={<AlertTriangle size={20} />} label="Críticos" value={stats.criticos} color="text-red-600" bg="bg-red-50" />
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="bg-blue-50 w-10 h-10 rounded-lg flex items-center justify-center mb-2">
+            <FileText size={20} className="text-blue-600" />
+          </div>
+          <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
+          <p className="text-xs text-slate-500">Mis Reportes</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="bg-yellow-50 w-10 h-10 rounded-lg flex items-center justify-center mb-2">
+            <Clock size={20} className="text-yellow-600" />
+          </div>
+          <p className="text-2xl font-bold text-slate-800">{stats.pendientes}</p>
+          <p className="text-xs text-slate-500">Pendientes</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="bg-green-50 w-10 h-10 rounded-lg flex items-center justify-center mb-2">
+            <CheckCircle size={20} className="text-green-600" />
+          </div>
+          <p className="text-2xl font-bold text-slate-800">{stats.aprobados}</p>
+          <p className="text-xs text-slate-500">Aprobados</p>
+        </div>
       </div>
 
       {/* Recent */}
@@ -81,9 +94,10 @@ export default function LiderDashboard() {
               to={`/reportes/${report.id}`}
               className="flex items-center gap-3 p-4 hover:bg-slate-50 transition-colors"
             >
-              <span className="text-xl">{getReportIcon(report)}</span>
+              <span className="text-xl">{getReportIcon(report.tituloNovedad)}</span>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-slate-800 text-sm truncate">{report.title}</p>
+                <p className="font-medium text-slate-800 text-sm truncate">{report.tituloNovedad}</p>
+                <p className="text-xs text-slate-400">{report.proyecto}</p>
                 <p className="text-xs text-slate-400">
                   {format(parseISO(report.createdAt), "dd MMM, HH:mm", { locale: es })}
                 </p>
@@ -100,24 +114,6 @@ export default function LiderDashboard() {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function MiniStat({ icon, label, value, color, bg }: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  color: string;
-  bg: string;
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <div className={`${bg} w-10 h-10 rounded-lg flex items-center justify-center mb-2`}>
-        <span className={color}>{icon}</span>
-      </div>
-      <p className="text-2xl font-bold text-slate-800">{value}</p>
-      <p className="text-xs text-slate-500">{label}</p>
     </div>
   );
 }
