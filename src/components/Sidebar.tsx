@@ -1,23 +1,62 @@
 import { NavLink, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard,
   FilePlus,
   List,
   Shield,
   Menu,
-  X
+  X,
+  Users,
+  LogOut,
+  UserCheck,
 } from 'lucide-react';
 import { useState } from 'react';
+import { ROLE_LABELS, ROLE_COLORS } from '../types';
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const { currentUser, logout } = useAuth();
 
-  const links = [
-    { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/nuevo', icon: FilePlus, label: 'Nuevo Reporte' },
-    { to: '/reportes', icon: List, label: 'Reportes' },
-  ];
+  if (!currentUser) return null;
+
+  const getLinks = () => {
+    switch (currentUser.role) {
+      case 'lider':
+        return [
+          { to: '/', icon: LayoutDashboard, label: 'Mi Panel' },
+          { to: '/nuevo', icon: FilePlus, label: 'Nuevo Reporte' },
+          { to: '/mis-reportes', icon: List, label: 'Mis Reportes' },
+        ];
+      case 'operaciones':
+        return [
+          { to: '/', icon: LayoutDashboard, label: 'Panel Operaciones' },
+          { to: '/reportes', icon: List, label: 'Todos los Reportes' },
+        ];
+      case 'cliente':
+        return [
+          { to: '/', icon: LayoutDashboard, label: 'Mis Reportes' },
+        ];
+      case 'administrador':
+        return [
+          { to: '/', icon: LayoutDashboard, label: 'Administración' },
+          { to: '/usuarios', icon: Users, label: 'Usuarios' },
+          { to: '/reportes', icon: List, label: 'Reportes' },
+        ];
+      default:
+        return [];
+    }
+  };
+
+  const links = getLinks();
+
+  const roleIcons: Record<string, string> = {
+    lider: '🛡️',
+    operaciones: '📊',
+    cliente: '👤',
+    administrador: '👑',
+  };
 
   return (
     <>
@@ -78,17 +117,26 @@ export default function Sidebar() {
           })}
         </nav>
 
-        {/* Footer */}
+        {/* User Info */}
         <div className="p-4 border-t border-slate-700">
-          <div className="flex items-center gap-3 px-4 py-2">
-            <div className="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center">
-              <span className="text-sm font-medium">GU</span>
+          <div className="flex items-center gap-3 px-3 py-2 mb-3">
+            <div className="w-9 h-9 bg-slate-700 rounded-full flex items-center justify-center">
+              <span className="text-sm">{roleIcons[currentUser.role]}</span>
             </div>
-            <div>
-              <p className="text-sm font-medium">Guardia de Turno</p>
-              <p className="text-xs text-slate-400">Turno Activo</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{currentUser.name}</p>
+              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${ROLE_COLORS[currentUser.role]}`}>
+                {ROLE_LABELS[currentUser.role]}
+              </span>
             </div>
           </div>
+          <button
+            onClick={logout}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition-colors"
+          >
+            <LogOut size={18} />
+            <span className="font-medium text-sm">Cerrar Sesión</span>
+          </button>
         </div>
       </aside>
     </>

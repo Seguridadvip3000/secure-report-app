@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useReports } from '../context/ReportContext';
+import { useAuth } from '../context/AuthContext';
 import { ReportCategory, ReportPriority } from '../types';
 import {
   FileText,
@@ -9,12 +10,21 @@ import {
   AlertTriangle,
   CheckCircle,
   ArrowLeft,
+  Clock,
 } from 'lucide-react';
 
 export default function NewReport() {
   const { addReport } = useReports();
+  const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [submitted, setSubmitted] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Update time every second for real-time display
+  useState(() => {
+    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(interval);
+  });
 
   const [form, setForm] = useState({
     title: '',
@@ -22,7 +32,7 @@ export default function NewReport() {
     category: 'novedad_rutinaria' as ReportCategory,
     priority: 'media' as ReportPriority,
     location: '',
-    guardName: '',
+    guardName: currentUser?.name || '',
     date: new Date().toISOString().slice(0, 16),
   });
 
@@ -33,7 +43,7 @@ export default function NewReport() {
     if (!form.title.trim()) newErrors.title = 'El título es requerido';
     if (!form.description.trim()) newErrors.description = 'La descripción es requerida';
     if (!form.location.trim()) newErrors.location = 'La ubicación es requerida';
-    if (!form.guardName.trim()) newErrors.guardName = 'El nombre del guardia es requerido';
+    if (!form.guardName.trim()) newErrors.guardName = 'El nombre es requerido';
     if (!form.date) newErrors.date = 'La fecha es requerida';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -41,7 +51,7 @@ export default function NewReport() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) return;
+    if (!validate() || !currentUser) return;
 
     addReport({
       title: form.title,
@@ -51,11 +61,11 @@ export default function NewReport() {
       priority: form.priority,
       location: form.location,
       guardName: form.guardName,
+      createdBy: currentUser.id,
       date: new Date(form.date).toISOString(),
     });
 
     setSubmitted(true);
-    setTimeout(() => navigate('/reportes'), 2000);
   };
 
   const handleChange = (field: string, value: string) => {
@@ -68,13 +78,29 @@ export default function NewReport() {
   if (submitted) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center space-y-4">
+        <div className="text-center space-y-4 max-w-md">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
             <CheckCircle size={32} className="text-green-600" />
           </div>
-          <h2 className="text-2xl font-bold text-slate-800">¡Reporte Creado!</h2>
-          <p className="text-slate-500">El reporte ha sido registrado exitosamente.</p>
-          <p className="text-sm text-slate-400">Redirigiendo a la lista de reportes...</p>
+          <h2 className="text-2xl font-bold text-slate-800">¡Reporte Registrado!</h2>
+          <p className="text-slate-500">El reporte ha sido creado exitosamente en tiempo real.</p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+            📊 El equipo de Operaciones revisará y aprobará el reporte para el cliente.
+          </div>
+          <div className="flex gap-3 justify-center pt-2">
+            <button
+              onClick={() => { setSubmitted(false); setForm({ title: '', description: '', category: 'novedad_rutinaria', priority: 'media', location: '', guardName: currentUser?.name || '', date: new Date().toISOString().slice(0, 16) }); }}
+              className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              Crear Otro Reporte
+            </button>
+            <button
+              onClick={() => navigate('/')}
+              className="px-5 py-2.5 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors font-medium"
+            >
+              Ir al Inicio
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -83,16 +109,25 @@ export default function NewReport() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => navigate(-1)}
-          className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-        >
-          <ArrowLeft size={20} className="text-slate-600" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Nuevo Reporte</h1>
-          <p className="text-slate-500">Complete el formulario para registrar una novedad</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <ArrowLeft size={20} className="text-slate-600" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">Nuevo Reporte</h1>
+            <p className="text-slate-500">Registro en tiempo real de novedades</p>
+          </div>
+        </div>
+        {/* Real-time clock */}
+        <div className="hidden sm:flex items-center gap-2 bg-slate-100 px-3 py-2 rounded-lg">
+          <Clock size={16} className="text-blue-600" />
+          <span className="text-sm font-mono text-slate-700">
+            {currentTime.toLocaleTimeString('es-ES')}
+          </span>
         </div>
       </div>
 
@@ -238,7 +273,7 @@ export default function NewReport() {
             type="submit"
             className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
           >
-            Registrar Reporte
+            📡 Registrar Reporte en Tiempo Real
           </button>
         </div>
       </form>
