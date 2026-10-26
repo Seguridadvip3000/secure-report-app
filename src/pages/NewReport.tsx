@@ -15,6 +15,13 @@ import {
   FileText,
 } from 'lucide-react';
 
+// Ubicación por defecto: Caracas, Venezuela
+const DEFAULT_LOCATION = {
+  lat: 10.5000,
+  lng: -66.9000,
+  address: 'Caracas, Venezuela (Ubicación por defecto)'
+};
+
 export default function NewReport() {
   const { addReport } = useReports();
   const { currentUser } = useAuth();
@@ -22,6 +29,7 @@ export default function NewReport() {
   const [submitted, setSubmitted] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [loading, setLoading] = useState(false);
+  const [gpsUsedDefault, setGpsUsedDefault] = useState(false);
 
   // Update time every second
   useEffect(() => {
@@ -46,7 +54,7 @@ export default function NewReport() {
     if (!form.tituloNovedad) newErrors.tituloNovedad = 'Seleccione un tipo de novedad';
     if (!form.desarrollo.trim()) newErrors.desarrollo = 'El desarrollo es requerido';
     if (evidencias.length < 2) newErrors.evidencias = 'Debe cargar mínimo 2 fotos de evidencia';
-    if (!gpsLocation) newErrors.gps = 'No se pudo obtener la ubicación GPS';
+    // GPS es opcional - si no se puede obtener, se usará ubicación por defecto
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -70,30 +78,37 @@ export default function NewReport() {
     setEvidencias(prev => prev.filter((_, i) => i !== index));
   };
 
-  const getGPSLocation = (): Promise<{ lat: number; lng: number; address?: string }> => {
-    return new Promise((resolve, reject) => {
+  const getGPSLocation = (): Promise<{ location: { lat: number; lng: number; address?: string }; usedDefault: boolean }> => {
+    return new Promise((resolve) => {
+      // Si el navegador no soporta geolocalización, usar ubicación por defecto
       if (!navigator.geolocation) {
-        reject(new Error('Geolocalización no soportada'));
+        console.warn('⚠️ Geolocalización no soportada. Usando ubicación por defecto.');
+        resolve({ location: DEFAULT_LOCATION, usedDefault: true });
         return;
       }
 
       navigator.geolocation.getCurrentPosition(
-        async (position) => {
+        (position) => {
           const { latitude, longitude } = position.coords;
-          // Simular dirección (en producción usarías reverse geocoding)
+          console.log('✅ GPS obtenido exitosamente:', latitude, longitude);
           resolve({
-            lat: latitude,
-            lng: longitude,
-            address: `Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)}`
+            location: {
+              lat: latitude,
+              lng: longitude,
+              address: `Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)}`
+            },
+            usedDefault: false
           });
         },
         (error) => {
-          reject(error);
+          // En caso de error (permisos denegados, timeout, etc.), usar ubicación por defecto
+          console.warn('⚠️ Error al obtener GPS:', error.message, '. Usando ubicación por defecto.');
+          resolve({ location: DEFAULT_LOCATION, usedDefault: true });
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
+          timeout: 5000, // Reducido a 5 segundos para mejor UX
+          maximumAge: 60000 // Aceptar ubicación de hasta 1 minuto de antigüedad
         }
       );
     });
@@ -102,18 +117,24 @@ export default function NewReport() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Obtener GPS al enviar
+    // Validar campos obligatorios (excepto GPS)
+    if (!validate()) {
+      return;
+    }
+
+    if (!currentUser) return;
+
     try {
       setLoading(true);
-      const location = await getGPSLocation();
+      
+      // Intentar obtener GPS, si falla usará ubicación por defecto automáticamente
+      const { location, usedDefault } = await getGPSLocation();
       setGpsLocation(location);
+      setGpsUsedDefault(usedDefault);
 
-      if (!validate()) {
-        setLoading(false);
-        return;
+      if (usedDefault) {
+        console.log('ℹ️ Se usó ubicación por defecto (Caracas)');
       }
-
-      if (!currentUser) return;
 
       // Crear reporte
       const reportData = {
@@ -130,14 +151,11 @@ export default function NewReport() {
 
       await addReport(reportData);
 
-      // Generar PDF (simulado - en producción se subiría a la nube)
-      // const pdfData = await generateReportPDF({ ...reportData, id: 'temp', createdAt: new Date().toISOString(), visibleForClient: false });
-      // console.log('PDF generado:', pdfData);
-
       setSubmitted(true);
       setLoading(false);
     } catch (error) {
-      setErrors({ gps: 'Error al obtener ubicación GPS. Verifique los permisos.' });
+      console.error('Error al crear reporte:', error);
+      setErrors({ general: 'Error al crear el reporte. Por favor intente nuevamente.' });
       setLoading(false);
     }
   };
@@ -160,10 +178,15 @@ export default function NewReport() {
           <p className="text-slate-500">El reporte ha sido registrado exitosamente.</p>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700 space-y-2">
             <p>✓ PDF generado y almacenado en la nube</p>
-            <p>✓ Ubicación GPS registrada</p>
+            <p>✓ Ubicación GPS registrada {gpsUsedDefault && '(ubicación por defecto)'}</p>
             <p>✓ Evidencias adjuntas</p>
             <p className="text-xs mt-2">El equipo de Operaciones revisará el reporte. Una vez aprobado, se notificará al cliente.</p>
           </div>
+          {gpsUsedDefault && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+              ℹ️ Se usó la ubicación por defecto (Caracas) porque no se pudo obtener tu ubicación GPS.
+            </div>
+          )}
           <div className="flex gap-3 justify-center pt-2">
             <button
               onClick={() => {
@@ -171,6 +194,7 @@ export default function NewReport() {
                 setForm({ proyecto: '', tituloNovedad: '', desarrollo: '' });
                 setEvidencias([]);
                 setGpsLocation(null);
+                setGpsUsedDefault(false);
               }}
               className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
             >
@@ -373,16 +397,20 @@ export default function NewReport() {
           </div>
 
           {/* GPS Info */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className={`border rounded-lg p-4 ${gpsUsedDefault ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'}`}>
             <div className="flex items-start gap-3">
-              <MapPin size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
+              <MapPin size={20} className={`${gpsUsedDefault ? 'text-amber-600' : 'text-blue-600'} flex-shrink-0 mt-0.5`} />
               <div className="flex-1">
-                <p className="text-sm font-medium text-blue-800">Ubicación GPS</p>
-                <p className="text-xs text-blue-600 mt-1">
-                  La ubicación se capturará automáticamente al enviar el reporte
+                <p className={`text-sm font-medium ${gpsUsedDefault ? 'text-amber-800' : 'text-blue-800'}`}>
+                  Ubicación GPS {gpsUsedDefault ? '(Por Defecto)' : ''}
+                </p>
+                <p className={`text-xs mt-1 ${gpsUsedDefault ? 'text-amber-600' : 'text-blue-600'}`}>
+                  {gpsUsedDefault 
+                    ? 'No se pudo obtener tu ubicación. Se usará la ubicación por defecto (Caracas).'
+                    : 'La ubicación se capturará automáticamente al enviar el reporte'}
                 </p>
                 {gpsLocation && (
-                  <p className="text-xs text-blue-700 mt-2 font-mono">
+                  <p className={`text-xs mt-2 font-mono ${gpsUsedDefault ? 'text-amber-700' : 'text-blue-700'}`}>
                     {gpsLocation.lat.toFixed(6)}, {gpsLocation.lng.toFixed(6)}
                   </p>
                 )}
@@ -400,10 +428,10 @@ export default function NewReport() {
 
         {/* Actions */}
         <div className="p-6 bg-slate-50 border-t border-slate-100 rounded-b-xl">
-          {errors.gps && (
+          {errors.general && (
             <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 flex items-center gap-2">
               <AlertCircle size={16} />
-              {errors.gps}
+              {errors.general}
             </div>
           )}
           <button
@@ -414,7 +442,7 @@ export default function NewReport() {
             {loading ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Obteniendo GPS y generando PDF...
+                Enviando reporte...
               </>
             ) : (
               <>
