@@ -205,6 +205,14 @@ export default function AuthPage() {
                   <p>📊 Operaciones: roberto@operaciones.com</p>
                   <p>👤 Cliente: ana@cliente.com</p>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => window.location.href = '/setup'}
+                  className="w-full text-xs text-blue-600 hover:text-blue-700 underline mt-2"
+                >
+                  ¿Problemas para iniciar sesión? Inicializar base de datos
+                </button>
               </form>
             )}
 

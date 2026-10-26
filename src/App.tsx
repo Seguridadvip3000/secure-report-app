@@ -12,6 +12,7 @@ import ReportList from './pages/ReportList';
 import ReportDetail from './pages/ReportDetail';
 import AprobacionesPage from './pages/AprobacionesPage';
 import ConfiguracionPage from './pages/ConfiguracionPage';
+import SetupWizard from './pages/SetupWizard';
 import { ReactNode } from 'react';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -104,6 +105,9 @@ function AppRoutes() {
                 <ReportDetail />
               </ProtectedRoute>
             } />
+
+            {/* Setup Wizard - para inicializar datos de prueba */}
+            <Route path="/setup" element={<SetupWizard />} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
