@@ -8,7 +8,7 @@ import { userService } from '../services/userService';
 interface AuthContextType {
   currentUser: User | null;
   users: User[];
-  login: (email: string, phone: string) => { success: boolean; message: string };
+  login: (email: string, phone: string) => Promise<{ success: boolean; message: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
   approveUser: (userId: string) => Promise<void>;
@@ -106,12 +106,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     saveSession(currentUser);
   }, [currentUser]);
 
-  const login = (email: string, phone: string) => {
-    const user = users.find(
+  const login = async (email: string, phone: string): Promise<{ success: boolean; message: string }> => {
+    // Primero buscar en la lista de usuarios cargados
+    let user = users.find(
       u => (u.email === email || u.phone === phone)
     );
+
+    // Si no existe en Supabase pero es un usuario de prueba, crearlo automáticamente
+    if (!user && storageMode === 'supabase') {
+      const testUser = initialUsers.find(
+        u => (u.email === email || u.phone === phone)
+      );
+      
+      if (testUser) {
+        console.log('ℹ️ Usuario de prueba no existe en Supabase. Creándolo automáticamente...');
+        try {
+          await userService.registerUser({
+            name: testUser.name,
+            email: testUser.email,
+            phone: testUser.phone,
+            role: testUser.role,
+            proyectos: testUser.proyectos,
+          });
+          
+          // Aprobarlo automáticamente si es un usuario de prueba
+          const newUser = await userService.getUserByCredentials(testUser.email, testUser.phone);
+          if (newUser && newUser.status === 'pendiente') {
+            await userService.approveUser(newUser.id, 'system');
+          }
+          
+          // Recargar usuarios
+          await loadUsersFromSupabase();
+          
+          // Buscar el usuario recién creado
+          user = users.find(
+            u => (u.email === email || u.phone === phone)
+          );
+          
+          if (user) {
+            console.log('✅ Usuario de prueba creado y aprobado exitosamente');
+          }
+        } catch (error) {
+          console.error('Error creando usuario de prueba:', error);
+          return { success: false, message: 'Error al crear usuario. Por favor, inicializa la base de datos desde /setup' };
+        }
+      }
+    }
+
     if (!user) {
-      return { success: false, message: 'Usuario no encontrado. Regístrese primero.' };
+      return { success: false, message: 'Usuario no encontrado. Regístrese primero o inicialice la base de datos desde /setup' };
     }
     if (user.status === 'pendiente') {
       return { success: false, message: 'Su cuenta está pendiente de aprobación por la Directiva.' };

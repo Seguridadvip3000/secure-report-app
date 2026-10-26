@@ -24,14 +24,14 @@ export default function AuthPage() {
   // Register form - paso 2 (solo para lider y cliente)
   const [regProyectos, setRegProyectos] = useState<string[]>([]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (!loginEmail && !loginPhone) {
       setError('Ingrese su email o teléfono');
       return;
     }
-    const result = login(loginEmail, loginPhone);
+    const result = await login(loginEmail, loginPhone);
     if (!result.success) {
       setError(result.message);
     }

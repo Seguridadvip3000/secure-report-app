@@ -63,7 +63,7 @@ export default function SetupWizard() {
   };
 
   const handleQuickLogin = async (email: string) => {
-    const result = login(email, '');
+    const result = await login(email, '');
     if (result.success) {
       navigate('/');
     } else {
