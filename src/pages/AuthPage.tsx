@@ -213,6 +213,13 @@ export default function AuthPage() {
                 >
                   ¿Problemas para iniciar sesión? Inicializar base de datos
                 </button>
+                <button
+                  type="button"
+                  onClick={() => window.location.href = '/diagnostic'}
+                  className="w-full text-xs text-purple-600 hover:text-purple-700 underline mt-1"
+                >
+                  🔧 Diagnóstico y crear usuarios de prueba
+                </button>
               </form>
             )}
 

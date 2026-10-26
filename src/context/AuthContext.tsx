@@ -107,21 +107,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [currentUser]);
 
   const login = async (email: string, phone: string): Promise<{ success: boolean; message: string }> => {
+    console.log('🔍 Intentando login con:', { email, phone, storageMode });
+    console.log('📋 Usuarios cargados:', users.length);
+    
     // Primero buscar en la lista de usuarios cargados
     let user = users.find(
       u => (u.email === email || u.phone === phone)
     );
 
+    console.log('👤 Usuario encontrado en memoria:', user ? user.name : 'NO');
+
     // Si no existe en Supabase pero es un usuario de prueba, crearlo automáticamente
     if (!user && storageMode === 'supabase') {
+      console.log('⚠️ Usuario no existe en memoria. Verificando si es usuario de prueba...');
+      
       const testUser = initialUsers.find(
         u => (u.email === email || u.phone === phone)
       );
       
       if (testUser) {
-        console.log('ℹ️ Usuario de prueba no existe en Supabase. Creándolo automáticamente...');
+        console.log('✅ Es usuario de prueba:', testUser.name);
+        console.log('🚀 Creando usuario en Supabase...');
+        
         try {
-          await userService.registerUser({
+          // Registrar el usuario
+          const registeredUser = await userService.registerUser({
             name: testUser.name,
             email: testUser.email,
             phone: testUser.phone,
@@ -129,31 +139,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             proyectos: testUser.proyectos,
           });
           
-          // Aprobarlo automáticamente si es un usuario de prueba
-          const newUser = await userService.getUserByCredentials(testUser.email, testUser.phone);
-          if (newUser && newUser.status === 'pendiente') {
-            await userService.approveUser(newUser.id, 'system');
-          }
+          console.log('✅ Usuario registrado en Supabase:', registeredUser.id);
           
-          // Recargar usuarios
+          // Aprobarlo automáticamente
+          console.log('✅ Aprobando usuario automáticamente...');
+          await userService.approveUser(registeredUser.id, 'system');
+          
+          // Recargar usuarios desde Supabase
+          console.log('🔄 Recargando usuarios desde Supabase...');
           await loadUsersFromSupabase();
           
-          // Buscar el usuario recién creado
+          // Buscar el usuario recién creado en la lista actualizada
           user = users.find(
             u => (u.email === email || u.phone === phone)
           );
           
           if (user) {
-            console.log('✅ Usuario de prueba creado y aprobado exitosamente');
+            console.log('✅ Usuario de prueba creado y aprobado exitosamente:', user.name);
+          } else {
+            console.error('❌ Usuario no encontrado después de recargar');
+            return { success: false, message: 'Error: Usuario creado pero no encontrado. Recarga la página.' };
           }
         } catch (error) {
-          console.error('Error creando usuario de prueba:', error);
-          return { success: false, message: 'Error al crear usuario. Por favor, inicializa la base de datos desde /setup' };
+          console.error('❌ Error creando usuario de prueba:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+          return { success: false, message: `Error al crear usuario en Supabase: ${errorMessage}. Verifica la consola para más detalles.` };
         }
+      } else {
+        console.log('❌ No es un usuario de prueba conocido');
+      }
+    } else if (!user && storageMode === 'local') {
+      console.log('⚠️ Modo local: buscando en localStorage...');
+      const localUsers = loadLocalUsers();
+      user = localUsers.find(u => (u.email === email || u.phone === phone));
+      if (user) {
+        console.log('✅ Usuario encontrado en localStorage:', user.name);
+        setUsers(localUsers);
       }
     }
 
     if (!user) {
+      console.error('❌ Usuario no encontrado en ningún lado');
       return { success: false, message: 'Usuario no encontrado. Regístrese primero o inicialice la base de datos desde /setup' };
     }
     if (user.status === 'pendiente') {
@@ -162,6 +188,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user.status === 'rechazado') {
       return { success: false, message: `Su cuenta fue rechazada. ${user.rejectionReason || ''}` };
     }
+    
+    console.log('✅ Login exitoso:', user.name);
     setCurrentUser(user);
     return { success: true, message: 'Inicio de sesión exitoso' };
   };
