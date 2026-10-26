@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useReports } from '../context/ReportContext';
 import { useAuth } from '../context/AuthContext';
@@ -24,10 +24,10 @@ export default function NewReport() {
   const [loading, setLoading] = useState(false);
 
   // Update time every second
-  useState(() => {
+  useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
-  });
+  }, []);
 
   const [form, setForm] = useState({
     proyecto: '',
