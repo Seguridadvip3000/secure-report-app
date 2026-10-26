@@ -117,12 +117,29 @@ export default function NewReport() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('🔍 handleSubmit llamado');
+    console.log('👤 currentUser:', currentUser);
+    console.log('🆔 currentUser.id:', currentUser?.id);
+    console.log('📧 currentUser.email:', currentUser?.email);
+    
     // Validar campos obligatorios (excepto GPS)
     if (!validate()) {
+      console.log('❌ Validación fallida');
       return;
     }
 
-    if (!currentUser) return;
+    if (!currentUser) {
+      console.error('❌ No hay currentUser');
+      return;
+    }
+
+    // Validar que el ID sea un UUID válido
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(currentUser.id)) {
+      console.error('❌ currentUser.id no es un UUID válido:', currentUser.id);
+      setErrors({ general: 'Error: Usuario no válido. Por favor, cierra sesión e inicia sesión nuevamente.' });
+      return;
+    }
 
     try {
       setLoading(true);
@@ -149,13 +166,19 @@ export default function NewReport() {
         status: 'pendiente' as const,
       };
 
+      console.log('📝 Llamando a addReport con:', reportData);
       await addReport(reportData);
 
+      console.log('✅ Reporte enviado exitosamente');
       setSubmitted(true);
       setLoading(false);
     } catch (error) {
-      console.error('Error al crear reporte:', error);
-      setErrors({ general: 'Error al crear el reporte. Por favor intente nuevamente.' });
+      console.error('❌ Error al crear reporte:', error);
+      if (error instanceof Error) {
+        console.error('❌ Mensaje:', error.message);
+        console.error('❌ Stack:', error.stack);
+      }
+      setErrors({ general: `Error al crear el reporte: ${error instanceof Error ? error.message : 'Error desconocido'}` });
       setLoading(false);
     }
   };

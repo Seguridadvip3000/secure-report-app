@@ -39,25 +39,66 @@ export const reportService = {
     quienReporta: string;
     createdBy: string;
   }): Promise<Report> {
-    const { data, error } = await supabase
-      .from('reports')
-      .insert([{
+    console.log('📝 Intentando crear reporte en Supabase...');
+    console.log('📋 Datos del reporte:', {
+      fechaHora: reportData.fechaHora,
+      proyecto: reportData.proyecto,
+      tituloNovedad: reportData.tituloNovedad,
+      quienReporta: reportData.quienReporta,
+      createdBy: reportData.createdBy,
+      evidenciasCount: reportData.evidencias?.length || 0,
+      ubicacionGPS: reportData.ubicacionGPS
+    });
+
+    try {
+      // Validar que createdBy sea un UUID válido
+      if (!reportData.createdBy || reportData.createdBy === 'system') {
+        throw new Error('createdBy debe ser un UUID válido de usuario, no "system"');
+      }
+
+      // Preparar datos para insertar
+      const insertData = {
         fecha_hora: reportData.fechaHora,
         proyecto: reportData.proyecto,
         titulo_novedad: reportData.tituloNovedad,
         desarrollo: reportData.desarrollo,
-        evidencias: reportData.evidencias,
-        ubicacion_gps: reportData.ubicacionGPS,
+        evidencias: reportData.evidencias || [],
+        ubicacion_gps: reportData.ubicacionGPS || { lat: 0, lng: 0 },
         quien_reporta: reportData.quienReporta,
         created_by: reportData.createdBy,
         status: 'pendiente',
         visible_for_client: false,
-      }])
-      .select()
-      .single();
+      };
 
-    if (error) throw error;
-    return data;
+      console.log('📤 Datos a insertar:', insertData);
+
+      const { data, error } = await supabase
+        .from('reports')
+        .insert([insertData])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error de Supabase al crear reporte:', error);
+        console.error('❌ Detalles del error:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw error;
+      }
+
+      console.log('✅ Reporte creado exitosamente:', data.id);
+      return data;
+    } catch (error) {
+      console.error('❌ Excepción al crear reporte:', error);
+      if (error instanceof Error) {
+        console.error('❌ Mensaje de error:', error.message);
+        console.error('❌ Stack trace:', error.stack);
+      }
+      throw error;
+    }
   },
 
   // Aprobar reporte para cliente

@@ -98,23 +98,44 @@ export function ReportProvider({ children }: { children: ReactNode }) {
   }, [reports, storageMode]);
 
   const addReport = async (report: Omit<Report, 'id' | 'createdAt' | 'visibleForClient'>) => {
+    console.log('📝 addReport llamado con:', report);
+    
     if (storageMode === 'supabase') {
       try {
+        // Validar que createdBy sea un UUID válido
+        console.log('🔍 Validando createdBy:', report.createdBy);
+        if (!report.createdBy || report.createdBy === 'system' || !report.createdBy.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+          console.error('❌ createdBy no es un UUID válido:', report.createdBy);
+          throw new Error(`createdBy debe ser un UUID válido de Supabase. Valor recibido: ${report.createdBy}`);
+        }
+
         // 1. Crear el reporte primero para obtener el ID
         const newReportId = uuidv4();
+        console.log('🆔 Nuevo ID de reporte generado:', newReportId);
         
         // 2. Subir imágenes a Supabase Storage
         let uploadedEvidenceUrls: string[] = [];
         if (report.evidencias && report.evidencias.length > 0) {
           console.log('📸 Subiendo evidencias a Supabase Storage...');
-          uploadedEvidenceUrls = await storageService.uploadImagesFromBase64(
-            report.evidencias,
-            newReportId
-          );
-          console.log(`✅ ${uploadedEvidenceUrls.length} evidencias subidas`);
+          console.log(`📸 Cantidad de evidencias: ${report.evidencias.length}`);
+          
+          try {
+            uploadedEvidenceUrls = await storageService.uploadImagesFromBase64(
+              report.evidencias,
+              newReportId
+            );
+            console.log(`✅ ${uploadedEvidenceUrls.length} evidencias subidas exitosamente`);
+            console.log('📸 URLs de evidencias:', uploadedEvidenceUrls);
+          } catch (uploadError) {
+            console.error('❌ Error subiendo evidencias:', uploadError);
+            console.error('❌ Detalles:', uploadError instanceof Error ? uploadError.message : uploadError);
+            // Continuar sin evidencias si falla la subida
+            uploadedEvidenceUrls = [];
+          }
         }
 
         // 3. Crear el reporte con las URLs de las evidencias
+        console.log('📤 Llamando a reportService.createReport...');
         await reportService.createReport({
           fechaHora: report.fechaHora,
           proyecto: report.proyecto,
@@ -129,7 +150,11 @@ export function ReportProvider({ children }: { children: ReactNode }) {
         console.log('✅ Reporte creado exitosamente en Supabase');
         await refreshReports();
       } catch (error) {
-        console.error('Error creating report:', error);
+        console.error('❌ Error creating report:', error);
+        if (error instanceof Error) {
+          console.error('❌ Mensaje:', error.message);
+          console.error('❌ Stack:', error.stack);
+        }
         throw error;
       }
     } else {
