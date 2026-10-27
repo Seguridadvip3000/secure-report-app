@@ -1,9 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useReports } from '../context/ReportContext';
 import { useAuth } from '../context/AuthContext';
 import { PROYECTOS, TITULOS_NOVEDAD } from '../data/constants';
-import { generateReportPDF } from '../utils/pdfGenerator';
 import {
   ArrowLeft,
   CheckCircle,
