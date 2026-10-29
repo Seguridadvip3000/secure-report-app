@@ -16,8 +16,8 @@ import {
 
 // Ubicación por defecto: Caracas, Venezuela
 const DEFAULT_LOCATION = {
-  lat: 10.5000,
-  lng: -66.9000,
+  lat: 10.4806,
+  lng: -66.9036,
   address: 'Caracas, Venezuela (Ubicación por defecto)'
 };
 
@@ -82,7 +82,13 @@ export default function NewReport() {
       // Si el navegador no soporta geolocalización, usar ubicación por defecto
       if (!navigator.geolocation) {
         console.warn('⚠️ Geolocalización no soportada. Usando ubicación por defecto.');
-        resolve({ location: DEFAULT_LOCATION, usedDefault: true });
+        resolve({ 
+          location: {
+            ...DEFAULT_LOCATION,
+            address: 'Ubicación por defecto (Navegador no soporta GPS)'
+          }, 
+          usedDefault: true 
+        });
         return;
       }
 
@@ -101,8 +107,15 @@ export default function NewReport() {
         },
         (error) => {
           // En caso de error (permisos denegados, timeout, etc.), usar ubicación por defecto
-          console.warn('⚠️ Error al obtener GPS:', error.message, '. Usando ubicación por defecto.');
-          resolve({ location: DEFAULT_LOCATION, usedDefault: true });
+          console.warn('⚠️ GPS bloqueado por el navegador, aplicando coordenadas base por defecto.');
+          console.warn('⚠️ Error details:', error.message, '(Código:', error.code, ')');
+          resolve({ 
+            location: {
+              ...DEFAULT_LOCATION,
+              address: 'Ubicación estimada (Permiso de navegador denegado)'
+            }, 
+            usedDefault: true 
+          });
         },
         {
           enableHighAccuracy: true,
