@@ -130,40 +130,123 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('🚀 Creando usuario en Supabase...');
         
         try {
-          // Registrar el usuario
-          const registeredUser = await userService.registerUser({
+          console.log('📝 Datos a registrar:', {
             name: testUser.name,
             email: testUser.email,
             phone: testUser.phone,
             role: testUser.role,
-            proyectos: testUser.proyectos,
+            proyectos: testUser.proyectos
           });
+
+          // Primero verificar si el usuario ya existe
+          console.log('🔍 Verificando si el usuario ya existe en Supabase...');
+          const existingUser = await userService.getUserByCredentials(testUser.email, testUser.phone);
           
-          console.log('✅ Usuario registrado en Supabase:', registeredUser.id);
-          
-          // Aprobarlo automáticamente
-          console.log('✅ Aprobando usuario automáticamente...');
-          await userService.approveUser(registeredUser.id, 'system');
-          
-          // Recargar usuarios desde Supabase
-          console.log('🔄 Recargando usuarios desde Supabase...');
-          await loadUsersFromSupabase();
-          
-          // Buscar el usuario recién creado en la lista actualizada
-          user = users.find(
-            u => (u.email === email || u.phone === phone)
-          );
-          
-          if (user) {
-            console.log('✅ Usuario de prueba creado y aprobado exitosamente:', user.name);
+          if (existingUser) {
+            console.log('✅ Usuario ya existe en Supabase:', existingUser.id);
+            console.log('📊 Estado actual:', existingUser.status);
+            
+            // Si existe pero no está aprobado, aprobarlo
+            if (existingUser.status !== 'aprobado') {
+              console.log('✅ Aprobando usuario existente...');
+              await userService.approveUser(existingUser.id, 'system');
+            }
+            
+            // Recargar usuarios
+            console.log('🔄 Recargando usuarios desde Supabase...');
+            await loadUsersFromSupabase();
+            
+            user = users.find(u => u.email === email || u.phone === phone);
+            
+            if (user) {
+              console.log('✅ Usuario encontrado y aprobado:', user.name);
+            } else {
+              console.error('❌ Usuario no encontrado después de recargar');
+              return { success: false, message: 'Error: Usuario existe pero no se pudo cargar. Recarga la página.' };
+            }
           } else {
-            console.error('❌ Usuario no encontrado después de recargar');
-            return { success: false, message: 'Error: Usuario creado pero no encontrado. Recarga la página.' };
+            // Registrar el usuario
+            console.log('📝 Registrando nuevo usuario en Supabase...');
+            const registeredUser = await userService.registerUser({
+              name: testUser.name,
+              email: testUser.email,
+              phone: testUser.phone,
+              role: testUser.role,
+              proyectos: testUser.proyectos,
+            });
+            
+            console.log('✅ Usuario registrado en Supabase:', registeredUser.id);
+            
+            // Aprobarlo automáticamente
+            console.log('✅ Aprobando usuario automáticamente...');
+            await userService.approveUser(registeredUser.id, 'system');
+            
+            // Recargar usuarios desde Supabase
+            console.log('🔄 Recargando usuarios desde Supabase...');
+            await loadUsersFromSupabase();
+            
+            // Buscar el usuario recién creado en la lista actualizada
+            user = users.find(
+              u => (u.email === email || u.phone === phone)
+            );
+            
+            if (user) {
+              console.log('✅ Usuario de prueba creado y aprobado exitosamente:', user.name);
+            } else {
+              console.error('❌ Usuario no encontrado después de recargar');
+              return { success: false, message: 'Error: Usuario creado pero no encontrado. Recarga la página.' };
+            }
           }
         } catch (error) {
           console.error('❌ Error creando usuario de prueba:', error);
-          const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-          return { success: false, message: `Error al crear usuario en Supabase: ${errorMessage}. Verifica la consola para más detalles.` };
+          
+          // Extraer información detallada del error
+          let errorMessage = 'Error desconocido';
+          let errorDetails = '';
+          
+          if (error instanceof Error) {
+            errorMessage = error.message;
+            errorDetails = error.stack || '';
+          } else if (typeof error === 'object' && error !== null) {
+            // Error de Supabase
+            const supabaseError = error as any;
+            if (supabaseError.message) {
+              errorMessage = supabaseError.message;
+            }
+            if (supabaseError.details) {
+              errorDetails = supabaseError.details;
+            }
+            if (supabaseError.hint) {
+              errorDetails += (errorDetails ? '\n' : '') + supabaseError.hint;
+            }
+            if (supabaseError.code) {
+              errorDetails += (errorDetails ? '\n' : '') + `Código: ${supabaseError.code}`;
+            }
+          }
+          
+          console.error('📋 Detalles del error:', {
+            message: errorMessage,
+            details: errorDetails,
+            error: error
+          });
+          
+          // Mensaje más descriptivo para el usuario
+          let userMessage = `Error al crear usuario en Supabase: ${errorMessage}`;
+          
+          if (errorDetails) {
+            userMessage += `\n\nDetalles: ${errorDetails}`;
+          }
+          
+          // Sugerencias basadas en el tipo de error
+          if (errorMessage.includes('duplicate') || errorMessage.includes('unique')) {
+            userMessage += '\n\n💡 El usuario ya existe. Intenta recargar la página.';
+          } else if (errorMessage.includes('policy') || errorMessage.includes('permission')) {
+            userMessage += '\n\n💡 Error de permisos. Verifica las políticas RLS en Supabase.';
+          } else if (errorMessage.includes('connection') || errorMessage.includes('network')) {
+            userMessage += '\n\n💡 Error de conexión. Verifica tu conexión a internet y las credenciales de Supabase.';
+          }
+          
+          return { success: false, message: userMessage };
         }
       } else {
         console.log('❌ No es un usuario de prueba conocido');

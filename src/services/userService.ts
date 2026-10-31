@@ -15,17 +15,36 @@ export const userService = {
 
   // Obtener usuario por email o teléfono
   async getUserByCredentials(email: string, phone: string): Promise<User | null> {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .or(`email.eq.${email},phone.eq.${phone}`)
-      .single();
+    console.log('🔍 userService.getUserByCredentials llamado con:', { email, phone });
+    
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .or(`email.eq.${email},phone.eq.${phone}`)
+        .single();
 
-    if (error) {
-      if (error.code === 'PGRST116') return null; // No rows
+      if (error) {
+        if (error.code === 'PGRST116') {
+          console.log('ℹ️ Usuario no encontrado (PGRST116)');
+          return null; // No rows
+        }
+        console.error('❌ Error de Supabase al buscar usuario:', error);
+        console.error('📋 Detalles:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw error;
+      }
+
+      console.log('✅ Usuario encontrado:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Excepción en getUserByCredentials:', error);
       throw error;
     }
-    return data;
   },
 
   // Registrar nuevo usuario
@@ -36,35 +55,71 @@ export const userService = {
     role: UserRole;
     proyectos?: string[];
   }): Promise<User> {
-    const { data, error } = await supabase
-      .from('users')
-      .insert([{
-        name: userData.name,
-        email: userData.email,
-        phone: userData.phone,
-        role: userData.role,
-        status: 'pendiente',
-        proyectos: userData.proyectos || [],
-      }])
-      .select()
-      .single();
+    console.log('📝 userService.registerUser llamado con:', userData);
+    
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .insert([{
+          name: userData.name,
+          email: userData.email,
+          phone: userData.phone,
+          role: userData.role,
+          status: 'pendiente',
+          proyectos: userData.proyectos || [],
+        }])
+        .select()
+        .single();
 
-    if (error) throw error;
-    return data;
+      if (error) {
+        console.error('❌ Error de Supabase al registrar usuario:', error);
+        console.error('📋 Detalles:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw error;
+      }
+
+      console.log('✅ Usuario registrado exitosamente:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Excepción en registerUser:', error);
+      throw error;
+    }
   },
 
   // Aprobar usuario
   async approveUser(userId: string, approvedBy: string): Promise<void> {
-    const { error } = await supabase
-      .from('users')
-      .update({
-        status: 'aprobado',
-        approved_at: new Date().toISOString(),
-        approved_by: approvedBy,
-      })
-      .eq('id', userId);
+    console.log('✅ userService.approveUser llamado con:', { userId, approvedBy });
+    
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          status: 'aprobado',
+          approved_at: new Date().toISOString(),
+          approved_by: approvedBy,
+        })
+        .eq('id', userId);
 
-    if (error) throw error;
+      if (error) {
+        console.error('❌ Error de Supabase al aprobar usuario:', error);
+        console.error('📋 Detalles:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw error;
+      }
+
+      console.log('✅ Usuario aprobado exitosamente');
+    } catch (error) {
+      console.error('❌ Excepción en approveUser:', error);
+      throw error;
+    }
   },
 
   // Rechazar usuario
