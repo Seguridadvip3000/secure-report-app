@@ -17,6 +17,7 @@ interface ReportContextType {
   addNote: (id: string, note: string) => Promise<void>;
   deleteReport: (id: string) => Promise<void>;
   getReportById: (id: string) => Report | undefined;
+  refreshReports: () => Promise<void>;
   loading: boolean;
 }
 
@@ -52,31 +53,45 @@ export function ReportProvider({ children }: { children: ReactNode }) {
 
   const loadReportsFromSupabase = async () => {
     try {
+      console.log('🔄 [ReportContext] Cargando reportes desde Supabase...');
       const supabaseReports = await reportService.getAllReports();
+      console.log('📊 [ReportContext] Reportes recibidos de Supabase:', supabaseReports.length);
+      
       // Map database fields to frontend fields
-      const mappedReports = supabaseReports.map((r: any) => ({
-        id: r.id,
-        fechaHora: r.fecha_hora,
-        proyecto: r.proyecto,
-        tituloNovedad: r.titulo_novedad,
-        desarrollo: r.desarrollo,
-        evidencias: r.evidencias || [],
-        ubicacionGPS: r.ubicacion_gps,
-        quienReporta: r.quien_reporta,
-        createdBy: r.created_by,
-        status: r.status,
-        createdAt: r.created_at,
-        notes: r.notes,
-        approvedByOperaciones: r.approved_by_operaciones,
-        approvedAtOperaciones: r.approved_at_operaciones,
-        visibleForClient: r.visible_for_client,
-        pdfUrl: r.pdf_url,
-        emailEnviadoA: r.email_enviado_a,
-        emailEnviadoAt: r.email_enviado_at,
-      }));
+      const mappedReports = supabaseReports.map((r: any) => {
+        const mapped = {
+          id: r.id,
+          fechaHora: r.fecha_hora,
+          proyecto: r.proyecto,
+          tituloNovedad: r.titulo_novedad,
+          desarrollo: r.desarrollo,
+          evidencias: r.evidencias || [],
+          ubicacionGPS: r.ubicacion_gps,
+          quienReporta: r.quien_reporta,
+          createdBy: r.created_by,
+          status: r.status,
+          createdAt: r.created_at,
+          notes: r.notes,
+          approvedByOperaciones: r.approved_by_operaciones,
+          approvedAtOperaciones: r.approved_at_operaciones,
+          visibleForClient: r.visible_for_client,
+          pdfUrl: r.pdf_url,
+          emailEnviadoA: r.email_enviado_a,
+          emailEnviadoAt: r.email_enviado_at,
+        };
+        
+        // Log solo para reportes aprobados
+        if (r.status === 'aprobado' || r.visible_for_client) {
+          console.log(`📄 [ReportContext] Reporte mapeado: "${r.titulo_novedad}" - status: ${r.status}, visibleForClient: ${r.visible_for_client}, proyecto: ${r.proyecto}`);
+        }
+        
+        return mapped;
+      });
+      
+      console.log('✅ [ReportContext] Total de reportes mapeados:', mappedReports.length);
       setReports(mappedReports);
     } catch (error) {
-      console.error('Error loading reports from Supabase:', error);
+      console.error('❌ [ReportContext] Error cargando reportes desde Supabase:', error);
       // Fallback to local data
       setReports(initialReports);
     } finally {
@@ -344,6 +359,7 @@ export function ReportProvider({ children }: { children: ReactNode }) {
         addNote,
         deleteReport,
         getReportById,
+        refreshReports,
         loading,
       }}
     >

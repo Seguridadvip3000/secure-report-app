@@ -1,25 +1,54 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useReports } from '../context/ReportContext';
 import { useAuth } from '../context/AuthContext';
-import { Search, FileText, CheckCircle, Calendar, Shield } from 'lucide-react';
+import { Search, FileText, CheckCircle, Calendar, Shield, RefreshCw } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import ReportCard from '../components/ReportCard';
 
 export default function ClienteDashboard() {
-  const { reports } = useReports();
+  const { reports, refreshReports } = useReports();
   const { currentUser } = useAuth();
   const [search, setSearch] = useState('');
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+
+  // Auto-refresh reports when component mounts
+  useEffect(() => {
+    console.log('🔄 [ClienteDashboard] Componente montado, recargando reportes...');
+    refreshReports().then(() => {
+      setLastUpdate(new Date());
+      console.log('✅ [ClienteDashboard] Reportes recargados exitosamente');
+    });
+  }, []);
+
+  const handleRefresh = async () => {
+    console.log('🔄 [ClienteDashboard] Usuario solicitó recarga manual...');
+    await refreshReports();
+    setLastUpdate(new Date());
+  };
 
   // Client only sees approved reports for their projects
   const approvedReports = useMemo(() => {
-    return reports
-      .filter(r => r.visibleForClient && r.status === 'aprobado')
+    console.log('🔍 [ClienteDashboard] Filtrando reportes...');
+    console.log('📊 Total de reportes cargados:', reports.length);
+    console.log('👤 Usuario actual:', currentUser?.name);
+    console.log('📁 Proyectos del cliente:', currentUser?.proyectos);
+    
+    const filtered = reports
+      .filter(r => {
+        const isVisible = r.visibleForClient;
+        const isApproved = r.status === 'aprobado';
+        console.log(`📄 Reporte "${r.tituloNovedad}" - visibleForClient: ${isVisible}, status: ${r.status}`);
+        return isVisible && isApproved;
+      })
       .filter(r => {
         // Filter by client's assigned projects
         if (currentUser?.proyectos && currentUser.proyectos.length > 0) {
-          return currentUser.proyectos.includes(r.proyecto);
+          const matches = currentUser.proyectos.includes(r.proyecto);
+          console.log(`📄 Reporte "${r.tituloNovedad}" - proyecto: ${r.proyecto}, coincide: ${matches}`);
+          return matches;
         }
+        console.log(`📄 Reporte "${r.tituloNovedad}" - cliente sin proyectos asignados, mostrando todos`);
         return true; // If no projects assigned, show all
       })
       .filter(r => {
@@ -31,20 +60,36 @@ export default function ClienteDashboard() {
         );
       })
       .sort((a, b) => new Date(b.approvedAtOperaciones || b.createdAt).getTime() - new Date(a.approvedAtOperaciones || a.createdAt).getTime());
+    
+    console.log('✅ Reportes filtrados para el cliente:', filtered.length);
+    return filtered;
   }, [reports, search, currentUser]);
 
-  const totalApproved = reports.filter(r => r.visibleForClient).length;
+  const totalApproved = reports.filter(r => r.visibleForClient && r.status === 'aprobado').length;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-6 text-white">
-        <div className="flex items-center gap-3 mb-2">
-          <Shield size={24} />
-          <h1 className="text-xl font-bold">Panel del Cliente</h1>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <Shield size={24} />
+            <h1 className="text-xl font-bold">Panel del Cliente</h1>
+          </div>
+          <button
+            onClick={handleRefresh}
+            className="flex items-center gap-2 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors text-sm"
+            title="Recargar reportes"
+          >
+            <RefreshCw size={16} />
+            <span className="hidden sm:inline">Recargar</span>
+          </button>
         </div>
         <p className="text-green-100">
           Reportes verificados y aprobados por el equipo de operaciones.
+        </p>
+        <p className="text-green-200 text-xs mt-1">
+          Última actualización: {format(lastUpdate, "HH:mm:ss", { locale: es })}
         </p>
       </div>
 

@@ -4,12 +4,29 @@ import type { Report, ReportStatus } from '../types';
 export const reportService = {
   // Obtener todos los reportes
   async getAllReports(): Promise<Report[]> {
+    console.log('🔍 [reportService] Obteniendo todos los reportes desde Supabase...');
+    
     const { data, error } = await supabase
       .from('reports')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ [reportService] Error obteniendo reportes:', error);
+      throw error;
+    }
+    
+    console.log('✅ [reportService] Reportes obtenidos:', data?.length || 0);
+    
+    // Log detallado de reportes aprobados
+    if (data) {
+      const approvedReports = data.filter(r => r.status === 'aprobado' || r.visible_for_client);
+      console.log('📊 [reportService] Reportes aprobados/visibles:', approvedReports.length);
+      approvedReports.forEach(r => {
+        console.log(`  - "${r.titulo_novedad}" | status: ${r.status} | visible: ${r.visible_for_client} | proyecto: ${r.proyecto}`);
+      });
+    }
+    
     return data || [];
   },
 
