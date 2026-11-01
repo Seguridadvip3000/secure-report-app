@@ -7,6 +7,7 @@ import { reportService } from '../services/reportService';
 import { storageService } from '../services/storageService';
 import { emailService } from '../services/emailService';
 import { generateReportPDF } from '../utils/pdfGenerator';
+import { supabase } from '../lib/supabase';
 
 interface ReportContextType {
   reports: Report[];
@@ -204,23 +205,42 @@ export function ReportProvider({ children }: { children: ReactNode }) {
         const report = reports.find(r => r.id === id);
         if (!report) return;
 
-        // 1. Buscar cliente para este proyecto
-        let clientEmail: string | undefined;
-        let clientName: string = 'Cliente';
-        try {
-          const usersData = localStorage.getItem('securereport_users');
-          if (usersData) {
-            const users = JSON.parse(usersData);
-            const clientUser = users.find(
-              (u: any) => u.role === 'cliente' && u.proyectos?.includes(report.proyecto)
-            );
-            if (clientUser) {
-              clientEmail = clientUser.email;
-              clientName = clientUser.name;
-            }
+      // 1. Buscar cliente para este proyecto en Supabase
+      let clientEmail: string | undefined;
+      let clientName: string = 'Cliente';
+      try {
+        console.log('🔍 Buscando cliente para el proyecto:', report.proyecto);
+        const { data: clientUsers, error } = await supabase
+          .from('users')
+          .select('email, nombre_completo, proyectos')
+          .eq('role', 'cliente')
+          .eq('status', 'aprobado');
+        
+        if (error) {
+          console.error('❌ Error buscando clientes:', error);
+        } else if (clientUsers && clientUsers.length > 0) {
+          console.log('✅ Clientes encontrados:', clientUsers.length);
+          
+          // Buscar cliente con acceso al proyecto específico o acceso global
+          const clientUser = clientUsers.find(
+            (u: any) => 
+              u.proyectos?.includes(report.proyecto) || 
+              u.proyectos?.includes('*')
+          );
+          
+          if (clientUser) {
+            clientEmail = clientUser.email;
+            clientName = clientUser.nombre_completo;
+            console.log('✅ Cliente encontrado:', clientEmail, clientName);
+          } else {
+            console.warn('⚠️ No se encontró cliente para el proyecto:', report.proyecto);
           }
-        } catch {}
-
+        } else {
+          console.warn('⚠️ No hay clientes aprobados en el sistema');
+        }
+      } catch (error) {
+        console.error('❌ Error en búsqueda de cliente:', error);
+      }
         // 2. Generar PDF del reporte
         let pdfUrl: string | undefined;
         try {
