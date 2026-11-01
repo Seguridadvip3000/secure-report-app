@@ -11,8 +11,24 @@ interface ReporteData {
   coordenadas: { lat: number; lng: number };
 }
 
-// Imagen oficial de Seguridad Vip 3000 codificada de forma nativa
-const BANNER_BASE64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABQAAAADICAIAAABwcs76AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH6gMREhEAFfS/NgAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUOvn2asAACAASURBVHja7Z15fFPV9sfvS9qkaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZum';
+// Banner SVG corporativo de Seguridad Vip 3000 (completo y autónomo)
+const BANNER_SVG = `<svg width="800" height="100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="back" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#1e293b"/>
+      <stop offset="100%" style="stop-color:#0f172a"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="100" fill="url(#back)"/>
+  <path d="M50 25 L70 35 L70 55 L50 65 L30 55 L30 35 Z" fill="#fbbf24" stroke="#f59e0b" stroke-width="2"/>
+  <path d="M45 45 L50 50 L60 40" stroke="#1e293b" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="100" y="45" font-family="Arial" font-size="28" font-weight="bold" fill="#fbbf24">SEGURIDAD VIP 3000</text>
+  <text x="100" y="65" font-family="Arial" font-size="14" fill="#94a3b8">SISTEMA DE GESTIÓN DE NOVEDADES</text>
+  <line x1="100" y1="75" x2="700" y2="75" stroke="#fbbf24" stroke-width="1"/>
+</svg>`;
+
+// Convertir SVG a Base64 data URL
+const BANNER_BASE64 = 'image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(BANNER_SVG)));
 
 export const generateOfficialPDF = async (reporte: ReporteData): Promise<Blob> => {
   const doc = new jsPDF({
@@ -25,15 +41,17 @@ export const generateOfficialPDF = async (reporte: ReporteData): Promise<Blob> =
   const marginX = 20;
   let currentY = 20;
 
-  // Renderizado del Banner Superior Integrado
+  // Renderizado del Banner Superior Integrado (SVG)
   try {
     const bannerWidth = pageWidth - (marginX * 2); 
     const bannerHeight = 28; 
-    doc.addImage(BANNER_BASE64, 'PNG', marginX, currentY, bannerWidth, bannerHeight);
+    doc.addImage(BANNER_BASE64, 'SVG', marginX, currentY, bannerWidth, bannerHeight);
     currentY += bannerHeight + 15;
   } catch (error) {
+    // Fallback si el SVG no se puede renderizar
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(14);
+    doc.setTextColor(30, 41, 59);
     doc.text('SEGURIDAD VIP 3000', marginX, currentY);
     currentY += 25;
   }
