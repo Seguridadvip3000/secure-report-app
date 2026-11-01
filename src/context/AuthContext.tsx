@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { User, UserRole } from '../types';
 import { supabase } from '../lib/supabase';
 import { getStorageMode } from '../config/appConfig';
-import { emailService } from '../services/emailService';
+import { notificationService } from '../services/notificationService';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -274,18 +274,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('✅ Usuario registrado exitosamente');
       await loadUsers(); // Recargar lista de usuarios
 
-      // NOTIFICACIÓN 1: Enviar alerta de registro pendiente a Directiva
+      // NOTIFICACIÓN 1: Enviar notificación push de registro pendiente
       try {
-        await emailService.sendNewUserRegistrationAlert({
-          username: data.username,
-          nombre_completo: data.nombre_completo,
-          email: data.email,
-          role: data.role,
-        });
-        console.log('✅ [NOTIFICACIÓN 1] Alerta de registro enviada a Directiva');
-      } catch (emailError) {
-        console.error('❌ [NOTIFICACIÓN 1] Error enviando alerta de registro:', emailError);
-        // No fallar el registro si el email falla
+        notificationService.notifyNewUserRegistration(
+          data.username,
+          data.nombre_completo,
+          data.role
+        );
+        console.log('✅ [NOTIFICACIÓN 1] Push de registro enviada');
+      } catch (notificationError) {
+        console.error('❌ [NOTIFICACIÓN 1] Error enviando notificación:', notificationError);
       }
       
       return { 

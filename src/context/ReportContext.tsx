@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getStorageMode } from '../config/appConfig';
 import { reportService } from '../services/reportService';
 import { storageService } from '../services/storageService';
-import { emailService } from '../services/emailService';
+import { notificationService } from '../services/notificationService';
 import { generateReportPDF } from '../utils/pdfGenerator';
 import { supabase } from '../lib/supabase';
 
@@ -259,28 +259,15 @@ export function ReportProvider({ children }: { children: ReactNode }) {
         await reportService.approveReport(id, userId, clientEmail, pdfUrl);
         await refreshReports();
 
-        // 5. NOTIFICACIÓN 3: Enviar email al cliente Y a Directiva (CC)
-        if (clientEmail) {
-          console.log(`📧 [NOTIFICACIÓN 3] Enviando email al Cliente (${clientEmail}) y Directiva...`);
-          const emailResults = await emailService.sendReportApprovalEmail({
-            clientEmail,
-            clientName,
-            reportTitle: report.tituloNovedad,
-            reportProject: report.proyecto,
-            reportDate: new Date(report.fechaHora).toLocaleString('es-ES'),
-            reportDescription: report.desarrollo.substring(0, 200) + '...',
-            reportUrl: pdfUrl,
-          });
-
-          console.log('✅ [NOTIFICACIÓN 3] Resultados de envío:', emailResults);
-          if (emailResults.client) {
-            console.log(`✅ Email enviado al Cliente: ${clientEmail}`);
-          }
-          if (emailResults.directiva) {
-            console.log(`✅ Email enviado a Directiva (CC)`);
-          }
-        } else {
-          console.warn('⚠️ No se pudo enviar email: cliente no encontrado');
+        // 5. NOTIFICACIÓN 3: Enviar notificación push de reporte aprobado
+        try {
+          notificationService.notifyReportApproved(
+            report.tituloNovedad,
+            report.proyecto
+          );
+          console.log('✅ [NOTIFICACIÓN 3] Push de reporte aprobado enviada');
+        } catch (notificationError) {
+          console.error('❌ [NOTIFICACIÓN 3] Error enviando notificación:', notificationError);
         }
       } catch (error) {
         console.error('Error approving report:', error);

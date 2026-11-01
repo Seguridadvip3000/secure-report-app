@@ -2,10 +2,16 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
-import { emailService } from "./services/emailService";
+import { notificationService } from "./services/notificationService";
 
-// Inicializar EmailJS al cargar la aplicación
-emailService.initialize();
+// Solicitar permisos de notificación al cargar la aplicación
+notificationService.requestPermission().then(permission => {
+  if (permission === 'granted') {
+    console.log('✅ Notificaciones push habilitadas');
+  } else {
+    console.warn('⚠️ Notificaciones push no habilitadas');
+  }
+});
 
 // Registrar Service Worker para PWA
 if ('serviceWorker' in navigator) {
