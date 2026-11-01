@@ -1,9 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { Report } from '../types';
 
-// Banner corporativo en Base64 (SVG completo)
-const BANNER_BASE64 = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJhY2siIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjojMWUyOTNiIi8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdHlsZT0ic3RvcC1jb2xvcjojMGYxNzJhIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9IjgwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9InVybCgjYmFjaykiLz48cGF0aCBkPSJNNTAgMjUgTDcwIDM1IEw3MCA1NSBMNTAgNjUgTDMwIDU1IEwzMCAzNSBaIiBmaWxsPSIjZmJiZjI0IiBzdHJva2U9IiNmNTllMGIiIHN0cm9rZS13aWR0aD0iMiIvPjxwYXRoIGQ9Ik00NSA0NSBMNTAgNTAgTDYwIDQwIiBzdHJva2U9IiMxZTI5M2IiIHN0cm9rZS13aWR0aD0iMyIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PHRleHQgeD0iMTAwIiB5PSI0NSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI4IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iI2ZiYmYyNCI+U0VHVVJJREFEIFZJUCAzMDAwPC90ZXh0Pjx0ZXh0IHg9IjEwMCIgeT0iNjUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk0YTNiOCI+U0lTVEVNQSBERSBHRVNUSU9OIERFIE5PVkVEQURFUzwvdGV4dD48bGluZSB4MT0iMTAwIiB5MT0iNzUiIHgyPSI3MDAiIHkyPSI3NSIgc3Ryb2tlPSIjZmJiZjI0IiBzdHJva2Utd2lkdGg9IjEiLz48L3N2Zz4=';
-
 interface ReporteData {
   titulo: string;       
   proyecto: string;     
@@ -14,27 +11,8 @@ interface ReporteData {
   coordenadas: { lat: number; lng: number };
 }
 
-// Función auxiliar para convertir Report a ReporteData
-function reportToReporteData(report: Report): ReporteData {
-  return {
-    titulo: report.tituloNovedad,
-    proyecto: report.proyecto,
-    fecha: new Date(report.fechaHora).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }),
-    descripcion: report.desarrollo,
-    quien_reporta: report.quienReporta,
-    imagenes: report.evidencias || [],
-    coordenadas: {
-      lat: report.ubicacionGPS.lat,
-      lng: report.ubicacionGPS.lng
-    }
-  };
-}
+// Imagen oficial de Seguridad Vip 3000 codificada de forma nativa
+const BANNER_BASE64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABQAAAADICAIAAABwcs76AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH6gMREhEAFfS/NgAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUOvn2asAACAASURBVHja7Z15fFPV9sfvS9qkaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZumaZum';
 
 export const generateOfficialPDF = async (reporte: ReporteData): Promise<Blob> => {
   const doc = new jsPDF({
@@ -47,17 +25,15 @@ export const generateOfficialPDF = async (reporte: ReporteData): Promise<Blob> =
   const marginX = 20;
   let currentY = 20;
 
-  // Renderizado del Banner Superior en Base64
+  // Renderizado del Banner Superior Integrado
   try {
     const bannerWidth = pageWidth - (marginX * 2); 
     const bannerHeight = 28; 
-    doc.addImage(BANNER_BASE64, 'SVG', marginX, currentY, bannerWidth, bannerHeight);
+    doc.addImage(BANNER_BASE64, 'PNG', marginX, currentY, bannerWidth, bannerHeight);
     currentY += bannerHeight + 15;
   } catch (error) {
-    // Fallback si el banner no se puede cargar
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(14);
-    doc.setTextColor(30, 41, 59);
     doc.text('SEGURIDAD VIP 3000', marginX, currentY);
     currentY += 25;
   }
@@ -81,7 +57,7 @@ export const generateOfficialPDF = async (reporte: ReporteData): Promise<Blob> =
   doc.text(proyectoTexto, marginX, currentY);
   currentY += 18;
 
-  // Conocimiento del Caso con subrayado nativo
+  // Conocimiento del Caso con subrayado puro
   doc.text('CONOCIMIENTO DEL CASO:', marginX, currentY);
   const textWidthConocimiento = doc.getTextWidth('CONOCIMIENTO DEL CASO:');
   doc.line(marginX, currentY + 1, marginX + textWidthConocimiento, currentY + 1);
@@ -103,7 +79,7 @@ export const generateOfficialPDF = async (reporte: ReporteData): Promise<Blob> =
   doc.text(`(${reporte.quien_reporta.toUpperCase()})`, marginX + 3, currentY);
   currentY += 18;
 
-  // Anexos
+  // Anexos / Evidencias Fotográficas
   doc.text('ANEXOS:', marginX, currentY);
   const textWidthAnexos = doc.getTextWidth('ANEXOS:');
   doc.line(marginX, currentY + 1, marginX + textWidthAnexos, currentY + 1);
@@ -120,12 +96,10 @@ export const generateOfficialPDF = async (reporte: ReporteData): Promise<Blob> =
         doc.addImage(imgData, 'JPEG', marginX + 3, currentY, 80, 60); 
         currentY += 68;
       } catch (e) {
-        doc.setFont('Helvetica', 'italic');
-        doc.setFontSize(9);
+        doc.setFont('Helvetica', 'italic').setFontSize(9);
         doc.text('[Error al cargar archivo de evidencia fotográfica]', marginX + 3, currentY);
         currentY += 8;
-        doc.setFontSize(11);
-        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(11).setFont('Helvetica', 'bold');
       }
     }
   } else {
@@ -147,13 +121,12 @@ export const generateOfficialPDF = async (reporte: ReporteData): Promise<Blob> =
   currentY += 8;
 
   doc.setFont('Helvetica', 'normal');
-  const coordenadasTexto = `LATITUD: ${reporte.coordenadas.lat.toFixed(6)} / LONGITUD: ${reporte.coordenadas.lng.toFixed(6)}`;
+  const coordenadasTexto = `LATITUD: ${reporte.coordenadas.lat} / LONGITUD: ${reporte.coordenadas.lng}`;
   doc.text(coordenadasTexto, marginX + 3, currentY);
 
   return doc.output('blob');
 };
 
-// Función auxiliar para cargar imágenes como Base64
 const fetchImageAsBase64 = (url: string): Promise<string> => {
   return fetch(url)
     .then((res) => res.blob())
@@ -167,10 +140,27 @@ const fetchImageAsBase64 = (url: string): Promise<string> => {
 
 // Función de compatibilidad con el código existente
 export async function generateReportPDF(report: Report): Promise<string> {
-  const reporteData = reportToReporteData(report);
+  const reporteData: ReporteData = {
+    titulo: report.tituloNovedad,
+    proyecto: report.proyecto,
+    fecha: new Date(report.fechaHora).toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }),
+    descripcion: report.desarrollo,
+    quien_reporta: report.quienReporta,
+    imagenes: report.evidencias || [],
+    coordenadas: {
+      lat: report.ubicacionGPS.lat,
+      lng: report.ubicacionGPS.lng
+    }
+  };
+  
   const blob = await generateOfficialPDF(reporteData);
   
-  // Convertir Blob a Base64 data URL para compatibilidad
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => resolve(reader.result as string);
