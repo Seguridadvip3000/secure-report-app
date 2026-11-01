@@ -259,10 +259,10 @@ export function ReportProvider({ children }: { children: ReactNode }) {
         await reportService.approveReport(id, userId, clientEmail, pdfUrl);
         await refreshReports();
 
-        // 5. Enviar email al cliente
+        // 5. NOTIFICACIÓN 3: Enviar email al cliente Y a Directiva (CC)
         if (clientEmail) {
-          console.log(`📧 Enviando email a ${clientEmail}...`);
-          const emailSent = await emailService.sendReportApprovalEmail({
+          console.log(`📧 [NOTIFICACIÓN 3] Enviando email al Cliente (${clientEmail}) y Directiva...`);
+          const emailResults = await emailService.sendReportApprovalEmail({
             clientEmail,
             clientName,
             reportTitle: report.tituloNovedad,
@@ -272,9 +272,15 @@ export function ReportProvider({ children }: { children: ReactNode }) {
             reportUrl: pdfUrl,
           });
 
-          if (emailSent) {
-            console.log(`✅ Email enviado exitosamente a ${clientEmail}`);
+          console.log('✅ [NOTIFICACIÓN 3] Resultados de envío:', emailResults);
+          if (emailResults.client) {
+            console.log(`✅ Email enviado al Cliente: ${clientEmail}`);
           }
+          if (emailResults.directiva) {
+            console.log(`✅ Email enviado a Directiva (CC)`);
+          }
+        } else {
+          console.warn('⚠️ No se pudo enviar email: cliente no encontrado');
         }
       } catch (error) {
         console.error('Error approving report:', error);

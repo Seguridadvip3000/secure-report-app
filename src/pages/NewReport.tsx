@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useReports } from '../context/ReportContext';
 import { useAuth } from '../context/AuthContext';
 import { PROYECTOS, TITULOS_NOVEDAD } from '../data/constants';
+import { emailService } from '../services/emailService';
 import {
   ArrowLeft,
   CheckCircle,
@@ -184,6 +185,21 @@ export default function NewReport() {
       await addReport(reportData);
 
       console.log('✅ Reporte enviado exitosamente');
+
+      // NOTIFICACIÓN 2: Enviar alerta de reporte creado a Operaciones y Directiva
+      try {
+        const emailResults = await emailService.sendNewReportAlert({
+          tituloNovedad: form.tituloNovedad,
+          proyecto: form.proyecto,
+          desarrollo: form.desarrollo,
+          supervisorName: currentUser.nombre_completo,
+        });
+        console.log('✅ [NOTIFICACIÓN 2] Alerta de reporte creado enviada:', emailResults);
+      } catch (emailError) {
+        console.error('❌ [NOTIFICACIÓN 2] Error enviando alerta de reporte:', emailError);
+        // No fallar el envío del reporte si el email falla
+      }
+
       setSubmitted(true);
       setLoading(false);
     } catch (error) {
