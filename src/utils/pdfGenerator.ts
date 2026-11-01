@@ -1,289 +1,182 @@
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import { Report } from '../types';
-import { format, parseISO } from 'date-fns';
-import { es } from 'date-fns/locale';
 
-// Banner corporativo en Base64 (SVG convertido a data URL)
-const BANNER_BASE64 = `data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYmFja2dyb3VuZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjojMWUyOTNiO3N0b3Atb3BhY2l0eToxIiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiMwZjE3MmE7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KICA8cmVjdCB3aWR0aD0iODAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0idXJsKCNiYWNrZ3JvdW5kKSIvPgogIDxwYXRoIGQ9Ik01MCAyNSBMNzAgMzUgTDcwIDU1IEw1MCA2NSBMMzAgNTUgTDMwIDM1IFoiIGZpbGw9IiNmYmJmMjQiIHN0cm9rZT0iI2Y1OWUwYiIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgPHBhdGggZD0iTTQ1IDQ1IEw1MCA1MCBMNjAgNDAiIHN0cm9rZT0iIzFlMjkzYiIgc3Ryb2tlLXdpZHRoPSIzIiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KICA8dGV4dCB4PSIxMDAiIHk9IjQ1IiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSIjZmJiZjI0Ij5TRUdVUklEQUQgVklQIDMwMDA8L3RleHQ+CiAgPHRleHQgeD0iMTAwIiB5PSI2NSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSIjOTRhM2I4Ij5TSVNURU1BIERFIEdFU1RJw5NOIERFIE5PVkVEQURFUzwvdGV4dD4KICA8bGluZSB4MT0iMTAwIiB5MT0iNzUiIHgyPSI3MDAiIHkyPSI3NSIgc3Ryb2tlPSIjZmJiZjI0IiBzdHJva2Utd2lkdGg9IjEiLz4KPC9zdmc+`;
+// Banner corporativo en Base64 (SVG completo)
+const BANNER_BASE64 = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJhY2siIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjojMWUyOTNiIi8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdHlsZT0ic3RvcC1jb2xvcjojMGYxNzJhIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9IjgwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9InVybCgjYmFjaykiLz48cGF0aCBkPSJNNTAgMjUgTDcwIDM1IEw3MCA1NSBMNTAgNjUgTDMwIDU1IEwzMCAzNSBaIiBmaWxsPSIjZmJiZjI0IiBzdHJva2U9IiNmNTllMGIiIHN0cm9rZS13aWR0aD0iMiIvPjxwYXRoIGQ9Ik00NSA0NSBMNTAgNTAgTDYwIDQwIiBzdHJva2U9IiMxZTI5M2IiIHN0cm9rZS13aWR0aD0iMyIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PHRleHQgeD0iMTAwIiB5PSI0NSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI4IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iI2ZiYmYyNCI+U0VHVVJJREFEIFZJUCAzMDAwPC90ZXh0Pjx0ZXh0IHg9IjEwMCIgeT0iNjUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk0YTNiOCI+U0lTVEVNQSBERSBHRVNUSU9OIERFIE5PVkVEQURFUzwvdGV4dD48bGluZSB4MT0iMTAwIiB5MT0iNzUiIHgyPSI3MDAiIHkyPSI3NSIgc3Ryb2tlPSIjZmJiZjI0IiBzdHJva2Utd2lkdGg9IjEiLz48L3N2Zz4=';
 
-export async function generateReportPDF(report: Report): Promise<string> {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 15;
-  let y = 0;
+interface ReporteData {
+  titulo: string;       
+  proyecto: string;     
+  fecha: string;        
+  descripcion: string;  
+  quien_reporta: string;
+  imagenes: string[];   
+  coordenadas: { lat: number; lng: number };
+}
 
-  // ============================================
-  // BANNER SUPERIOR
-  // ============================================
+// Función auxiliar para convertir Report a ReporteData
+function reportToReporteData(report: Report): ReporteData {
+  return {
+    titulo: report.tituloNovedad,
+    proyecto: report.proyecto,
+    fecha: new Date(report.fechaHora).toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }),
+    descripcion: report.desarrollo,
+    quien_reporta: report.quienReporta,
+    imagenes: report.evidencias || [],
+    coordenadas: {
+      lat: report.ubicacionGPS.lat,
+      lng: report.ubicacionGPS.lng
+    }
+  };
+}
+
+export const generateOfficialPDF = async (reporte: ReporteData): Promise<Blob> => {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'letter'
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth(); 
+  const marginX = 20;
+  let currentY = 20;
+
+  // Renderizado del Banner Superior en Base64
   try {
-    doc.addImage(BANNER_BASE64, 'PNG', 0, 0, pageWidth, 35);
+    const bannerWidth = pageWidth - (marginX * 2); 
+    const bannerHeight = 28; 
+    doc.addImage(BANNER_BASE64, 'SVG', marginX, currentY, bannerWidth, bannerHeight);
+    currentY += bannerHeight + 15;
   } catch (error) {
-    console.error('Error agregando banner:', error);
-    // Fallback: header simple si el banner falla
-    doc.setFillColor(30, 41, 59);
-    doc.rect(0, 0, pageWidth, 35, 'F');
-    doc.setTextColor(251, 191, 36);
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text('SEGURIDAD VIP 3000', pageWidth / 2, 18, { align: 'center' });
-    doc.setFontSize(10);
-    doc.setTextColor(148, 163, 184);
-    doc.text('Sistema de Gestión de Novedades', pageWidth / 2, 28, { align: 'center' });
+    // Fallback si el banner no se puede cargar
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(30, 41, 59);
+    doc.text('SEGURIDAD VIP 3000', marginX, currentY);
+    currentY += 25;
   }
 
-  y = 45;
-  doc.setTextColor(0, 0, 0);
+  doc.setFont('Helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(0, 0, 0); 
 
-  // ============================================
-  // INFORMACIÓN GENERAL DEL REPORTE
-  // ============================================
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 41, 59);
-  doc.text('INFORMACIÓN DEL REPORTE', margin, y);
-  y += 2;
-  
-  // Línea separadora
-  doc.setDrawColor(251, 191, 36);
-  doc.setLineWidth(0.5);
-  doc.line(margin, y, pageWidth - margin, y);
-  y += 8;
+  // Fecha (Alineada a la derecha)
+  const fechaTexto = `(${reporte.fecha.toUpperCase()})`;
+  doc.text(fechaTexto, pageWidth - marginX, currentY, { align: 'right' });
+  currentY += 15;
 
-  // ID del Reporte
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 116, 139);
-  doc.text(`ID del Reporte: ${report.id.slice(0, 8).toUpperCase()}`, margin, y);
-  y += 6;
-
-  // Fecha y Hora
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 41, 59);
-  doc.text('Fecha y Hora del Suceso:', margin, y);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(71, 85, 105);
-  doc.text(format(parseISO(report.fechaHora), "dd 'de' MMMM 'de' yyyy, HH:mm", { locale: es }), margin + 55, y);
-  y += 6;
+  // Caso
+  const casoTexto = `CASO: ${reporte.titulo.toUpperCase()}.`;
+  doc.text(casoTexto, marginX, currentY);
+  currentY += 10;
 
   // Proyecto
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 41, 59);
-  doc.text('Proyecto:', margin, y);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(71, 85, 105);
-  doc.text(report.proyecto, margin + 55, y);
-  y += 6;
+  const proyectoTexto = `PROYECTO:       ${reporte.proyecto.toUpperCase()}`;
+  doc.text(proyectoTexto, marginX, currentY);
+  currentY += 18;
 
-  // Tipo de Novedad
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 41, 59);
-  doc.text('Tipo de Novedad:', margin, y);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(71, 85, 105);
-  doc.text(report.tituloNovedad, margin + 55, y);
-  y += 6;
+  // Conocimiento del Caso con subrayado nativo
+  doc.text('CONOCIMIENTO DEL CASO:', marginX, currentY);
+  const textWidthConocimiento = doc.getTextWidth('CONOCIMIENTO DEL CASO:');
+  doc.line(marginX, currentY + 1, marginX + textWidthConocimiento, currentY + 1);
+  currentY += 8;
 
-  // Quien Reporta
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 41, 59);
-  doc.text('Reportado por:', margin, y);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(71, 85, 105);
-  doc.text(report.quienReporta, margin + 55, y);
-  y += 6;
+  // Contenido indentado
+  doc.setFont('Helvetica', 'normal');
+  const splitDescripcion = doc.splitTextToSize(reporte.descripcion, pageWidth - (marginX * 2) - 5);
+  doc.text(splitDescripcion, marginX + 3, currentY);
+  currentY += (splitDescripcion.length * 5) + 15;
 
-  // Estado
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 41, 59);
-  doc.text('Estado:', margin, y);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(71, 85, 105);
-  doc.text(report.status.toUpperCase(), margin + 55, y);
-  y += 12;
+  // Atentamente
+  doc.setFont('Helvetica', 'bold');
+  doc.text('ATENTAMENTE:', marginX, currentY);
+  const textWidthAtentamente = doc.getTextWidth('ATENTAMENTE:');
+  doc.line(marginX, currentY + 1, marginX + textWidthAtentamente, currentY + 1);
+  currentY += 8;
 
-  // ============================================
-  // DESARROLLO DE LA NOVEDAD
-  // ============================================
-  if (y > 240) {
-    doc.addPage();
-    y = 20;
-  }
+  doc.text(`(${reporte.quien_reporta.toUpperCase()})`, marginX + 3, currentY);
+  currentY += 18;
 
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 41, 59);
-  doc.text('DESARROLLO DE LA NOVEDAD', margin, y);
-  y += 2;
-  
-  doc.setDrawColor(251, 191, 36);
-  doc.setLineWidth(0.5);
-  doc.line(margin, y, pageWidth - margin, y);
-  y += 8;
+  // Anexos
+  doc.text('ANEXOS:', marginX, currentY);
+  const textWidthAnexos = doc.getTextWidth('ANEXOS:');
+  doc.line(marginX, currentY + 1, marginX + textWidthAnexos, currentY + 1);
+  currentY += 8;
 
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(51, 65, 85);
-  
-  const splitDesarrollo = doc.splitTextToSize(report.desarrollo, pageWidth - (margin * 2));
-  doc.text(splitDesarrollo, margin, y);
-  y += splitDesarrollo.length * 5 + 12;
-
-  // ============================================
-  // EVIDENCIAS FOTOGRÁFICAS
-  // ============================================
-  if (report.evidencias && report.evidencias.length > 0) {
-    if (y > 220) {
-      doc.addPage();
-      y = 20;
-    }
-
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 41, 59);
-    doc.text(`EVIDENCIAS FOTOGRÁFICAS (${report.evidencias.length})`, margin, y);
-    y += 2;
-    
-    doc.setDrawColor(251, 191, 36);
-    doc.setLineWidth(0.5);
-    doc.line(margin, y, pageWidth - margin, y);
-    y += 8;
-
-    for (let i = 0; i < report.evidencias.length; i++) {
-      if (y > 230) {
-        doc.addPage();
-        y = 20;
-      }
-      
+  if (reporte.imagenes && reporte.imagenes.length > 0) {
+    for (const urlImg of reporte.imagenes) {
       try {
-        // Imagen de evidencia
-        doc.addImage(report.evidencias[i], 'JPEG', margin, y, 90, 60);
-        
-        // Etiqueta de la evidencia
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
-        doc.text(`Evidencia ${i + 1}`, margin, y + 65);
-        
-        y += 75;
+        if (currentY + 65 > doc.internal.pageSize.getHeight() - 20) {
+          doc.addPage();
+          currentY = 25;
+        }
+        const imgData = await fetchImageAsBase64(urlImg);
+        doc.addImage(imgData, 'JPEG', marginX + 3, currentY, 80, 60); 
+        currentY += 68;
       } catch (e) {
-        console.error(`Error agregando evidencia ${i + 1}:`, e);
+        doc.setFont('Helvetica', 'italic');
         doc.setFontSize(9);
-        doc.setFont('helvetica', 'italic');
-        doc.setTextColor(239, 68, 68);
-        doc.text(`[Evidencia ${i + 1} - imagen no disponible]`, margin, y);
-        y += 10;
+        doc.text('[Error al cargar archivo de evidencia fotográfica]', marginX + 3, currentY);
+        currentY += 8;
+        doc.setFontSize(11);
+        doc.setFont('Helvetica', 'bold');
       }
     }
-  }
-
-  // ============================================
-  // UBICACIÓN GPS
-  // ============================================
-  if (y > 240) {
-    doc.addPage();
-    y = 20;
-  }
-
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 41, 59);
-  doc.text('UBICACIÓN GPS', margin, y);
-  y += 2;
-  
-  doc.setDrawColor(251, 191, 36);
-  doc.setLineWidth(0.5);
-  doc.line(margin, y, pageWidth - margin, y);
-  y += 8;
-
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(51, 65, 85);
-  
-  doc.text(`Latitud: ${report.ubicacionGPS.lat.toFixed(6)}`, margin, y);
-  y += 6;
-  doc.text(`Longitud: ${report.ubicacionGPS.lng.toFixed(6)}`, margin, y);
-  y += 6;
-  
-  if (report.ubicacionGPS.address) {
-    const splitAddress = doc.splitTextToSize(`Dirección: ${report.ubicacionGPS.address}`, pageWidth - (margin * 2));
-    doc.text(splitAddress, margin, y);
-    y += splitAddress.length * 5 + 6;
   } else {
-    y += 6;
+    doc.setFont('Helvetica', 'normal');
+    doc.text('(SIN EVIDENCIAS REGISTRADAS)', marginX + 3, currentY);
+    currentY += 12;
   }
+  currentY += 5;
 
-  // ============================================
-  // NOTAS ADICIONALES (si existen)
-  // ============================================
-  if (report.notes && report.notes.trim()) {
-    if (y > 230) {
-      doc.addPage();
-      y = 20;
-    }
-
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 41, 59);
-    doc.text('NOTAS ADICIONALES', margin, y);
-    y += 2;
-    
-    doc.setDrawColor(251, 191, 36);
-    doc.setLineWidth(0.5);
-    doc.line(margin, y, pageWidth - margin, y);
-    y += 8;
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(51, 65, 85);
-    
-    const splitNotes = doc.splitTextToSize(report.notes, pageWidth - (margin * 2));
-    doc.text(splitNotes, margin, y);
-    y += splitNotes.length * 5 + 12;
-  }
-
-  // ============================================
-  // FOOTER PROFESIONAL
-  // ============================================
-  y = Math.max(y + 15, 260);
-  if (y > 270) {
+  // Ubicación
+  if (currentY + 20 > doc.internal.pageSize.getHeight() - 20) {
     doc.addPage();
-    y = 260;
+    currentY = 25;
   }
+  doc.setFont('Helvetica', 'bold');
+  doc.text('UBICACION:', marginX, currentY);
+  const textWidthUbicacion = doc.getTextWidth('UBICACION:');
+  doc.line(marginX, currentY + 1, marginX + textWidthUbicacion, currentY + 1);
+  currentY += 8;
 
-  // Línea separadora
-  doc.setDrawColor(251, 191, 36);
-  doc.setLineWidth(1);
-  doc.line(margin, y, pageWidth - margin, y);
-  y += 8;
+  doc.setFont('Helvetica', 'normal');
+  const coordenadasTexto = `LATITUD: ${reporte.coordenadas.lat.toFixed(6)} / LONGITUD: ${reporte.coordenadas.lng.toFixed(6)}`;
+  doc.text(coordenadasTexto, marginX + 3, currentY);
 
-  // Información del footer
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'italic');
-  doc.setTextColor(100, 116, 139);
-  doc.text(
-    `Documento generado automáticamente por Seguridad Vip 3000`,
-    pageWidth / 2,
-    y,
-    { align: 'center' }
-  );
-  y += 4;
-  doc.text(
-    `Fecha de generación: ${new Date().toLocaleString('es-ES')}`,
-    pageWidth / 2,
-    y,
-    { align: 'center' }
-  );
-  y += 4;
-  doc.text(
-    'Este documento es un reporte oficial de novedades de seguridad',
-    pageWidth / 2,
-    y,
-    { align: 'center' }
-  );
+  return doc.output('blob');
+};
 
-  // Convert to base64 data URL
-  return doc.output('datauristring');
+// Función auxiliar para cargar imágenes como Base64
+const fetchImageAsBase64 = (url: string): Promise<string> => {
+  return fetch(url)
+    .then((res) => res.blob())
+    .then((blob) => new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    }));
+};
+
+// Función de compatibilidad con el código existente
+export async function generateReportPDF(report: Report): Promise<string> {
+  const reporteData = reportToReporteData(report);
+  const blob = await generateOfficialPDF(reporteData);
+  
+  // Convertir Blob a Base64 data URL para compatibilidad
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 export function downloadPDF(pdfData: string, filename: string) {
