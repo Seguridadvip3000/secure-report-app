@@ -217,7 +217,7 @@ export default function ReportDetail() {
                 </p>
                 {approverUser && report.approvedAtOperaciones && (
                   <p className={`text-sm ${report.status === 'aprobado' ? 'text-green-600' : 'text-red-600'}`}>
-                    Por {approverUser.name} el {format(parseISO(report.approvedAtOperaciones), "dd MMM yyyy, HH:mm", { locale: es })}
+                    Por {approverUser.nombre_completo} el {format(parseISO(report.approvedAtOperaciones), "dd MMM yyyy, HH:mm", { locale: es })}
                   </p>
                 )}
                 {report.emailEnviadoA && (

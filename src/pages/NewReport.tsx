@@ -175,7 +175,7 @@ export default function NewReport() {
         desarrollo: form.desarrollo,
         evidencias: evidencias,
         ubicacionGPS: location,
-        quienReporta: currentUser.name,
+        quienReporta: currentUser.nombre_completo,
         createdBy: currentUser.id,
         status: 'pendiente' as const,
       };
@@ -459,7 +459,7 @@ export default function NewReport() {
           {/* Quien Reporta */}
           <div className="bg-slate-50 rounded-lg p-4">
             <p className="text-xs text-slate-500">Quien Reporta</p>
-            <p className="text-sm font-medium text-slate-700">{currentUser?.name}</p>
+            <p className="text-sm font-medium text-slate-700">{currentUser?.nombre_completo}</p>
             <p className="text-xs text-slate-500 mt-1">{currentUser?.email}</p>
           </div>
         </div>

@@ -132,14 +132,14 @@ export default function ConfiguracionPage() {
                   <div key={user.id} className="py-3 flex items-start gap-3">
                     <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-xs font-bold text-slate-600">
-                        {user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                        {user.nombre_completo.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <h3 className="font-medium text-slate-800">{user.name}</h3>
-                          <p className="text-xs text-slate-500">{user.email} • {user.phone}</p>
+                          <h3 className="font-medium text-slate-800">{user.nombre_completo}</h3>
+                          <p className="text-xs text-slate-500">{user.email} • @{user.username}</p>
                           {user.proyectos && user.proyectos.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1">
                               {user.proyectos.map(p => (
@@ -156,7 +156,7 @@ export default function ConfiguracionPage() {
                           </span>
                           {user.role !== 'directiva' && (
                             <button
-                              onClick={() => { if (confirm(`¿Eliminar a ${user.name}?`)) deleteUser(user.id); }}
+                              onClick={() => { if (confirm(`¿Eliminar a ${user.nombre_completo}?`)) deleteUser(user.id); }}
                               className="p-1.5 text-red-500 hover:bg-red-50 rounded"
                             >
                               <Trash2 size={16} />

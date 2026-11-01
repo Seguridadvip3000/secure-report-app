@@ -19,7 +19,7 @@ export default function OperacionesHome() {
       {/* Header */}
       <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl p-6 text-white">
         <h1 className="text-2xl font-bold">Panel de Operaciones</h1>
-        <p className="text-purple-100 mt-1">Bienvenido, {currentUser?.name}</p>
+        <p className="text-purple-100 mt-1">Bienvenido, {currentUser?.nombre_completo}</p>
       </div>
 
       {/* Stats */}

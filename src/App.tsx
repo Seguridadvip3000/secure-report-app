@@ -16,8 +16,6 @@ const ReportList = lazy(() => import('./pages/ReportList'));
 const ReportDetail = lazy(() => import('./pages/ReportDetail'));
 const AprobacionesPage = lazy(() => import('./pages/AprobacionesPage'));
 const ConfiguracionPage = lazy(() => import('./pages/ConfiguracionPage'));
-const SetupWizard = lazy(() => import('./pages/SetupWizard'));
-const DiagnosticPage = lazy(() => import('./pages/DiagnosticPage'));
 
 // Componente de carga
 function LoadingScreen() {
@@ -116,12 +114,6 @@ function AppRoutes() {
                   <ReportDetail />
                 </ProtectedRoute>
               } />
-
-              {/* Setup Wizard - para inicializar datos de prueba */}
-              <Route path="/setup" element={<SetupWizard />} />
-
-              {/* Diagnostic Page - para verificar conexión y crear usuarios */}
-              <Route path="/diagnostic" element={<DiagnosticPage />} />
 
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

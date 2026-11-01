@@ -31,7 +31,7 @@ export default function ClienteDashboard() {
   const approvedReports = useMemo(() => {
     console.log('🔍 [ClienteDashboard] Filtrando reportes...');
     console.log('📊 Total de reportes cargados:', reports.length);
-    console.log('👤 Usuario actual:', currentUser?.name);
+    console.log('👤 Usuario actual:', currentUser?.nombre_completo);
     console.log('📁 Proyectos del cliente:', currentUser?.proyectos);
     
     const filtered = reports
