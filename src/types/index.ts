@@ -5,12 +5,12 @@ export type ReportPriority = 'baja' | 'media' | 'alta' | 'critica';
 
 export interface User {
   id: string;
-  name: string;
+  username: string;
+  nombre_completo: string;
   email: string;
-  phone: string;
   role: UserRole;
   status: UserStatus;
-  proyectos?: string[]; // Proyectos asignados (solo para lider y cliente)
+  proyectos?: string[]; // Proyectos asignados (array vacío para acceso global)
   createdAt: string;
   approvedAt?: string;
   approvedBy?: string;

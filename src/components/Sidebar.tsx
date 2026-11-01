@@ -127,7 +127,7 @@ export default function Sidebar() {
               <span className="text-sm">{roleIcons[currentUser.role]}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{currentUser.name}</p>
+              <p className="text-sm font-medium truncate">{currentUser.nombre_completo}</p>
               <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${ROLE_COLORS[currentUser.role]}`}>
                 {ROLE_LABELS[currentUser.role]}
               </span>

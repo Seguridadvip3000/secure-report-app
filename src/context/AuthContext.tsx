@@ -1,16 +1,14 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, UserRole, UserStatus } from '../types';
-import { initialUsers } from '../data/initialData';
-import { v4 as uuidv4 } from 'uuid';
+import { User, UserRole } from '../types';
+import { supabase } from '../lib/supabase';
 import { getStorageMode } from '../config/appConfig';
-import { userService } from '../services/userService';
 
 interface AuthContextType {
   currentUser: User | null;
   users: User[];
-  login: (email: string, phone: string) => Promise<{ success: boolean; message: string }>;
+  login: (usernameOrEmail: string, password: string) => Promise<{ success: boolean; message: string }>;
   register: (data: RegisterData) => Promise<{ success: boolean; message: string }>;
-  logout: () => void;
+  logout: () => Promise<void>;
   approveUser: (userId: string) => Promise<void>;
   rejectUser: (userId: string, reason: string) => Promise<void>;
   deleteUser: (userId: string) => Promise<void>;
@@ -20,347 +18,344 @@ interface AuthContextType {
 }
 
 interface RegisterData {
-  name: string;
+  username: string;
+  nombre_completo: string;
   email: string;
-  phone: string;
+  password: string;
   role: UserRole;
   proyectos?: string[];
 }
 
-const SESSION_KEY = 'securereport_session';
-const LOCAL_STORAGE_KEY = 'securereport_users';
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-function loadSession(): User | null {
-  try {
-    const stored = localStorage.getItem(SESSION_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return null;
-}
-
-function saveSession(user: User | null) {
-  if (user) {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-  } else {
-    localStorage.removeItem(SESSION_KEY);
-  }
-}
-
-// LocalStorage functions
-function loadLocalUsers(): User[] {
-  try {
-    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return initialUsers;
-}
-
-function saveLocalUsers(users: User[]) {
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(users));
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const storageMode = getStorageMode();
-  const [currentUser, setCurrentUser] = useState<User | null>(loadSession);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(storageMode === 'supabase');
+  const [loading, setLoading] = useState(true);
 
-  // Load users based on storage mode
+  // Cargar sesión al iniciar
   useEffect(() => {
-    if (storageMode === 'supabase') {
-      loadUsersFromSupabase();
-    } else {
-      setUsers(loadLocalUsers());
-    }
-  }, [storageMode]);
+    checkUser();
+  }, []);
 
-  const loadUsersFromSupabase = async () => {
+  // Verificar sesión de Supabase
+  const checkUser = async () => {
     try {
-      const supabaseUsers = await userService.getAllUsers();
-      setUsers(supabaseUsers);
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        // Obtener perfil del usuario desde public.users
+        const { data: profile, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (error) {
+          console.error('Error cargando perfil:', error);
+          setLoading(false);
+          return;
+        }
+
+        if (profile) {
+          const user: User = {
+            id: profile.id,
+            username: profile.username,
+            nombre_completo: profile.nombre_completo,
+            email: profile.email,
+            role: profile.role,
+            status: profile.status,
+            proyectos: profile.proyectos || [],
+            createdAt: profile.created_at,
+            approvedAt: profile.approved_at,
+            approvedBy: profile.approved_by,
+            rejectionReason: profile.rejection_reason,
+          };
+          setCurrentUser(user);
+        }
+      }
     } catch (error) {
-      console.error('Error loading users from Supabase:', error);
-      // Fallback to local data
-      setUsers(initialUsers);
+      console.error('Error verificando sesión:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const refreshUsers = async () => {
-    if (storageMode === 'supabase') {
-      await loadUsersFromSupabase();
+  // Cargar todos los usuarios
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const loadUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const mappedUsers: User[] = (data || []).map((u: any) => ({
+        id: u.id,
+        username: u.username,
+        nombre_completo: u.nombre_completo,
+        email: u.email,
+        role: u.role,
+        status: u.status,
+        proyectos: u.proyectos || [],
+        createdAt: u.created_at,
+        approvedAt: u.approved_at,
+        approvedBy: u.approved_by,
+        rejectionReason: u.rejection_reason,
+      }));
+
+      setUsers(mappedUsers);
+    } catch (error) {
+      console.error('Error cargando usuarios:', error);
     }
   };
 
-  // Save local users when they change (only in local mode)
-  useEffect(() => {
-    if (storageMode === 'local' && users.length > 0) {
-      saveLocalUsers(users);
-    }
-  }, [users, storageMode]);
+  // Login con Supabase Auth
+  const login = async (usernameOrEmail: string, password: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      console.log('🔐 Intentando login con:', usernameOrEmail);
 
-  useEffect(() => {
-    saveSession(currentUser);
-  }, [currentUser]);
-
-  const login = async (email: string, phone: string): Promise<{ success: boolean; message: string }> => {
-    console.log('🔍 Intentando login con:', { email, phone, storageMode });
-    console.log('📋 Usuarios cargados:', users.length);
-    
-    // Primero buscar en la lista de usuarios cargados
-    let user = users.find(
-      u => (u.email === email || u.phone === phone)
-    );
-
-    console.log('👤 Usuario encontrado en memoria:', user ? user.name : 'NO');
-
-    // Si no existe en Supabase pero es un usuario de prueba, crearlo automáticamente
-    if (!user && storageMode === 'supabase') {
-      console.log('⚠️ Usuario no existe en memoria. Verificando si es usuario de prueba...');
+      // Determinar si es username o email
+      const isEmail = usernameOrEmail.includes('@');
       
-      const testUser = initialUsers.find(
-        u => (u.email === email || u.phone === phone)
-      );
+      let email = usernameOrEmail;
       
-      if (testUser) {
-        console.log('✅ Es usuario de prueba:', testUser.name);
-        console.log('🚀 Creando usuario en Supabase...');
-        
-        try {
-          console.log('📝 Datos a registrar:', {
-            name: testUser.name,
-            email: testUser.email,
-            phone: testUser.phone,
-            role: testUser.role,
-            proyectos: testUser.proyectos
-          });
+      // Si es username, buscar el email asociado
+      if (!isEmail) {
+        const { data: user, error } = await supabase
+          .from('users')
+          .select('email')
+          .eq('username', usernameOrEmail)
+          .single();
 
-          // Primero verificar si el usuario ya existe
-          console.log('🔍 Verificando si el usuario ya existe en Supabase...');
-          const existingUser = await userService.getUserByCredentials(testUser.email, testUser.phone);
-          
-          if (existingUser) {
-            console.log('✅ Usuario ya existe en Supabase:', existingUser.id);
-            console.log('📊 Estado actual:', existingUser.status);
-            
-            // Si existe pero no está aprobado, aprobarlo
-            if (existingUser.status !== 'aprobado') {
-              console.log('✅ Aprobando usuario existente...');
-              await userService.approveUser(existingUser.id, 'system');
-            }
-            
-            // Recargar usuarios
-            console.log('🔄 Recargando usuarios desde Supabase...');
-            await loadUsersFromSupabase();
-            
-            user = users.find(u => u.email === email || u.phone === phone);
-            
-            if (user) {
-              console.log('✅ Usuario encontrado y aprobado:', user.name);
-            } else {
-              console.error('❌ Usuario no encontrado después de recargar');
-              return { success: false, message: 'Error: Usuario existe pero no se pudo cargar. Recarga la página.' };
-            }
-          } else {
-            // Registrar el usuario
-            console.log('📝 Registrando nuevo usuario en Supabase...');
-            const registeredUser = await userService.registerUser({
-              name: testUser.name,
-              email: testUser.email,
-              phone: testUser.phone,
-              role: testUser.role,
-              proyectos: testUser.proyectos,
-            });
-            
-            console.log('✅ Usuario registrado en Supabase:', registeredUser.id);
-            
-            // Aprobarlo automáticamente
-            console.log('✅ Aprobando usuario automáticamente...');
-            await userService.approveUser(registeredUser.id, 'system');
-            
-            // Recargar usuarios desde Supabase
-            console.log('🔄 Recargando usuarios desde Supabase...');
-            await loadUsersFromSupabase();
-            
-            // Buscar el usuario recién creado en la lista actualizada
-            user = users.find(
-              u => (u.email === email || u.phone === phone)
-            );
-            
-            if (user) {
-              console.log('✅ Usuario de prueba creado y aprobado exitosamente:', user.name);
-            } else {
-              console.error('❌ Usuario no encontrado después de recargar');
-              return { success: false, message: 'Error: Usuario creado pero no encontrado. Recarga la página.' };
-            }
-          }
-        } catch (error) {
-          console.error('❌ Error creando usuario de prueba:', error);
-          
-          // Extraer información detallada del error
-          let errorMessage = 'Error desconocido';
-          let errorDetails = '';
-          
-          if (error instanceof Error) {
-            errorMessage = error.message;
-            errorDetails = error.stack || '';
-          } else if (typeof error === 'object' && error !== null) {
-            // Error de Supabase
-            const supabaseError = error as any;
-            if (supabaseError.message) {
-              errorMessage = supabaseError.message;
-            }
-            if (supabaseError.details) {
-              errorDetails = supabaseError.details;
-            }
-            if (supabaseError.hint) {
-              errorDetails += (errorDetails ? '\n' : '') + supabaseError.hint;
-            }
-            if (supabaseError.code) {
-              errorDetails += (errorDetails ? '\n' : '') + `Código: ${supabaseError.code}`;
-            }
-          }
-          
-          console.error('📋 Detalles del error:', {
-            message: errorMessage,
-            details: errorDetails,
-            error: error
-          });
-          
-          // Mensaje más descriptivo para el usuario
-          let userMessage = `Error al crear usuario en Supabase: ${errorMessage}`;
-          
-          if (errorDetails) {
-            userMessage += `\n\nDetalles: ${errorDetails}`;
-          }
-          
-          // Sugerencias basadas en el tipo de error
-          if (errorMessage.includes('duplicate') || errorMessage.includes('unique')) {
-            userMessage += '\n\n💡 El usuario ya existe. Intenta recargar la página.';
-          } else if (errorMessage.includes('policy') || errorMessage.includes('permission')) {
-            userMessage += '\n\n💡 Error de permisos. Verifica las políticas RLS en Supabase.';
-          } else if (errorMessage.includes('connection') || errorMessage.includes('network')) {
-            userMessage += '\n\n💡 Error de conexión. Verifica tu conexión a internet y las credenciales de Supabase.';
-          }
-          
-          return { success: false, message: userMessage };
+        if (error || !user) {
+          return { success: false, message: 'Usuario no encontrado' };
         }
-      } else {
-        console.log('❌ No es un usuario de prueba conocido');
+        email = user.email;
       }
-    } else if (!user && storageMode === 'local') {
-      console.log('⚠️ Modo local: buscando en localStorage...');
-      const localUsers = loadLocalUsers();
-      user = localUsers.find(u => (u.email === email || u.phone === phone));
-      if (user) {
-        console.log('✅ Usuario encontrado en localStorage:', user.name);
-        setUsers(localUsers);
-      }
-    }
 
-    if (!user) {
-      console.error('❌ Usuario no encontrado en ningún lado');
-      return { success: false, message: 'Usuario no encontrado. Regístrese primero o inicialice la base de datos desde /setup' };
+      // Intentar login con Supabase Auth
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        console.error('❌ Error de autenticación:', error);
+        return { success: false, message: 'Credenciales incorrectas' };
+      }
+
+      if (data.user) {
+        // Obtener perfil del usuario
+        const { data: profile, error: profileError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileError || !profile) {
+          return { success: false, message: 'Error cargando perfil de usuario' };
+        }
+
+        // Verificar que el usuario esté aprobado
+        if (profile.status !== 'aprobado') {
+          await supabase.auth.signOut();
+          return { 
+            success: false, 
+            message: profile.status === 'pendiente' 
+              ? 'Su cuenta está pendiente de aprobación' 
+              : 'Su cuenta ha sido rechazada' 
+          };
+        }
+
+        const user: User = {
+          id: profile.id,
+          username: profile.username,
+          nombre_completo: profile.nombre_completo,
+          email: profile.email,
+          role: profile.role,
+          status: profile.status,
+          proyectos: profile.proyectos || [],
+          createdAt: profile.created_at,
+          approvedAt: profile.approved_at,
+          approvedBy: profile.approved_by,
+          rejectionReason: profile.rejection_reason,
+        };
+
+        setCurrentUser(user);
+        console.log('✅ Login exitoso:', user.username);
+        return { success: true, message: 'Inicio de sesión exitoso' };
+      }
+
+      return { success: false, message: 'Error inesperado' };
+    } catch (error) {
+      console.error('❌ Error en login:', error);
+      return { success: false, message: 'Error al iniciar sesión' };
     }
-    if (user.status === 'pendiente') {
-      return { success: false, message: 'Su cuenta está pendiente de aprobación por la Directiva.' };
-    }
-    if (user.status === 'rechazado') {
-      return { success: false, message: `Su cuenta fue rechazada. ${user.rejectionReason || ''}` };
-    }
-    
-    console.log('✅ Login exitoso:', user.name);
-    setCurrentUser(user);
-    return { success: true, message: 'Inicio de sesión exitoso' };
   };
 
-  const register = async (data: RegisterData) => {
-    const exists = users.find(u => u.email === data.email || u.phone === data.phone);
-    if (exists) {
-      return { success: false, message: 'Ya existe un usuario con ese email o teléfono.' };
-    }
+  // Registro con Supabase Auth
+  const register = async (data: RegisterData): Promise<{ success: boolean; message: string }> => {
+    try {
+      console.log('📝 Registrando usuario:', data.username);
 
-    if (storageMode === 'supabase') {
-      try {
-        await userService.registerUser(data);
-        await refreshUsers();
-        return { success: true, message: 'Registro exitoso. Espere la aprobación de la Directiva.' };
-      } catch (error) {
-        console.error('Error registering user:', error);
-        return { success: false, message: 'Error al registrar. Intente nuevamente.' };
+      // Verificar si el username ya existe
+      const { data: existingUsername } = await supabase
+        .from('users')
+        .select('username')
+        .eq('username', data.username)
+        .single();
+
+      if (existingUsername) {
+        return { success: false, message: 'El nombre de usuario ya está en uso' };
       }
-    } else {
-      // Local mode
-      const newUser: User = {
-        id: uuidv4(),
-        name: data.name,
+
+      // Verificar si el email ya existe
+      const { data: existingEmail } = await supabase
+        .from('users')
+        .select('email')
+        .eq('email', data.email)
+        .single();
+
+      if (existingEmail) {
+        return { success: false, message: 'El correo electrónico ya está registrado' };
+      }
+
+      // Crear usuario en Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
-        phone: data.phone,
-        role: data.role,
-        status: 'pendiente',
-        proyectos: data.proyectos,
-        createdAt: new Date().toISOString(),
+        password: data.password,
+      });
+
+      if (authError) {
+        console.error('❌ Error creando usuario en Auth:', authError);
+        return { success: false, message: authError.message };
+      }
+
+      if (!authData.user) {
+        return { success: false, message: 'Error creando usuario' };
+      }
+
+      // Determinar proyectos según el rol
+      let proyectos: string[] = [];
+      if (data.role === 'directiva' || data.role === 'operaciones') {
+        proyectos = ['*']; // Acceso global
+      } else {
+        proyectos = data.proyectos || [];
+      }
+
+      // Crear perfil en public.users
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert([{
+          id: authData.user.id,
+          username: data.username,
+          nombre_completo: data.nombre_completo,
+          email: data.email,
+          role: data.role,
+          status: 'pendiente',
+          proyectos: proyectos,
+        }]);
+
+      if (profileError) {
+        console.error('❌ Error creando perfil:', profileError);
+        // Intentar limpiar el usuario de Auth si falla el perfil
+        await supabase.auth.admin.deleteUser(authData.user.id);
+        return { success: false, message: 'Error creando perfil de usuario' };
+      }
+
+      console.log('✅ Usuario registrado exitosamente');
+      await loadUsers(); // Recargar lista de usuarios
+      
+      return { 
+        success: true, 
+        message: 'Registro exitoso. Su cuenta está pendiente de aprobación por la Directiva.' 
       };
-      setUsers(prev => [...prev, newUser]);
-      return { success: true, message: 'Registro exitoso. Espere la aprobación de la Directiva.' };
+    } catch (error) {
+      console.error('❌ Error en registro:', error);
+      return { success: false, message: 'Error al registrar usuario' };
     }
   };
 
-  const logout = () => {
-    setCurrentUser(null);
+  // Logout
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setCurrentUser(null);
+      console.log('✅ Sesión cerrada');
+    } catch (error) {
+      console.error('Error cerrando sesión:', error);
+    }
   };
 
+  // Aprobar usuario
   const approveUser = async (userId: string) => {
-    if (storageMode === 'supabase') {
-      try {
-        await userService.approveUser(userId, currentUser?.id || '');
-        await refreshUsers();
-      } catch (error) {
-        console.error('Error approving user:', error);
-      }
-    } else {
-      setUsers(prev =>
-        prev.map(u =>
-          u.id === userId
-            ? { ...u, status: 'aprobado' as UserStatus, approvedAt: new Date().toISOString(), approvedBy: currentUser?.id }
-            : u
-        )
-      );
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          status: 'aprobado',
+          approved_at: new Date().toISOString(),
+          approved_by: currentUser?.id,
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      await loadUsers();
+      console.log('✅ Usuario aprobado:', userId);
+    } catch (error) {
+      console.error('Error aprobando usuario:', error);
     }
   };
 
+  // Rechazar usuario
   const rejectUser = async (userId: string, reason: string) => {
-    if (storageMode === 'supabase') {
-      try {
-        await userService.rejectUser(userId, reason);
-        await refreshUsers();
-      } catch (error) {
-        console.error('Error rejecting user:', error);
-      }
-    } else {
-      setUsers(prev =>
-        prev.map(u =>
-          u.id === userId
-            ? { ...u, status: 'rechazado' as UserStatus, rejectionReason: reason }
-            : u
-        )
-      );
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          status: 'rechazado',
+          rejection_reason: reason,
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      await loadUsers();
+      console.log('✅ Usuario rechazado:', userId);
+    } catch (error) {
+      console.error('Error rechazando usuario:', error);
     }
   };
 
+  // Eliminar usuario
   const deleteUser = async (userId: string) => {
-    if (storageMode === 'supabase') {
-      try {
-        await userService.deleteUser(userId);
-        await refreshUsers();
-      } catch (error) {
-        console.error('Error deleting user:', error);
+    try {
+      // Eliminar de Auth
+      const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+      if (authError) {
+        console.error('Error eliminando usuario de Auth:', authError);
       }
-    } else {
-      setUsers(prev => prev.filter(u => u.id !== userId));
+
+      // Eliminar perfil
+      const { error: profileError } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId);
+
+      if (profileError) throw profileError;
+
+      await loadUsers();
+      console.log('✅ Usuario eliminado:', userId);
+    } catch (error) {
+      console.error('Error eliminando usuario:', error);
     }
   };
 

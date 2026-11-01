@@ -58,16 +58,16 @@ export default function AprobacionesPage() {
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center flex-shrink-0">
                     <span className="text-sm font-bold text-slate-600">
-                      {user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      {user.nombre_completo.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div>
-                        <h3 className="font-semibold text-slate-800 text-lg">{user.name}</h3>
+                        <h3 className="font-semibold text-slate-800 text-lg">{user.nombre_completo}</h3>
                         <div className="flex flex-wrap gap-3 mt-1 text-sm text-slate-500">
+                          <span>👤 @{user.username}</span>
                           <span>📧 {user.email}</span>
-                          <span>📱 {user.phone}</span>
                         </div>
                         {user.proyectos && user.proyectos.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1">
@@ -95,7 +95,7 @@ export default function AprobacionesPage() {
                         Aprobar
                       </button>
                       <button
-                        onClick={() => setRejectModal({ userId: user.id, name: user.name })}
+                        onClick={() => setRejectModal({ userId: user.id, name: user.nombre_completo })}
                         className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 text-sm rounded-lg hover:bg-red-200 transition-colors font-medium"
                       >
                         <XCircle size={16} />
