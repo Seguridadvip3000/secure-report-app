@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useReports } from '../context/ReportContext';
 import { useAuth } from '../context/AuthContext';
@@ -45,7 +45,9 @@ export default function NewReport() {
   const [evidencias, setEvidencias] = useState<string[]>([]);
   const [gpsLocation, setGpsLocation] = useState<{ lat: number; lng: number; address?: string } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Función helper para obtener el input de archivos
+  const getFileInput = () => document.getElementById('fileInput') as HTMLInputElement;
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -358,7 +360,7 @@ export default function NewReport() {
             </label>
             <div className="border-2 border-dashed border-slate-200 rounded-lg p-4">
               <input
-                ref={fileInputRef}
+                id="fileInput"
                 type="file"
                 accept="image/*"
                 capture="environment"
@@ -370,7 +372,7 @@ export default function NewReport() {
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => getFileInput()?.click()}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
                   >
                     <Camera size={18} />
@@ -379,9 +381,10 @@ export default function NewReport() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (fileInputRef.current) {
-                        fileInputRef.current.removeAttribute('capture');
-                        fileInputRef.current.click();
+                      const input = getFileInput();
+                      if (input) {
+                        input.removeAttribute('capture');
+                        input.click();
                       }
                     }}
                     className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium"
