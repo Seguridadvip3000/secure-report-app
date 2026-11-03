@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabaseClient'; 
+import { supabase } from '../config/supabaseClient'; 
 import { AttendanceReport } from '../types';
 
 export const attendanceService = {
@@ -16,7 +16,7 @@ export const attendanceService = {
       return null;
     }
     
-    return data && data.length > 0 ? (data.status as 'entrada' | 'salida') : null;
+    return data && data.length > 0 ? (data[0].status as 'entrada' | 'salida') : null;
   },
 
   // 2. Registrar un nuevo reporte de asistencia (Entrada/Salida) con el GPS o la contingencia de Caracas
