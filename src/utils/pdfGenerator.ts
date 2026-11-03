@@ -57,37 +57,26 @@ export const generateOfficialPDF = async (reporte: ReporteData): Promise<Blob> =
   // ==========================================
   // RENDERIZADO DEL BANNER SUPERIOR
   // ==========================================
+  // 1. Inyección del Banner Institucional Limpio y Preciso
   try {
-    const bannerWidth = pageWidth - (marginX * 2);
-    const bannerHeight = bannerWidth / 4; // Proporción 4:1
+    const bannerWidth = pageWidth - (marginX * 2); // 175.9 mm
+    const bannerHeight = bannerWidth / 4;          // Proporción 4:1
 
-    console.log('🎨 Inyectando banner real de Seguridad Vip 3000...');
-    
-    // Detectar formato automáticamente desde el Data URI
-    const bannerFormat = detectImageFormat(BANNER_VIP_BASE64);
-    // Extraer solo el Base64 crudo (sin prefijo data:image/...)
-    const bannerRawBase64 = extractBase64(BANNER_VIP_BASE64);
-    
-    console.log(`📐 Formato detectado: ${bannerFormat}`);
-    
-    // Inyectar el banner usando Base64 crudo + formato detectado
-    doc.addImage(bannerRawBase64, bannerFormat, marginX, currentY, bannerWidth, bannerHeight);
-    
-    currentY += bannerHeight + 15;
-    console.log('✅ Banner renderizado exitosamente');
+    // Forzamos la carga limpia en un objeto Image nativo antes de pintar
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const htmlImg = new Image();
+      htmlImg.onload = () => resolve(htmlImg);
+      htmlImg.onerror = (err) => reject(err);
+      htmlImg.src = BANNER_VIP_BASE64;
+    });
+
+    doc.addImage(img, 'JPEG', marginX, currentY, bannerWidth, bannerHeight);
+    currentY += bannerHeight + 12;
   } catch (error) {
-    console.error('❌ Error renderizando banner:', error);
-    // Fallback mejorado con rectángulo corporativo
-    doc.setFillColor(30, 41, 59);
-    doc.rect(marginX, currentY, pageWidth - (marginX * 2), 25, 'F');
-    doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.setTextColor(251, 191, 36);
-    doc.text('SEGURIDAD VIP 3000', marginX + 5, currentY + 10);
-    doc.setFontSize(9);
-    doc.setTextColor(148, 163, 184);
-    doc.text('SISTEMA DE GESTION DE NOVEDADES', marginX + 5, currentY + 18);
-    currentY += 30;
+    console.error("Error al renderizar el banner:", error);
+    doc.setFont('Helvetica', 'bold').setFontSize(14);
+    doc.text('SEGURIDAD VIP 3000 C.A.', marginX, currentY);
+    currentY += 25;
   }
 
   doc.setFont('Helvetica', 'bold');
