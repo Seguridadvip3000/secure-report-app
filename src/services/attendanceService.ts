@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabaseClient'; 
+import { supabase } from '../lib/supabase'; 
 import { AttendanceReport } from '../types';
 
 export const attendanceService = {
