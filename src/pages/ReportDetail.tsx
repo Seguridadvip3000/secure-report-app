@@ -311,5 +311,6 @@ export default function ReportDetail() {
         </div>
       </div>
     </div>
+    </div>
   );
 }
