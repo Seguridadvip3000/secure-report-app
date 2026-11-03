@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useReports } from '../context/ReportContext';
-import { FilePlus, List, CheckCircle, Clock, XCircle, FileText } from 'lucide-react';
+import { FilePlus, List, CheckCircle, Clock, FileText } from 'lucide-react';
+import { AttendanceButton } from '../components/AttendanceButton'; // Importación agregada
 
 export default function OperacionesHome() {
   const navigate = useNavigate();
@@ -14,12 +15,31 @@ export default function OperacionesHome() {
     aprobados: reports.filter(r => r.status === 'aprobado').length,
   };
 
+  // Extraemos el primer proyecto asignado de su arreglo text[] para el control de asistencia
+  const proyectoActual = currentUser?.proyectos && currentUser.proyectos.length > 0 
+    ? currentUser.proyectos 
+    : 'Sin Proyecto Asignado';
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl p-6 text-white">
         <h1 className="text-2xl font-bold">Panel de Operaciones</h1>
         <p className="text-purple-100 mt-1">Bienvenido, {currentUser?.nombre_completo}</p>
+      </div>
+
+      {/* COMPONENTE DE ASISTENCIA EN TIEMPO REAL */}
+      <div className="max-w-sm">
+        {currentUser && (
+          <AttendanceButton 
+            user={{
+              id: currentUser.id,
+              name: currentUser.nombre_completo || currentUser.username || 'Efectivo',
+              role: currentUser.role
+            }}
+            proyectoActual={proyectoActual}
+          />
+        )}
       </div>
 
       {/* Stats */}

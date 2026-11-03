@@ -104,6 +104,20 @@ export default function ReportDetail() {
     setGeneratingPDF(false);
   };
 
+  // FUNCIÓN PARA COMPARTIR DETALLES DE NOVEDAD POR WHATSAPP
+  const handleWhatsAppShare = () => {
+    const mensaje = `*🚨 SEGURIDAD VIP 3000 - REPORTE DE NOVEDAD*\n\n` +
+                    `*ID:* ${report.id.slice(0, 8).toUpperCase()}\n` +
+                    `*Título:* ${report.tituloNovedad}\n` +
+                    `*Proyecto:* ${report.proyecto}\n` +
+                    `*Estatus:* ${getStatusLabel(report.status).toUpperCase()}\n\n` +
+                    `*Desarrollo:* \n${report.desarrollo}\n\n` +
+                    `_Enviado de forma automática desde la plataforma SecureReport PWA._`;
+
+    const url = `https://wa.me{encodeURIComponent(mensaje)}`;
+    window.open(url, '_blank');
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
@@ -117,7 +131,16 @@ export default function ReportDetail() {
             <p className="text-slate-500 text-sm">ID: {report.id.slice(0, 8).toUpperCase()}</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {/* BOTÓN FÍSICO WHATSAPP */}
+          <button
+            onClick={handleWhatsAppShare}
+            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+            title="Compartir por WhatsApp"
+          >
+            <MessageSquare size={20} />
+          </button>
+          
           <button
             onClick={handleDownloadPDF}
             disabled={generatingPDF}
@@ -174,7 +197,6 @@ export default function ReportDetail() {
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
                   {report.evidencias.map((img, index) => {
-                    // Verificar si es una URL de Supabase o base64
                     const isUrl = img.startsWith('http://') || img.startsWith('https://');
                     
                     return (
@@ -201,136 +223,91 @@ export default function ReportDetail() {
             )}
           </div>
 
-          {/* Approval Status */}
-          {(report.status === 'aprobado' || report.status === 'rechazado') && (
-            <div className={`rounded-xl border p-4 flex items-start gap-3 ${
-              report.status === 'aprobado' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-            }`}>
-              {report.status === 'aprobado' ? (
-                <CheckCircle size={24} className="text-green-600 flex-shrink-0" />
-              ) : (
-                <XCircle size={24} className="text-red-600 flex-shrink-0" />
-              )}
-              <div className="flex-1">
-                <p className={`font-semibold ${report.status === 'aprobado' ? 'text-green-800' : 'text-red-800'}`}>
-                  {report.status === 'aprobado' ? 'Reporte Aprobado' : 'Reporte Rechazado'}
-                </p>
-                {approverUser && report.approvedAtOperaciones && (
-                  <p className={`text-sm ${report.status === 'aprobado' ? 'text-green-600' : 'text-red-600'}`}>
-                    Por {approverUser.nombre_completo} el {format(parseISO(report.approvedAtOperaciones), "dd MMM yyyy, HH:mm", { locale: es })}
-                  </p>
-                )}
-                {report.emailEnviadoA && (
-                  <div className="mt-2 flex items-center gap-2 text-xs text-green-700">
-                    <Mail size={12} />
-                    Email enviado a: {report.emailEnviadoA}
-                  </div>
-                )}
-              </div>
+          {/* Approval Status & Actions */}
+          {canApprove && report.status === 'pendiente' && (
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex gap-3 justify-end">
+              <button
+                onClick={() => rejectReport(report.id)}
+                className="inline-flex items-center gap-2 border border-red-200 text-red-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-red-50 transition-colors"
+              >
+                <XCircle size={16} /> Rechazar
+              </button>
+              <button
+                onClick={() => approveForClient(report.id)}
+                className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors shadow-sm"
+              >
+                <CheckCircle size={16} /> Validar y Hacer Visible al Cliente
+              </button>
             </div>
           )}
-
-          {/* Quick Actions for Operaciones */}
-          {canApprove && (report.status === 'pendiente' || report.status === 'en_proceso') && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-              <h3 className="font-semibold text-amber-800 mb-3 flex items-center gap-2">
-                <ShieldCheck size={18} />
-                Acciones de Aprobación
-              </h3>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => approveForClient(report.id, currentUser.id)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm"
-                >
-                  <CheckCircle size={18} />
-                  Aprobar y Notificar Cliente
-                </button>
-                <button
-                  onClick={() => rejectReport(report.id)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium text-sm"
-                >
-                  <XCircle size={18} />
-                  Rechazar
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Notes */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-              <MessageSquare size={20} />
-              Notas
-            </h3>
-            {report.notes && (
-              <div className="bg-slate-50 rounded-lg p-4 mb-4">
-                <p className="text-slate-700 whitespace-pre-line text-sm">{report.notes}</p>
-              </div>
-            )}
-            {!report.notes && <p className="text-slate-400 text-sm mb-4">No hay notas</p>}
-            {canAddNotes && (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={note}
-                  onChange={e => setNote(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddNote()}
-                  placeholder="Agregar nota..."
-                  className="flex-1 px-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                />
-                <button
-                  onClick={handleAddNote}
-                  disabled={!note.trim()}
-                  className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  <Send size={18} />
-                </button>
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* Right Column - Info */}
+        {/* Right Column - Meta Info & Notes */}
         <div className="space-y-6">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-slate-600 mb-4">Información</h3>
-            <div className="space-y-4">
-              <div className="flex items-start gap-3">
-                <Calendar size={18} className="text-slate-400 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-xs text-slate-400">Fecha y Hora</p>
-                  <p className="text-sm font-medium text-slate-700">
-                    {format(parseISO(report.fechaHora), "dd 'de' MMMM yyyy, HH:mm", { locale: es })}
-                  </p>
-                </div>
+        {/* Right Column - Meta Info & Notes */}
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4 text-sm text-slate-600">
+            <div className="flex items-center gap-2">
+              <User size={16} /> 
+              <span><strong>Autor:</strong> {creatorUser?.nombre_completo || 'Desconocido'}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Calendar size={16} /> 
+              <span><strong>Fecha:</strong> {format(parseISO(report.fechaHora), 'dd LLL yyyy', { locale: es })}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Clock size={16} /> 
+              <span><strong>Hora:</strong> {format(parseISO(report.fechaHora), 'HH:mm aa')}</span>
+            </div>
+            {report.ubicacionGps && (
+              <div className="flex items-center gap-2">
+                <MapPin size={16} />
+                <a 
+                  href={`https://google.com{report.ubicacionGps.lat},${report.ubicacionGps.lng}`} 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  className="text-blue-600 underline"
+                >
+                  Ver Coordenadas
+                </a>
               </div>
-              <div className="flex items-start gap-3">
-                <User size={18} className="text-slate-400 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-xs text-slate-400">Quien Reporta</p>
-                  <p className="text-sm font-medium text-slate-700">{report.quienReporta}</p>
-                </div>
+            )}
+          </div>
+
+          {/* Notas de Seguimiento */}
+          {canAddNotes && (
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+              <h3 className="font-semibold text-slate-700 flex items-center gap-2">
+                <MessageSquare size={16} /> 
+                Notas de Control
+              </h3>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {report.notes?.map((n: any, idx: number) => (
+                  <div key={idx} className="bg-slate-50 p-2 rounded text-xs border border-slate-100">
+                    <p className="text-slate-700">{n.text}</p>
+                    <span className="text-[10px] text-slate-400 block mt-1">
+                      {new Date(n.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))}
               </div>
-              <div className="flex items-start gap-3">
-                <MapPin size={18} className="text-slate-400 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-xs text-slate-400">Ubicación GPS</p>
-                  <p className="text-sm font-medium text-slate-700 font-mono text-xs">
-                    {report.ubicacionGPS.lat.toFixed(6)}, {report.ubicacionGPS.lng.toFixed(6)}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Clock size={18} className="text-slate-400 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-xs text-slate-400">Registrado</p>
-                  <p className="text-sm font-medium text-slate-700">
-                    {format(parseISO(report.createdAt), "dd MMM yyyy, HH:mm", { locale: es })}
-                  </p>
-                </div>
+              <div className="flex gap-2 mt-2">
+                <input 
+                  type="text" 
+                  value={note} 
+                  onChange={(e) => setNote(e.target.value)} 
+                  placeholder="Escribir nota..." 
+                  className="flex-1 text-sm border rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-blue-500" 
+                />
+                <button 
+                  onClick={handleAddNote} 
+                  className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700"
+                >
+                  <Send size={14} />
+                </button>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

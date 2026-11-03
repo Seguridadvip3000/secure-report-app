@@ -110,4 +110,27 @@ export const notificationService = {
 
     console.log(`🔔 [NOTIFICACIÓN 3] Push enviada: ${title}`);
   },
+  // Alertas de asistencia en tiempo real con emojis
+  async notifyAttendance(userName: string, status: 'entrada' | 'salida', proyecto: string) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    const emoji = status === 'entrada' ? '🟢' : '🔴';
+    const titulo = `${emoji} Asistencia: ${userName}`;
+    const opciones = {
+      body: `Marcó ${status} en: ${proyecto}\nHora: ${new Date().toLocaleTimeString()}`,
+      icon: '/icon-192x192.png'
+    };
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      if (registration) {
+        registration.showNotification(titulo, opciones);
+      } else {
+        new Notification(titulo, opciones);
+      }
+    } catch (error) {
+      console.warn('Error al despachar notificación push nativa:', error);
+      new Notification(titulo, opciones);
+    }
+  }
 };

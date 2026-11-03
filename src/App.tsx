@@ -5,7 +5,7 @@ import { ReportProvider, useReports } from './context/ReportContext';
 import Sidebar from './components/Sidebar';
 import { ReactNode } from 'react';
 
-// Lazy load de todos los componentes de páginas
+// Lazy load de todos los componentes de páginas (Manteniendo consistencia de optimización)
 const AuthPage = lazy(() => import('./pages/AuthPage'));
 const LiderHome = lazy(() => import('./pages/LiderHome'));
 const ClienteDashboard = lazy(() => import('./pages/ClienteDashboard'));
@@ -16,8 +16,9 @@ const ReportList = lazy(() => import('./pages/ReportList'));
 const ReportDetail = lazy(() => import('./pages/ReportDetail'));
 const AprobacionesPage = lazy(() => import('./pages/AprobacionesPage'));
 const ConfiguracionPage = lazy(() => import('./pages/ConfiguracionPage'));
+const SeguimientoRutasPage = lazy(() => import('./pages/SeguimientoRutasPage'));
 
-// Componente de carga
+// Componente de carga institucional
 function LoadingScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center">
@@ -91,6 +92,13 @@ function AppRoutes() {
               <Route path="/reportes" element={
                 <RoleRoute roles={['operaciones', 'directiva']}>
                   <ReportList />
+                </RoleRoute>
+              } />
+
+              {/* Seguimiento de Rutas en Tiempo Real - Directiva only */}
+              <Route path="/seguimiento-rutas" element={
+                <RoleRoute roles={['directiva']}>
+                  <SeguimientoRutasPage />
                 </RoleRoute>
               } />
 
