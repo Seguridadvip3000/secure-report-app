@@ -5,12 +5,13 @@ import { ReportProvider, useReports } from './context/ReportContext';
 import Sidebar from './components/Sidebar';
 import { ReactNode } from 'react';
 
-// Lazy load de todos los componentes de páginas (Manteniendo consistencia de optimización)
+// Lazy load de todos los componentes de páginas
 const AuthPage = lazy(() => import('./pages/AuthPage'));
 const LiderHome = lazy(() => import('./pages/LiderHome'));
 const ClienteDashboard = lazy(() => import('./pages/ClienteDashboard'));
 const OperacionesHome = lazy(() => import('./pages/OperacionesHome'));
 const DirectivaHome = lazy(() => import('./pages/DirectivaHome'));
+const AdministradorHome = lazy(() => import('./pages/AdministradorHome'));
 const NewReport = lazy(() => import('./pages/NewReport'));
 const ReportList = lazy(() => import('./pages/ReportList'));
 const ReportDetail = lazy(() => import('./pages/ReportDetail'));
@@ -18,7 +19,7 @@ const AprobacionesPage = lazy(() => import('./pages/AprobacionesPage'));
 const ConfiguracionPage = lazy(() => import('./pages/ConfiguracionPage'));
 const SeguimientoRutasPage = lazy(() => import('./pages/SeguimientoRutasPage'));
 
-// Componente de carga institucional
+// Componente de carga
 function LoadingScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center">
@@ -78,6 +79,7 @@ function AppRoutes() {
                   {currentUser.role === 'operaciones' && <OperacionesHome />}
                   {currentUser.role === 'cliente' && <ClienteDashboard />}
                   {currentUser.role === 'directiva' && <DirectivaHome />}
+                  {currentUser.role === 'administrador' && <AdministradorHome />}
                 </ProtectedRoute>
               } />
 
@@ -95,13 +97,6 @@ function AppRoutes() {
                 </RoleRoute>
               } />
 
-              {/* Seguimiento de Rutas en Tiempo Real - Directiva only */}
-              <Route path="/seguimiento-rutas" element={
-                <RoleRoute roles={['directiva']}>
-                  <SeguimientoRutasPage />
-                </RoleRoute>
-              } />
-
               {/* Aprobaciones - Directiva only */}
               <Route path="/aprobaciones" element={
                 <RoleRoute roles={['directiva']}>
@@ -109,10 +104,17 @@ function AppRoutes() {
                 </RoleRoute>
               } />
 
-              {/* Configuración - Directiva only */}
+              {/* Configuración - Directiva y Administrador */}
               <Route path="/configuracion" element={
-                <RoleRoute roles={['directiva']}>
+                <RoleRoute roles={['directiva', 'administrador']}>
                   <ConfiguracionPage />
+                </RoleRoute>
+              } />
+
+              {/* Seguimiento de Rutas - Solo Administrador */}
+              <Route path="/seguimiento-rutas" element={
+                <RoleRoute roles={['administrador']}>
+                  <SeguimientoRutasPage />
                 </RoleRoute>
               } />
 
@@ -142,4 +144,4 @@ export default function App() {
       </AuthProvider>
     </BrowserRouter>
   );
-} 
+}

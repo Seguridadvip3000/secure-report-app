@@ -1,7 +1,8 @@
-export type UserRole = 'lider' | 'cliente' | 'operaciones' | 'directiva';
+export type UserRole = 'lider' | 'cliente' | 'operaciones' | 'directiva' | 'administrador';
 export type UserStatus = 'pendiente' | 'aprobado' | 'rechazado';
 export type ReportStatus = 'pendiente' | 'en_proceso' | 'resuelto' | 'aprobado' | 'rechazado';
 export type ReportPriority = 'baja' | 'media' | 'alta' | 'critica';
+export type AttendanceStatus = 'entrada' | 'salida';
 
 export interface User {
   id: string;
@@ -15,6 +16,18 @@ export interface User {
   approvedAt?: string;
   approvedBy?: string;
   rejectionReason?: string;
+}
+
+export interface AttendanceReport {
+  id: string;
+  userId: string;
+  userName: string;
+  userRole: 'lider' | 'operaciones';
+  proyecto: string;
+  status: AttendanceStatus;
+  ubicacionGPS: { lat: number; lng: number; address?: string };
+  fechaHora: string;
+  createdAt: string;
 }
 
 export interface Report {
@@ -43,6 +56,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   cliente: 'Cliente',
   operaciones: 'Operaciones',
   directiva: 'Directiva',
+  administrador: 'Administrador',
 };
 
 export const ROLE_COLORS: Record<UserRole, string> = {
@@ -50,4 +64,5 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   cliente: 'bg-green-100 text-green-800 border-green-200',
   operaciones: 'bg-purple-100 text-purple-800 border-purple-200',
   directiva: 'bg-red-100 text-red-800 border-red-200',
+  administrador: 'bg-orange-100 text-orange-800 border-orange-200',
 };

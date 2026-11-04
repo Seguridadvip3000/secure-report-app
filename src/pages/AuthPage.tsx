@@ -336,7 +336,7 @@ export default function AuthPage() {
                     Tipo de Usuario *
                   </label>
                   <div className="grid grid-cols-2 gap-2">
-                    {(['lider', 'cliente', 'operaciones', 'directiva'] as UserRole[]).map(role => (
+                    {(['lider', 'cliente', 'operaciones', 'directiva', 'administrador'] as UserRole[]).map(role => (
                       <button
                         key={role}
                         type="button"
@@ -349,7 +349,7 @@ export default function AuthPage() {
                         disabled={loading}
                       >
                         <div className="text-lg mb-1">
-                          {role === 'lider' ? '🛡️' : role === 'cliente' ? '👤' : role === 'operaciones' ? '📊' : '👑'}
+                          {role === 'lider' ? '🛡️' : role === 'cliente' ? '👤' : role === 'operaciones' ? '📊' : role === 'directiva' ? '👑' : '⚙️'}
                         </div>
                         {ROLE_LABELS[role]}
                       </button>

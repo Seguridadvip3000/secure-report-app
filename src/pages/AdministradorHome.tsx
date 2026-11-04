@@ -1,108 +1,50 @@
-import React, { lazy, Suspense, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Sidebar from './components/Sidebar';
-import AuthPage from './pages/AuthPage';
-import { UserRole } from './types';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { Route, Settings, Users } from 'lucide-react';
 
-// Carga perezosa (lazy) de los componentes de páginas
-const LiderHome = lazy(() => import('./pages/LiderHome'));
-const OperacionesHome = lazy(() => import('./pages/OperacionesHome'));
-const DirectivaHome = lazy(() => import('./pages/DirectivaHome'));
-const AdministradorHome = lazy(() => import('./pages/AdministradorHome'));
-const SeguimientoRutasPage = lazy(() => import('./pages/SeguimientoRutasPage'));
-const NewReport = lazy(() => import('./pages/NewReport'));
-
-// Componente para proteger las rutas basándose en roles estrictos
-interface RoleRouteProps {
-  children: React.ReactNode;
-  allowedRoles: UserRole[];
-  userRole: UserRole | null;
-  isAuthenticated: boolean;
-}
-
-function RoleRoute({ children, allowedRoles, userRole, isAuthenticated }: RoleRouteProps) {
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (userRole && !allowedRoles.includes(userRole)) return <Navigate to="/unauthorized" replace />;
-  return <>{children}</>;
-}
-
-export default function App() {
-  // Simulación temporal de autenticación (Reemplazar con lógica real de Supabase)
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
-  const [userRole, setUserRole] = useState<UserRole>('administrador');
-  const [username, setUsername] = useState('Keyser Hernández');
-
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setUserRole(null);
-  };
+export default function AdministradorHome() {
+  const navigate = useNavigate();
+  const { currentUser } = useAuth();
 
   return (
-    <Router>
-      <div className="flex bg-gray-50 min-h-screen">
-        {isAuthenticated && userRole && (
-          <Sidebar role={userRole} username={username} onLogout={handleLogout} />
-        )}
-        
-        <div className={`flex-1 ${isAuthenticated ? 'pl-64' : ''}`}>
-          <Suspense fallback={
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-              <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600"></div>
-            </div>
-          }>
-            <Routes>
-              {/* Ruta pública */}
-              <Route path="/login" element={<AuthPage />} />
-
-              {/* Redirección automática de la raíz según el rol del usuario */}
-              <Route path="/" element={
-                isAuthenticated 
-                  ? userRole === 'administrador' ? <Navigate to="/admin" replace /> : <Navigate to="/dashboard" replace />
-                  : <Navigate to="/login" replace />
-              } />
-
-              {/* Paneles generales protegidos */}
-              <Route path="/dashboard" element={
-                <RoleRoute isAuthenticated={isAuthenticated} userRole={userRole} allowedRoles={['lider', 'operaciones', 'directiva']}>
-                  {userRole === 'lider' && <LiderHome />}
-                  {userRole === 'operaciones' && <OperacionesHome />}
-                  {userRole === 'directiva' && <DirectivaHome />}
-                </RoleRoute>
-              } />
-
-              <Route path="/nuevo-reporte" element={
-                <RoleRoute isAuthenticated={isAuthenticated} userRole={userRole} allowedRoles={['lider']}>
-                  <NewReport />
-                </RoleRoute>
-              } />
-
-              {/* Rutas exclusivas del Rol Administrador */}
-              <Route path="/admin" element={
-                <RoleRoute isAuthenticated={isAuthenticated} userRole={userRole} allowedRoles={['administrador']}>
-                  <AdministradorHome />
-                </RoleRoute>
-              } />
-
-              <Route path="/seguimiento-rutas" element={
-                <RoleRoute isAuthenticated={isAuthenticated} userRole={userRole} allowedRoles={['administrador']}>
-                  <SeguimientoRutasPage />
-                </RoleRoute>
-              } />
-
-              {/* Ruta de Contingencia para accesos denegados */}
-              <Route path="/unauthorized" element={
-                <div className="min-h-screen flex flex-col items-center justify-center p-4">
-                  <h1 className="text-2xl font-bold text-red-600">Acceso No Autorizado</h1>
-                  <p className="text-gray-500 mt-2 text-center">Tu rol actual no tiene privilegios para ingresar a este panel.</p>
-                </div>
-              } />
-
-              {/* Captura de rutas inexistentes */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
-        </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-orange-600 to-orange-700 rounded-xl p-6 text-white">
+        <h1 className="text-2xl font-bold">Panel de Administrador</h1>
+        <p className="text-orange-100 mt-1">Bienvenido, {currentUser?.nombre_completo}</p>
       </div>
-    </Router>
+
+      {/* Main Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <button
+          onClick={() => navigate('/seguimiento-rutas')}
+          className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-orange-500 hover:bg-orange-50 transition-all group text-left"
+        >
+          <div className="w-14 h-14 bg-orange-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+            <Route size={28} className="text-orange-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-800 mb-1">Seguimiento de Rutas</h3>
+          <p className="text-sm text-slate-500">Monitoreo en tiempo real de líderes y operaciones</p>
+        </button>
+
+        <button
+          onClick={() => navigate('/configuracion')}
+          className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-slate-500 hover:bg-slate-50 transition-all group text-left"
+        >
+          <div className="w-14 h-14 bg-slate-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+            <Settings size={28} className="text-slate-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-800 mb-1">Configuración</h3>
+          <p className="text-sm text-slate-500">Gestión de usuarios y parámetros del sistema</p>
+        </button>
+      </div>
+
+      {/* Info */}
+      <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+        <p className="text-sm text-orange-800">
+          <strong>Nota:</strong> Como administrador, tienes acceso exclusivo al seguimiento de rutas en tiempo real de todos los líderes y usuarios de operaciones.
+        </p>
+      </div>
+    </div>
   );
 }
