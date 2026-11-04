@@ -155,6 +155,7 @@ export default function AuthPage() {
       </div>
     );
   }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -259,295 +260,101 @@ export default function AuthPage() {
                   <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
                     <User size={16} />
                     Nombre de Usuario
-                  </label>
-                  <input
-                    type="text"
-                    value={regUsername}
-                    onChange={e => setRegUsername(e.target.value)}
-                    placeholder="ej. jgomez"
-                    className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    disabled={loading}
-                  />
-                </div>
+<input
+type="text"
+value={regUsername}
+onChange={e => setRegUsername(e.target.value)}
+placeholder="ej. jgomez"
+className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+disabled={loading}
+/>
+Nombre Completo
+<input
+type="text"
+value={regNombreCompleto}
+onChange={e => setRegNombreCompleto(e.target.value)}
+placeholder="ej. Juan Gómez"
+className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+disabled={loading}
+/>
+Correo Electrónico
+<input
+type="email"
+value={regEmail}
+onChange={e => setRegEmail(e.target.value)}
+placeholder="correo@ejemplo.com"
+className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+disabled={loading}
+/>
+Contraseña
+<input
+type={showRegPassword ? 'text' : 'password'}
+value={regPassword}
+onChange={e => setRegPassword(e.target.value)}
+placeholder="Mínimo 6 caracteres"
+className="w-full px-4 py-3 pr-12 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+disabled={loading}
+/>
+<button
+type="button"
+onClick={() => setShowRegPassword(!showRegPassword)}
+className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+>
+{showRegPassword ?  : }
 
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                    <UserCircle size={16} />
-                    Nombre Completo
-                  </label>
-                  <input
-                    type="text"
-                    value={regNombreCompleto}
-                    onChange={e => setRegNombreCompleto(e.target.value)}
-                    placeholder="ej. Juan Gómez"
-                    className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    disabled={loading}
-                  />
-                </div>
 
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                    <Mail size={16} />
-                    Correo Electrónico
-                  </label>
-                  <input
-                    type="email"
-                    value={regEmail}
-                    onChange={e => setRegEmail(e.target.value)}
-                    placeholder="correo@ejemplo.com"
-                    className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    disabled={loading}
-                  />
-                </div>
+Rol en la Empresa
+<select
+value={regRole}
+onChange={e => {
+setRegRole(e.target.value as UserRole);
+setRegProyectos([]);
+if(e.target.value !== 'admin') setAdminKey('');
+}}
+className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white outline-none"
+disabled={loading}
+>
+Seleccione un rol...
+{Object.entries(ROLE_LABELS).map(([value, label]) => (
+{label}
+))}
 
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                    <Lock size={16} />
-                    Contraseña
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showRegPassword ? 'text' : 'password'}
-                      value={regPassword}
-                      onChange={e => setRegPassword(e.target.value)}
-                      placeholder="Mínimo 6 caracteres"
-                      className="w-full px-4 py-3 pr-12 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                      disabled={loading}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowRegPassword(!showRegPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                      {showRegPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                </div>
+{regRole === 'admin' && (
+Clave de Seguridad Administrador
+<input
+type="password"
+value={adminKey}
+onChange={e => setAdminKey(e.target.value)}
+placeholder="Ingrese la clave corporativa"
+className="w-full px-4 py-3 border border-amber-300 bg-amber-50/30 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
+disabled={loading}
+required
+/>
 
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                    <Building size={16} />
-                    Rol en la Empresa
-                  </label>
-                  <select
-                    value={regRole}
-                    onChange={e => {
-                      setRegRole(e.target.value as UserRole);
-                      setRegProyectos([]);
-                      if(e.target.value !== 'admin') setAdminKey('');
-                    }}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white outline-none"
-                    disabled={loading}
-                  >
-                    <option value="">Seleccione un rol...</option>
-                    {Object.entries(ROLE_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
-                  </select>
-                </div>
+)}
+{(regRole === 'lider' || regRole === 'cliente') && (
+Asignar Proyectos / Rutas
+{PROYECTOS.map(proyecto => (
+<button
+key={proyecto}
+type="button"
+onClick={() => toggleProyecto(proyecto)}
+className={p-2 text-xs rounded-md border text-left transition-all ${ regProyectos.includes(proyecto) ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50' }}
+>
+{proyecto}
 
-                {regRole === 'admin' && (
-                  <div className="space-y-1">
-                    <label className="flex items-center gap-2 text-sm font-medium text-amber-700 mb-1.5">
-                      <Key size={16} className="text-amber-600" />
-                      Clave de Seguridad Administrador
-                    </label>
-                    <input
-                      type="password"
-                      value={adminKey}
-                      onChange={e => setAdminKey(e.target.value)}
-                      placeholder="Ingrese la clave corporativa"
-                      className="w-full px-4 py-3 border border-amber-300 bg-amber-50/30 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-                      disabled={loading}
-                      required
-                    />
-                  </div>
-                )}
+))}
 
-                {(regRole === 'lider' || regRole === 'cliente') && (
-                  <div className="space-y-2 border border-slate-100 rounded-lg p-3 bg-slate-50/50">
-                    <label className="text-sm font-medium text-slate-700 block">
-                    Contraseña
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showLoginPassword ? 'text' : 'password'}
-                      value={loginPassword}
-                      onChange={e => setLoginPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full px-4 py-3 pr-12 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                      disabled={loading}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowLoginPassword(!showLoginPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                      {showLoginPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                </div>
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {loading ? 'Iniciando sesión...' : 'Ingresar'}
-                  {!loading && <ArrowRight size={18} />}
-                </button>
-              </form>
-            )}
+)}
+{loading ? 'Creando cuenta...' : 'Completar Registro'}
+{!loading && }
 
-            {view === 'register' && (
-              <form onSubmit={handleRegister} className="space-y-4">
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                    <User size={16} />
-                    Nombre de Usuario
-                  </label>
-                  <input
-                    type="text"
-                    value={regUsername}
-                    onChange={e => setRegUsername(e.target.value)}
-                    placeholder="ej. jgomez"
-                    className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    disabled={loading}
-                  />
-                </div>
 
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                    <UserCircle size={16} />
-                    Nombre Completo
-                  </label>
-                  <input
-                    type="text"
-                    value={regNombreCompleto}
-                    onChange={e => setRegNombreCompleto(e.target.value)}
-                    placeholder="ej. Juan Gómez"
-                    className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    disabled={loading}
-                  />
-                </div>
+)}
 
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                    <Mail size={16} />
-                    Correo Electrónico
-                  </label>
-                  <input
-                    type="email"
-                    value={regEmail}
-                    onChange={e => setRegEmail(e.target.value)}
-                    placeholder="correo@ejemplo.com"
-                    className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    disabled={loading}
-                  />
-                </div>
 
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                    <Lock size={16} />
-                    Contraseña
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showRegPassword ? 'text' : 'password'}
-                      value={regPassword}
-                      onChange={e => setRegPassword(e.target.value)}
-                      placeholder="Mínimo 6 caracteres"
-                      className="w-full px-4 py-3 pr-12 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                      disabled={loading}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowRegPassword(!showRegPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                      {showRegPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                </div>
 
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                    <Building size={16} />
-                    Rol en la Empresa
-                  </label>
-                  <select
-                    value={regRole}
-                    onChange={e => {
-                      setRegRole(e.target.value as UserRole);
-                      setRegProyectos([]);
-                      if(e.target.value !== 'admin') setAdminKey('');
-                    }}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white outline-none"
-                    disabled={loading}
-                  >
-                    <option value="">Seleccione un rol...</option>
-                    {Object.entries(ROLE_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
-                  </select>
-                </div>
 
-                {regRole === 'admin' && (
-                  <div className="space-y-1">
-                    <label className="flex items-center gap-2 text-sm font-medium text-amber-700 mb-1.5">
-                      <Key size={16} className="text-amber-600" />
-                      Clave de Seguridad Administrador
-                    </label>
-                    <input
-                      type="password"
-                      value={adminKey}
-                      onChange={e => setAdminKey(e.target.value)}
-                      placeholder="Ingrese la clave corporativa"
-                      className="w-full px-4 py-3 border border-amber-300 bg-amber-50/30 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-                      disabled={loading}
-                      required
-                    />
-                  </div>
-                )}
-
-                {(regRole === 'lider' || regRole === 'cliente') && (
-                  <div className="space-y-2 border border-slate-100 rounded-lg p-3 bg-slate-50/50">
-                    <label className="text-sm font-medium text-slate-700 block">
-                      Asignar Proyectos / Rutas
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {PROYECTOS.map(proyecto => (
-                        <button
-                          key={proyecto}
-                          type="button"
-                          onClick={() => toggleProyecto(proyecto)}
-                          className={`p-2 text-xs rounded-md border text-left transition-all ${
-                            regProyectos.includes(proyecto)
-                              ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium'
-                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                          }`}
-                        >
-                          {proyecto}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-6"
-                >
-                  {loading ? 'Creando cuenta...' : 'Completar Registro'}
-                  {!loading && <ArrowRight size={18} />}
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+);
 }
-
