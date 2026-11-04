@@ -12,6 +12,7 @@ import {
   UserCheck,
   Settings,
   Route,
+  MapPin,
 } from 'lucide-react';
 import { useState } from 'react';
 import { ROLE_LABELS, ROLE_COLORS } from '../types';
@@ -51,6 +52,9 @@ export default function Sidebar() {
       case 'administrador':
         return [
           { to: '/', icon: LayoutDashboard, label: 'Inicio' },
+          { to: '/nuevo', icon: FilePlus, label: 'Crear Reporte' },
+          { to: '/reportes', icon: List, label: 'Lista de Reportes' },
+          { to: '/aprobaciones', icon: UserCheck, label: 'Aprobaciones' },
           { to: '/seguimiento-rutas', icon: Route, label: 'Seguimiento de Rutas' },
           { to: '/configuracion', icon: Settings, label: 'Configuración' },
         ];

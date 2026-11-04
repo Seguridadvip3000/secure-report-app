@@ -45,103 +45,90 @@ function RoleRoute({ roles, children }: { roles: string[]; children: ReactNode }
   return <>{children}</>;
 }
 
-function AppRoutes() {
-  const { currentUser, loading: authLoading } = useAuth();
-  const { loading: reportsLoading } = useReports();
-
-  // Show loading screen while data is being fetched
-  if (authLoading || reportsLoading) {
-    return <LoadingScreen />;
-  }
-
-  if (!currentUser || currentUser.status !== 'aprobado') {
-    return (
-      <Suspense fallback={<LoadingScreen />}>
-        <Routes>
-          <Route path="/auth" element={<AuthPage />} />
-          <Route path="*" element={<Navigate to="/auth" replace />} />
-        </Routes>
-      </Suspense>
-    );
-  }
-
+export default function App() {
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <Sidebar />
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
-        <div className="max-w-6xl mx-auto pt-12 lg:pt-0">
+    <AuthProvider>
+      <ReportProvider>
+        <BrowserRouter>
           <Suspense fallback={<LoadingScreen />}>
             <Routes>
-              {/* Home - role-based routing */}
-              <Route path="/" element={
-                <ProtectedRoute>
-                  {currentUser.role === 'lider' && <LiderHome />}
-                  {currentUser.role === 'operaciones' && <OperacionesHome />}
-                  {currentUser.role === 'cliente' && <ClienteDashboard />}
-                  {currentUser.role === 'directiva' && <DirectivaHome />}
-                  {currentUser.role === 'administrador' && <AdministradorHome />}
-                </ProtectedRoute>
-              } />
-
-              {/* New Report - Lider, Operaciones, Directiva */}
-              <Route path="/nuevo" element={
-                <RoleRoute roles={['lider', 'operaciones', 'directiva']}>
-                  <NewReport />
-                </RoleRoute>
-              } />
-
-              {/* Report List - Operaciones, Directiva */}
-              <Route path="/reportes" element={
-                <RoleRoute roles={['operaciones', 'directiva']}>
-                  <ReportList />
-                </RoleRoute>
-              } />
-
-              {/* Aprobaciones - Directiva only */}
-              <Route path="/aprobaciones" element={
-                <RoleRoute roles={['directiva']}>
-                  <AprobacionesPage />
-                </RoleRoute>
-              } />
-
-              {/* Configuración - Directiva y Administrador */}
-              <Route path="/configuracion" element={
-                <RoleRoute roles={['directiva', 'administrador']}>
-                  <ConfiguracionPage />
-                </RoleRoute>
-              } />
-
-              {/* Seguimiento de Rutas - Solo Administrador */}
-              <Route path="/seguimiento-rutas" element={
-                <RoleRoute roles={['administrador']}>
-                  <SeguimientoRutasPage />
-                </RoleRoute>
-              } />
-
-              {/* Report Detail - all roles (with internal permission check) */}
-              <Route path="/reportes/:id" element={
-                <ProtectedRoute>
-                  <ReportDetail />
-                </ProtectedRoute>
-              } />
-
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="/auth" element={<AuthPage />} />
+              
+              <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                <Route index element={
+                  <RoleRoute roles={['lider']}>
+                    <LiderHome />
+                  </RoleRoute>
+                } />
+                <Route path="nuevo" element={
+                  <RoleRoute roles={['lider', 'operaciones', 'directiva', 'administrador']}>
+                    <NewReport />
+                  </RoleRoute>
+                } />
+                <Route path="reportes" element={
+                  <RoleRoute roles={['operaciones', 'directiva', 'administrador']}>
+                    <ReportList />
+                  </RoleRoute>
+                } />
+                <Route path="reportes/:id" element={
+                  <RoleRoute roles={['lider', 'operaciones', 'directiva', 'administrador', 'cliente']}>
+                    <ReportDetail />
+                  </RoleRoute>
+                } />
+                <Route path="aprobaciones" element={
+                  <RoleRoute roles={['directiva', 'administrador']}>
+                    <AprobacionesPage />
+                  </RoleRoute>
+                } />
+                <Route path="configuracion" element={
+                  <RoleRoute roles={['directiva', 'administrador']}>
+                    <ConfiguracionPage />
+                  </RoleRoute>
+                } />
+                <Route path="seguimiento-rutas" element={
+                  <RoleRoute roles={['administrador']}>
+                    <SeguimientoRutasPage />
+                  </RoleRoute>
+                } />
+                <Route path="dashboard-cliente" element={
+                  <RoleRoute roles={['cliente']}>
+                    <ClienteDashboard />
+                  </RoleRoute>
+                } />
+                <Route path="home-operaciones" element={
+                  <RoleRoute roles={['operaciones']}>
+                    <OperacionesHome />
+                  </RoleRoute>
+                } />
+                <Route path="home-directiva" element={
+                  <RoleRoute roles={['directiva']}>
+                    <DirectivaHome />
+                  </RoleRoute>
+                } />
+                <Route path="home-admin" element={
+                  <RoleRoute roles={['administrador']}>
+                    <AdministradorHome />
+                  </RoleRoute>
+                } />
+              </Route>
             </Routes>
           </Suspense>
-        </div>
+        </BrowserRouter>
+      </ReportProvider>
+    </AuthProvider>
+  );
+}
+
+function Layout() {
+  return (
+    <div className="flex h-screen overflow-hidden bg-gray-50">
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto">
+        <Outlet />
       </main>
     </div>
   );
 }
 
-export default function App() {
-  return (
-    <BrowserRouter>
-      <AuthProvider>
-        <ReportProvider>
-          <AppRoutes />
-        </ReportProvider>
-      </AuthProvider>
-    </BrowserRouter>
-  );
-}
+// Importa Outlet desde react-router-dom si no está ya
+import { Outlet } from 'react-router-dom';
