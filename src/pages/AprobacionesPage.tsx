@@ -1,16 +1,37 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ROLE_LABELS, ROLE_COLORS } from '../types';
-import { ArrowLeft, CheckCircle, XCircle, Clock, Users } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Clock, ShieldAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 export default function AprobacionesPage() {
-  const { pendingUsers, approveUser, rejectUser } = useAuth();
+  const { user: currentUser, pendingUsers, approveUser, rejectUser } = useAuth();
   const navigate = useNavigate();
   const [rejectModal, setRejectModal] = useState<{ userId: string; name: string } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+
+  // VALIDACIÓN DE SEGURIDAD EXCLUSIVA: Solo el rol 'admin' puede interactuar o visualizar esta sección
+  if (!currentUser || currentUser.role !== 'admin') {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center space-y-4">
+        <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center shadow-sm">
+          <ShieldAlert size={36} />
+        </div>
+        <h2 className="text-2xl font-bold text-slate-800">Acceso Restringido</h2>
+        <p className="text-slate-500 max-w-md">
+          Lo sentimos, solo el **Administrador Principal** del sistema posee los privilegios requeridos para autorizar o rechazar solicitudes de registro.
+        </p>
+        <button
+          onClick={() => navigate(-1)}
+          className="px-5 py-2.5 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-900 transition-colors"
+        >
+          Regresar a un lugar seguro
+        </button>
+      </div>
+    );
+  }
 
   const handleReject = () => {
     if (rejectModal && rejectReason.trim()) {

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ReportProvider, useReports } from './context/ReportContext';
 import Sidebar from './components/Sidebar';
@@ -33,18 +33,26 @@ function LoadingScreen() {
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
+  
   if (!currentUser) return <Navigate to="/auth" replace />;
   if (currentUser.status !== 'aprobado') return <Navigate to="/auth" replace />;
+  
+  // CONTROL DE SEGURIDAD: Evita el inicio de sesión a usuarios directiva desaprobados
+  if (currentUser.role === 'directiva' && currentUser.is_approved === false) {
+    return <Navigate to="/auth" replace />;
+  }
+  
   return <>{children}</>;
 }
 
 function RoleRoute({ roles, children }: { roles: string[]; children: ReactNode }) {
   const { currentUser } = useAuth();
+  
   if (!currentUser) return <Navigate to="/auth" replace />;
   if (!roles.includes(currentUser.role)) return <Navigate to="/" replace />;
+  
   return <>{children}</>;
 }
-
 export default function App() {
   return (
     <AuthProvider>
@@ -75,15 +83,16 @@ export default function App() {
                     <ReportDetail />
                   </RoleRoute>
                 } />
+                {/* REQUERIMIENTO COMPLETO: Solo el rol administrador puede autorizar y acceder */}
                 <Route path="aprobaciones" element={
-                  <RoleRoute roles={['directiva', 'administrador']}>
+                  <RoleRoute roles={['administrador']}>
                     <AprobacionesPage />
                   </RoleRoute>
                 } />
                 <Route path="configuracion" element={
                   <RoleRoute roles={['directiva', 'administrador']}>
                     <ConfiguracionPage />
-                  </RoleRoute>
+                  </Route>
                 } />
                 <Route path="seguimiento-rutas" element={
                   <RoleRoute roles={['administrador']}>
@@ -129,6 +138,3 @@ function Layout() {
     </div>
   );
 }
-
-// Importa Outlet desde react-router-dom si no está ya
-import { Outlet } from 'react-router-dom';
