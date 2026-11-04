@@ -89,10 +89,10 @@ export default function App() {
                     <AprobacionesPage />
                   </RoleRoute>
                 } />
-                <Route path="configuracion" element={
+                               <Route path="configuracion" element={
                   <RoleRoute roles={['directiva', 'administrador']}>
                     <ConfiguracionPage />
-                  </Route>
+                  </RoleRoute> //
                 } />
                 <Route path="seguimiento-rutas" element={
                   <RoleRoute roles={['administrador']}>
