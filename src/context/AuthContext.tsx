@@ -46,10 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session?.user) {
-        // Obtener perfil del usuario desde public.users
+        // Obtener perfil especificando las columnas exactas para evitar error 406
         const { data: profile, error } = await supabase
           .from('users')
-          .select('*')
+          .select('id, username, nombre_completo, email, role, status, proyectos, created_at, approved_at, approved_by, rejection_reason')
           .eq('id', session.user.id)
           .single();
 
@@ -92,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('*')
+        .select('id, username, nombre_completo, email, role, status, proyectos, created_at, approved_at, approved_by, rejection_reason')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -116,15 +116,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Error cargando usuarios:', error);
     }
   };
-
   // Login con Supabase Auth
   const login = async (usernameOrEmail: string, password: string): Promise<{ success: boolean; message: string }> => {
     try {
       console.log('🔐 Intentando login con:', usernameOrEmail);
-
-      // Determinar si es username o email
       const isEmail = usernameOrEmail.includes('@');
-      
       let email = usernameOrEmail;
       
       // Si es username, buscar el email asociado
@@ -153,10 +149,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (data.user) {
-        // Obtener perfil del usuario
+        // Obtener perfil especificando columnas explícitas
         const { data: profile, error: profileError } = await supabase
           .from('users')
-          .select('*')
+          .select('id, username, nombre_completo, email, role, status, proyectos, created_at, approved_at, approved_by, rejection_reason')
           .eq('id', data.user.id)
           .single();
 
@@ -164,14 +160,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { success: false, message: 'Error cargando perfil de usuario' };
         }
 
-        // Verificar que el usuario esté aprobado
+        // Verificar que el usuario esté aprobado mediante estados en español
         if (profile.status !== 'aprobado') {
           await supabase.auth.signOut();
           return { 
             success: false, 
             message: profile.status === 'pendiente' 
-              ? 'Su cuenta está pendiente de aprobación' 
-              : 'Su cuenta ha sido rechazada' 
+              ? 'Su cuenta está pendiente de aprobación por el Administrador.' 
+              : 'Su cuenta ha sido rechazada.' 
           };
         }
 
@@ -206,7 +202,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('📝 Registrando usuario:', data.username);
 
-      // Verificar si el username ya existe
       const { data: existingUsername } = await supabase
         .from('users')
         .select('username')
@@ -217,7 +212,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, message: 'El nombre de usuario ya está en uso' };
       }
 
-      // Verificar si el email ya existe
       const { data: existingEmail } = await supabase
         .from('users')
         .select('email')
@@ -228,7 +222,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, message: 'El correo electrónico ya está registrado' };
       }
 
-      // Crear usuario en Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -243,15 +236,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, message: 'Error creando usuario' };
       }
 
-      // Determinar proyectos según el rol
       let proyectos: string[] = [];
       if (data.role === 'directiva' || data.role === 'operaciones') {
-        proyectos = ['*']; // Acceso global
+        proyectos = ['*'];
       } else {
         proyectos = data.proyectos || [];
       }
 
-      // Crear perfil en public.users
+      // El rol 'directiva' se guarda como 'pendiente'. Administradores y los demás inician como 'aprobado'.
+      const initialStatus = data.role === 'directiva' ? 'pendiente' : 'aprobado';
+
       const { error: profileError } = await supabase
         .from('users')
         .insert([{
@@ -260,21 +254,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           nombre_completo: data.nombre_completo,
           email: data.email,
           role: data.role,
-          status: 'pendiente',
+          status: initialStatus,
           proyectos: proyectos,
         }]);
 
       if (profileError) {
         console.error('❌ Error creando perfil:', profileError);
-        // Intentar limpiar el usuario de Auth si falla el perfil
         await supabase.auth.admin.deleteUser(authData.user.id);
         return { success: false, message: 'Error creando perfil de usuario' };
       }
 
       console.log('✅ Usuario registrado exitosamente');
-      await loadUsers(); // Recargar lista de usuarios
+      await loadUsers();
 
-      // NOTIFICACIÓN 1: Enviar notificación push de registro pendiente
       try {
         notificationService.notifyNewUserRegistration(
           data.username,
@@ -288,14 +280,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       return { 
         success: true, 
-        message: 'Registro exitoso. Su cuenta está pendiente de aprobación por la Directiva.' 
+        message: initialStatus === 'pendiente'
+          ? 'Registro exitoso. Su cuenta está pendiente de aprobación por la Directiva.'
+          : 'Registro exitoso. Ya puede iniciar sesión en la plataforma.'
       };
     } catch (error) {
       console.error('❌ Error en registro:', error);
       return { success: false, message: 'Error al registrar usuario' };
     }
   };
-
   // Logout
   const logout = async () => {
     try {
@@ -351,13 +344,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Eliminar usuario
   const deleteUser = async (userId: string) => {
     try {
-      // Eliminar de Auth
       const { error: authError } = await supabase.auth.admin.deleteUser(userId);
       if (authError) {
         console.error('Error eliminando usuario de Auth:', authError);
       }
 
-      // Eliminar perfil
       const { error: profileError } = await supabase
         .from('users')
         .delete()
@@ -368,7 +359,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await loadUsers();
       console.log('✅ Usuario eliminado:', userId);
     } catch (error) {
-      console.error('Error eliminando usuario:', error);
+      console.error('Error HARD deleting usuario:', error);
     }
   };
 
