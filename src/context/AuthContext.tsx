@@ -35,18 +35,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Cargar sesión al iniciar
   useEffect(() => {
     checkUser();
+    loadUsers();
   }, []);
 
-  // Verificar sesión de Supabase
   const checkUser = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session?.user) {
-        // Obtener perfil especificando las columnas exactas para evitar error 406
         const { data: profile, error } = await supabase
           .from('users')
           .select('id, username, nombre_completo, email, role, status, proyectos, created_at, approved_at, approved_by, rejection_reason')
@@ -54,13 +52,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .single();
 
         if (error) {
-          console.error('Error cargando perfil:', error);
+          console.error('Error cargando perfil activo:', error);
           setLoading(false);
           return;
         }
 
         if (profile) {
-          const user: User = {
+          setCurrentUser({
             id: profile.id,
             username: profile.username,
             nombre_completo: profile.nombre_completo,
@@ -72,21 +70,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             approvedAt: profile.approved_at,
             approvedBy: profile.approved_by,
             rejectionReason: profile.rejection_reason,
-          };
-          setCurrentUser(user);
+          });
         }
       }
     } catch (error) {
-      console.error('Error verificando sesión:', error);
+      console.error('Error en verificación de sesión:', error);
     } finally {
       setLoading(false);
     }
   };
-
-  // Cargar todos los usuarios
-  useEffect(() => {
-    loadUsers();
-  }, []);
 
   const loadUsers = async () => {
     try {
@@ -113,17 +105,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setUsers(mappedUsers);
     } catch (error) {
-      console.error('Error cargando usuarios:', error);
+      console.error('Error cargando base de usuarios:', error);
     }
   };
-  // Login con Supabase Auth
   const login = async (usernameOrEmail: string, password: string): Promise<{ success: boolean; message: string }> => {
     try {
       console.log('🔐 Intentando login con:', usernameOrEmail);
       const isEmail = usernameOrEmail.includes('@');
       let email = usernameOrEmail;
       
-      // Si es username, buscar el email asociado
       if (!isEmail) {
         const { data: user, error } = await supabase
           .from('users')
@@ -137,7 +127,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email = user.email;
       }
 
-      // Intentar login con Supabase Auth
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -149,7 +138,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (data.user) {
-        // Obtener perfil especificando columnas explícitas
         const { data: profile, error: profileError } = await supabase
           .from('users')
           .select('id, username, nombre_completo, email, role, status, proyectos, created_at, approved_at, approved_by, rejection_reason')
@@ -160,28 +148,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { success: false, message: 'Error cargando perfil de usuario' };
         }
 
-        // Verificar que el usuario esté aprobado mediante estados en español
         if (profile.status !== 'aprobado') {
-          // ❌ ASÍ ESTÁ EN TU ARCHIVO ACTUALMENTE:
-if (profile.status !== 'aprobado') {
-  await supabase.auth.signOut(); // <-- Esto genera el error auth:1
-  return { success: false, message: '...' };
-}
+          await supabase.auth.signOut({ scope: 'local' });
+          setCurrentUser(null);
+          return { 
+            success: false, 
+            message: profile.status === 'pendiente' 
+              ? 'Su cuenta está pendiente de aprobación por el Administrador.' 
+              : 'Su cuenta ha sido rechazada por la directiva.' 
+          };
+        }
 
-// ✅ ASÍ DEBE QUEDAR CORREGIDO EN LAS VALIDACIONES:
-if (profile.status !== 'aprobado') {
-  // Forzamos el cierre limpiando la sesión local explícitamente
-  await supabase.auth.signOut({ scope: 'local' }); 
-  setCurrentUser(null);
-  return { 
-    success: false, 
-    message: profile.status === 'pendiente' 
-      ? 'Su cuenta está pendiente de aprobación por el Administrador.' 
-      : 'Su cuenta ha sido rechazada.' 
-  };
-}
-
-        const user: User = {
+        setCurrentUser({
           id: profile.id,
           username: profile.username,
           nombre_completo: profile.nombre_completo,
@@ -193,21 +171,19 @@ if (profile.status !== 'aprobado') {
           approvedAt: profile.approved_at,
           approvedBy: profile.approved_by,
           rejectionReason: profile.rejection_reason,
-        };
+        });
 
-        setCurrentUser(user);
-        console.log('✅ Login exitoso:', user.username);
+        console.log('✅ Login exitoso:', profile.username);
         return { success: true, message: 'Inicio de sesión exitoso' };
       }
 
-      return { success: false, message: 'Error inesperado' };
+      return { success: false, message: 'Error inesperado en los servicios de autenticación.' };
     } catch (error) {
       console.error('❌ Error en login:', error);
       return { success: false, message: 'Error al iniciar sesión' };
     }
   };
 
-  // Registro con Supabase Auth
   const register = async (data: RegisterData): Promise<{ success: boolean; message: string }> => {
     try {
       console.log('📝 Registrando usuario:', data.username);
@@ -238,12 +214,12 @@ if (profile.status !== 'aprobado') {
       });
 
       if (authError) {
-        console.error('❌ Error creando usuario en Auth:', authError);
+        console.error('❌ Error en Supabase Auth SignUp:', authError);
         return { success: false, message: authError.message };
       }
 
       if (!authData.user) {
-        return { success: false, message: 'Error creando usuario' };
+        return { success: false, message: 'Error creando credenciales' };
       }
 
       let proyectos: string[] = [];
@@ -253,7 +229,6 @@ if (profile.status !== 'aprobado') {
         proyectos = data.proyectos || [];
       }
 
-      // El rol 'directiva' se guarda como 'pendiente'. Administradores y los demás inician como 'aprobado'.
       const initialStatus = data.role === 'directiva' ? 'pendiente' : 'aprobado';
 
       const { error: profileError } = await supabase
@@ -269,48 +244,40 @@ if (profile.status !== 'aprobado') {
         }]);
 
       if (profileError) {
-        console.error('❌ Error creando perfil:', profileError);
+        console.error('❌ Error vinculando perfil público:', profileError);
         await supabase.auth.admin.deleteUser(authData.user.id);
         return { success: false, message: 'Error creando perfil de usuario' };
       }
 
-      console.log('✅ Usuario registrado exitosamente');
       await loadUsers();
 
       try {
-        notificationService.notifyNewUserRegistration(
-          data.username,
-          data.nombre_completo,
-          data.role
-        );
-        console.log('✅ [NOTIFICACIÓN 1] Push de registro enviada');
-      } catch (notificationError) {
-        console.error('❌ [NOTIFICACIÓN 1] Error enviando notificación:', notificationError);
+        notificationService.notifyNewUserRegistration(data.username, data.nombre_completo, data.role);
+      } catch (e) {
+        console.error('Error enviando push de registro:', e);
       }
       
       return { 
         success: true, 
         message: initialStatus === 'pendiente'
-          ? 'Registro exitoso. Su cuenta está pendiente de aprobación por la Directiva.'
+          ? 'Registro exitoso. Su cuenta está pendiente de aprobación.'
           : 'Registro exitoso. Ya puede iniciar sesión en la plataforma.'
       };
     } catch (error) {
-      console.error('❌ Error en registro:', error);
+      console.error('❌ Error crítico en función de registro:', error);
       return { success: false, message: 'Error al registrar usuario' };
     }
   };
-  // Logout
   const logout = async () => {
     try {
       await supabase.auth.signOut();
       setCurrentUser(null);
-      console.log('✅ Sesión cerrada');
+      console.log('✅ Sesión destruida exitosamente');
     } catch (error) {
       console.error('Error cerrando sesión:', error);
     }
   };
 
-  // Aprobar usuario
   const approveUser = async (userId: string) => {
     try {
       const { error } = await supabase
@@ -323,15 +290,12 @@ if (profile.status !== 'aprobado') {
         .eq('id', userId);
 
       if (error) throw error;
-
       await loadUsers();
-      console.log('✅ Usuario aprobado:', userId);
     } catch (error) {
       console.error('Error aprobando usuario:', error);
     }
   };
 
-  // Rechazar usuario
   const rejectUser = async (userId: string, reason: string) => {
     try {
       const { error } = await supabase
@@ -343,33 +307,24 @@ if (profile.status !== 'aprobado') {
         .eq('id', userId);
 
       if (error) throw error;
-
       await loadUsers();
-      console.log('✅ Usuario rechazado:', userId);
     } catch (error) {
       console.error('Error rechazando usuario:', error);
     }
   };
 
-  // Eliminar usuario
   const deleteUser = async (userId: string) => {
     try {
-      const { error: authError } = await supabase.auth.admin.deleteUser(userId);
-      if (authError) {
-        console.error('Error eliminando usuario de Auth:', authError);
-      }
-
+      await supabase.auth.admin.deleteUser(userId);
       const { error: profileError } = await supabase
         .from('users')
         .delete()
         .eq('id', userId);
 
       if (profileError) throw profileError;
-
       await loadUsers();
-      console.log('✅ Usuario eliminado:', userId);
     } catch (error) {
-      console.error('Error HARD deleting usuario:', error);
+      console.error('Error eliminando registro completo:', error);
     }
   };
 
