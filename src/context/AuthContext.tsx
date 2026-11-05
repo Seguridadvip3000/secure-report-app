@@ -162,14 +162,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Verificar que el usuario esté aprobado mediante estados en español
         if (profile.status !== 'aprobado') {
-          await supabase.auth.signOut();
-          return { 
-            success: false, 
-            message: profile.status === 'pendiente' 
-              ? 'Su cuenta está pendiente de aprobación por el Administrador.' 
-              : 'Su cuenta ha sido rechazada.' 
-          };
-        }
+          // ❌ ASÍ ESTÁ EN TU ARCHIVO ACTUALMENTE:
+if (profile.status !== 'aprobado') {
+  await supabase.auth.signOut(); // <-- Esto genera el error auth:1
+  return { success: false, message: '...' };
+}
+
+// ✅ ASÍ DEBE QUEDAR CORREGIDO EN LAS VALIDACIONES:
+if (profile.status !== 'aprobado') {
+  // Forzamos el cierre limpiando la sesión local explícitamente
+  await supabase.auth.signOut({ scope: 'local' }); 
+  setCurrentUser(null);
+  return { 
+    success: false, 
+    message: profile.status === 'pendiente' 
+      ? 'Su cuenta está pendiente de aprobación por el Administrador.' 
+      : 'Su cuenta ha sido rechazada.' 
+  };
+}
 
         const user: User = {
           id: profile.id,
