@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { UserRole, ROLE_LABELS } from '../types';
 import { PROYECTOS } from '../data/constants';
 import { Shield, Mail, User, Lock, Eye, EyeOff, ArrowRight, Building, UserCircle, Key } from 'lucide-react';
@@ -7,7 +8,8 @@ import { Shield, Mail, User, Lock, Eye, EyeOff, ArrowRight, Building, UserCircle
 type View = 'login' | 'register' | 'success';
 
 export default function AuthPage() {
-  const { login, register } = useAuth();
+  const { login, register, currentUser } = useAuth();
+  const navigate = useNavigate();
   const [view, setView] = useState<View>('login');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -27,6 +29,13 @@ export default function AuthPage() {
   const [regProyectos, setRegProyectos] = useState<string[]>([]);
   const [adminKey, setAdminKey] = useState('');
 
+  // Redirección inmediata si el usuario ya está autenticado y aprobado
+  useEffect(() => {
+    if (currentUser && currentUser.status === 'aprobado') {
+      navigate('/', { replace: true });
+    }
+  }, [currentUser, navigate]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -40,30 +49,22 @@ export default function AuthPage() {
 
     const result = await login(loginUsernameOrEmail, loginPassword);
     
-    if (!result.success) {
+    if (result.success) {
+      // Forzar la redirección manual al instante de recibir el éxito
+      navigate('/', { replace: true });
+    } else {
       setError(result.message);
     }
     
     setLoading(false);
   };
-
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    if (!regUsername.trim()) {
-      setError('Ingrese un nombre de usuario');
-      setLoading(false);
-      return;
-    }
-    if (!regNombreCompleto.trim()) {
-      setError('Ingrese su nombre completo');
-      setLoading(false);
-      return;
-    }
-    if (!regEmail.trim()) {
-      setError('Ingrese su correo electrónico');
+    if (!regUsername.trim() || !regNombreCompleto.trim() || !regEmail.trim()) {
+      setError('Complete los campos requeridos');
       setLoading(false);
       return;
     }
@@ -96,8 +97,7 @@ export default function AuthPage() {
       email: regEmail,
       password: regPassword,
       role: regRole,
-      proyectos: (regRole === 'lider' || regRole === 'cliente') ? regProyectos : undefined,
-      is_approved: regRole === 'directiva' ? false : true,
+      proyectos: (regRole === 'lider' || regRole === 'cliente') ? regProyectos : undefined
     });
 
     if (result.success) {
@@ -116,6 +116,7 @@ export default function AuthPage() {
         : [...prev, proyecto]
     );
   };
+
   if (view === 'success') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
@@ -126,25 +127,16 @@ export default function AuthPage() {
             </svg>
           </div>
           <h2 className="text-2xl font-bold text-slate-800">¡Registro Exitoso!</h2>
-          <p className="text-slate-500">
-            Su cuenta ha sido creada correctamente en el sistema.
-          </p>
+          <p className="text-slate-500">Su cuenta ha sido creada correctamente en el sistema.</p>
           {regRole === 'directiva' && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700 text-left">
-              ⏳ **Aviso:** Su cuenta de directiva se encuentra en estado retenido. Deberá ser autorizada exclusivamente por el Administrador principal antes de poder iniciar sesión.
+              ⏳ **Aviso:** Su cuenta de directiva se encuentra en estado retenido. Deberá ser autorizada por el Administrador principal antes de poder iniciar sesión.
             </div>
           )}
           <button
             onClick={() => {
-              setView('login');
-              setError('');
-              setRegUsername('');
-              setRegNombreCompleto('');
-              setRegEmail('');
-              setRegPassword('');
-              setRegRole('');
-              setRegProyectos([]);
-              setAdminKey('');
+              setView('login'); setError(''); setRegUsername(''); setRegNombreCompleto('');
+              setRegEmail(''); setRegPassword(''); setRegRole(''); setRegProyectos([]); setAdminKey('');
             }}
             className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
           >
@@ -154,7 +146,6 @@ export default function AuthPage() {
       </div>
     );
   }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -173,212 +164,121 @@ export default function AuthPage() {
             <button
               type="button"
               onClick={() => { setView('login'); setError(''); }}
-              className={`flex-1 py-4 text-sm font-medium transition-colors ${
-                view === 'login'
-                  ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
+              className={`flex-1 py-4 text-sm font-medium transition-colors ${view === 'login' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Iniciar Sesión
             </button>
             <button
               type="button"
               onClick={() => { setView('register'); setError(''); }}
-              className={`flex-1 py-4 text-sm font-medium transition-colors ${
-                view === 'register'
-                  ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
+              className={`flex-1 py-4 text-sm font-medium transition-colors ${view === 'register' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Registrarse
             </button>
           </div>
 
           <div className="p-6">
-            {error && (
-              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
-                {error}
-              </div>
-            )}
+            {error && <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>}
 
             {view === 'login' && (
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                    <UserCircle size={16} />
-                    Nombre de Usuario o Correo Electrónico
-                  </label>
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5"><UserCircle size={16} />Nombre de Usuario o Correo Electrónico</label>
                   <input
-                    type="text"
-                    value={loginUsernameOrEmail}
-                    onChange={e => setLoginUsernameOrEmail(e.target.value)}
-                    placeholder="usuario o correo@ejemplo.com"
+                    type="text" value={loginUsernameOrEmail} onChange={e => setLoginUsernameOrEmail(e.target.value)}
+                    placeholder="usuario o correo@ejemplo.com" disabled={loading}
                     className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    disabled={loading}
                   />
                 </div>
-
                 <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                    <Lock size={16} />
-                    Contraseña
-                  </label>
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5"><Lock size={16} />Contraseña</label>
                   <div className="relative">
                     <input
-                      type={showLoginPassword ? 'text' : 'password'}
-                      value={loginPassword}
-                      onChange={e => setLoginPassword(e.target.value)}
-                      placeholder="••••••••"
+                      type={showLoginPassword ? 'text' : 'password'} value={loginPassword} onChange={e => setLoginPassword(e.target.value)}
+                      placeholder="••••••••" disabled={loading}
                       className="w-full px-4 py-3 pr-12 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                      disabled={loading}
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowLoginPassword(!showLoginPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
+                    <button type="button" onClick={() => setShowLoginPassword(!showLoginPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                       {showLoginPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
                 </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                >
+                <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
                   {loading ? 'Iniciando sesión...' : 'Ingresar'}
                   {!loading && <ArrowRight size={18} />}
                 </button>
               </form>
             )}
+
             {view === 'register' && (
               <form onSubmit={handleRegister} className="space-y-4">
                 <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                    <User size={16} />
-                    Nombre de Usuario
-                  </label>
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5"><User size={16} />Nombre de Usuario</label>
                   <input
-                    type="text"
-                    value={regUsername}
-                    onChange={e => setRegUsername(e.target.value)}
-                    placeholder="ej. jgomez"
+                    type="text" value={regUsername} onChange={e => setRegUsername(e.target.value)}
+                    placeholder="ej. jgomez" disabled={loading}
                     className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    disabled={loading}
                   />
                 </div>
-
                 <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                    <UserCircle size={16} />
-                    Nombre Completo
-                  </label>
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5"><UserCircle size={16} />Nombre Completo</label>
                   <input
-                    type="text"
-                    value={regNombreCompleto}
-                    onChange={e => setRegNombreCompleto(e.target.value)}
-                    placeholder="ej. Juan Gómez"
+                    type="text" value={regNombreCompleto} onChange={e => setRegNombreCompleto(e.target.value)}
+                    placeholder="ej. Juan Gómez" disabled={loading}
                     className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    disabled={loading}
                   />
                 </div>
-
                 <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                    <Mail size={16} />
-                    Correo Electrónico
-                  </label>
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5"><Mail size={16} />Correo Electrónico</label>
                   <input
-                    type="email"
-                    value={regEmail}
-                    onChange={e => setRegEmail(e.target.value)}
-                    placeholder="correo@ejemplo.com"
+                    type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)}
+                    placeholder="correo@ejemplo.com" disabled={loading}
                     className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    disabled={loading}
                   />
                 </div>
-
                 <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                    <Lock size={16} />
-                    Contraseña
-                  </label>
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5"><Lock size={16} />Contraseña</label>
                   <div className="relative">
                     <input
-                      type={showRegPassword ? 'text' : 'password'}
-                      value={regPassword}
-                      onChange={e => setRegPassword(e.target.value)}
-                      placeholder="Mínimo 6 caracteres"
+                      type={showRegPassword ? 'text' : 'password'} value={regPassword} onChange={e => setRegPassword(e.target.value)}
+                      placeholder="Mínimo 6 caracteres" disabled={loading}
                       className="w-full px-4 py-3 pr-12 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                      disabled={loading}
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowRegPassword(!showRegPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
+                    <button type="button" onClick={() => setShowRegPassword(!showRegPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                       {showRegPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
                 </div>
-
                 <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
-                    <Building size={16} />
-                    Rol en la Empresa
-                  </label>
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5"><Building size={16} />Rol en la Empresa</label>
                   <select
-                    value={regRole}
-                    onChange={e => {
-                      setRegRole(e.target.value as UserRole);
-                      setRegProyectos([]);
-                      if(e.target.value !== 'admin') setAdminKey('');
-                    }}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white outline-none"
-                    disabled={loading}
+                    value={regRole} onChange={e => { setRegRole(e.target.value as UserRole); setRegProyectos([]); if(e.target.value !== 'admin') setAdminKey(''); }}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white outline-none" disabled={loading}
                   >
                     <option value="">Seleccione un rol...</option>
-                    {Object.entries(ROLE_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
+                    {Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </div>
 
                 {regRole === 'admin' && (
-                  <div className="space-y-1">
-                    <label className="flex items-center gap-2 text-sm font-medium text-amber-700 mb-1.5">
-                      <Key size={16} className="text-amber-600" />
-                      Clave de Seguridad Administrador
-                    </label>
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-amber-700 mb-1.5"><Key size={16} className="text-amber-600" />Clave de Seguridad Administrador</label>
                     <input
-                      type="password"
-                      value={adminKey}
-                      onChange={e => setAdminKey(e.target.value)}
-                      placeholder="Ingrese la clave corporativa"
+                      type="password" value={adminKey} onChange={e => setAdminKey(e.target.value)}
+                      placeholder="Ingrese la clave corporativa" disabled={loading} required
                       className="w-full px-4 py-3 border border-amber-300 bg-amber-50/30 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-                      disabled={loading}
-                      required
                     />
                   </div>
                 )}
 
                 {(regRole === 'lider' || regRole === 'cliente') && (
                   <div className="space-y-2 border border-slate-100 rounded-lg p-3 bg-slate-50/50">
-                    <label className="text-sm font-medium text-slate-700 block">
-                      Asignar Proyectos / Rutas
-                    </label>
+                    <label className="text-sm font-medium text-slate-700 block">Asignar Proyectos / Rutas</label>
                     <div className="grid grid-cols-2 gap-2">
                       {PROYECTOS.map(proyecto => (
                         <button
-                          key={proyecto}
-                          type="button"
-                          onClick={() => toggleProyecto(proyecto)}
-                          className={`p-2 text-xs rounded-md border text-left transition-all ${
-                            regProyectos.includes(proyecto)
-                              ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium'
-                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                          }`}
+                          key={proyecto} type="button" onClick={() => toggleProyecto(proyecto)}
+                          className={`p-2 text-xs rounded-md border text-left transition-all ${regProyectos.includes(proyecto) ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                         >
                           {proyecto}
                         </button>
@@ -386,12 +286,7 @@ export default function AuthPage() {
                     </div>
                   </div>
                 )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-6"
-                >
+                <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-6">
                   {loading ? 'Creando cuenta...' : 'Completar Registro'}
                   {!loading && <ArrowRight size={18} />}
                 </button>
