@@ -149,8 +149,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (profile.status !== 'aprobado') {
-          await supabase.auth.signOut({ scope: 'local' });
           setCurrentUser(null);
+          const projectUrl = import.meta.env.VITE_SUPABASE_URL || '';
+          const match = projectUrl.match(/https:\/\/(.*?)\.supabase\.co/);
+          if (match && match[1]) {
+            localStorage.removeItem(`sb-${match[1]}-auth-token`);
+          }
+          
           return { 
             success: false, 
             message: profile.status === 'pendiente' 
@@ -245,7 +250,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (profileError) {
         console.error('❌ Error vinculando perfil público:', profileError);
-        await supabase.auth.admin.deleteUser(authData.user.id);
         return { success: false, message: 'Error creando perfil de usuario' };
       }
 
@@ -315,7 +319,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const deleteUser = async (userId: string) => {
     try {
-      await supabase.auth.admin.deleteUser(userId);
       const { error: profileError } = await supabase
         .from('users')
         .delete()
@@ -324,7 +327,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (profileError) throw profileError;
       await loadUsers();
     } catch (error) {
-      console.error('Error eliminando registro completo:', error);
+      console.error('Error Helium deleting registro completo:', error);
     }
   };
 
