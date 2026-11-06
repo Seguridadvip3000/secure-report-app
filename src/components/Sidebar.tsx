@@ -72,7 +72,6 @@ export default function Sidebar() {
     directiva: '👑',
     administrador: '⚙️',
   };
-
   return (
     <>
       {/* Mobile toggle */}
@@ -109,7 +108,6 @@ export default function Sidebar() {
             </div>
           </div>
         </div>
-
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-1">
           {links.map(link => {
