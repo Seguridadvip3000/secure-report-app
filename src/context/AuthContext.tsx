@@ -327,7 +327,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (profileError) throw profileError;
       await loadUsers();
     } catch (error) {
-      console.error('Error Helium deleting registro completo:', error);
+      console.error('Error eliminando registro completo:', error);
     }
   };
 
