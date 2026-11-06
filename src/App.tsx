@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { ReportProvider, useReports } from './context/ReportContext';
+import { ReportProvider } from './context/ReportContext';
 import Sidebar from './components/Sidebar';
 import { ReactNode } from 'react';
 
@@ -19,7 +19,7 @@ const AprobacionesPage = lazy(() => import('./pages/AprobacionesPage'));
 const ConfiguracionPage = lazy(() => import('./pages/ConfiguracionPage'));
 const SeguimientoRutasPage = lazy(() => import('./pages/SeguimientoRutasPage'));
 
-// Componente de carga
+// Componente de carga visual
 function LoadingScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center">
@@ -30,17 +30,13 @@ function LoadingScreen() {
     </div>
   );
 }
-
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
   
   if (!currentUser) return <Navigate to="/auth" replace />;
-  if (currentUser.status !== 'aprobado') return <Navigate to="/auth" replace />;
   
-  // CONTROL DE SEGURIDAD: Evita el inicio de sesión a usuarios directiva desaprobados
-  if (currentUser.role === 'directiva' && currentUser.is_approved === false) {
-    return <Navigate to="/auth" replace />;
-  }
+  // Sincronizado estrictamente con los estados en español corregidos de la base de datos
+  if (currentUser.status !== 'aprobado') return <Navigate to="/auth" replace />;
   
   return <>{children}</>;
 }
@@ -53,6 +49,27 @@ function RoleRoute({ roles, children }: { roles: string[]; children: ReactNode }
   
   return <>{children}</>;
 }
+
+// Redireccionador inteligente para la ruta raíz ("/") según el rol del usuario
+function RootRedirect() {
+  const { currentUser } = useAuth();
+  
+  if (!currentUser) return <Navigate to="/auth" replace />;
+  
+  switch (currentUser.role) {
+    case 'administrador':
+      return <Navigate to="/home-admin" replace />;
+    case 'directiva':
+      return <Navigate to="/home-directiva" replace />;
+    case 'operaciones':
+      return <Navigate to="/home-operaciones" replace />;
+    case 'cliente':
+      return <Navigate to="/dashboard-cliente" replace />;
+    case 'lider':
+    default:
+      return <LiderHome />;
+  }
+}
 export default function App() {
   return (
     <AuthProvider>
@@ -63,11 +80,9 @@ export default function App() {
               <Route path="/auth" element={<AuthPage />} />
               
               <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                <Route index element={
-                  <RoleRoute roles={['lider']}>
-                    <LiderHome />
-                  </RoleRoute>
-                } />
+                {/* La raíz ahora evalúa el rol del usuario dinámicamente */}
+                <Route index element={<RootRedirect />} />
+                
                 <Route path="nuevo" element={
                   <RoleRoute roles={['lider', 'operaciones', 'directiva', 'administrador']}>
                     <NewReport />
@@ -83,16 +98,15 @@ export default function App() {
                     <ReportDetail />
                   </RoleRoute>
                 } />
-                {/* REQUERIMIENTO COMPLETO: Solo el rol administrador puede autorizar y acceder */}
                 <Route path="aprobaciones" element={
                   <RoleRoute roles={['administrador']}>
                     <AprobacionesPage />
                   </RoleRoute>
                 } />
-                               <Route path="configuracion" element={
+                <Route path="configuracion" element={
                   <RoleRoute roles={['directiva', 'administrador']}>
                     <ConfiguracionPage />
-                  </RoleRoute> //
+                  </RoleRoute>
                 } />
                 <Route path="seguimiento-rutas" element={
                   <RoleRoute roles={['administrador']}>
