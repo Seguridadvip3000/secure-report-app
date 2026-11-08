@@ -61,9 +61,10 @@ const UNIDADES_INICIALES: UnidadCustodio[] = [
     bateria: 42,
   }
 ];
+
 export default function SeguimientoRutasPage() {
   const [unidades, setUnidades] = useState<UnidadCustodio[]>(UNIDADES_INICIALES);
-  const [selectedUnidad, setSelectedUnidad] = useState<UnidadCustodio>(UNIDADES_INICIALES);
+  const [selectedUnidad, setSelectedUnidad] = useState<UnidadCustodio>(UNIDADES_INICIALES[0]);
   const [mapCenter, setMapCenter] = useState<[number, number]>([10.4806, -66.9036]);
   const [isSimulating, setIsSimulating] = useState(true);
 
@@ -166,7 +167,7 @@ export default function SeguimientoRutasPage() {
           <div className="bg-slate-900 px-4 py-3 text-white flex items-center justify-between text-xs font-medium">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-ping" />
-              <span>Servidor Mapbox OpenStreetMap Conectado</span>
+              <span>Servidor OpenStreetMap Conectado</span>
             </div>
             <span className="text-slate-400 font-mono">
               Lat: {selectedUnidad.coordenadas[0].toFixed(4)} | Lng: {selectedUnidad.coordenadas[1].toFixed(4)}
