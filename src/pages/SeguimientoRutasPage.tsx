@@ -5,6 +5,7 @@ import L from 'leaflet';
 
 import 'leaflet/dist/leaflet.css';
 
+// CORRECCIÓN SINTÁCTICA: Dimensiones estándar numéricas añadidas para Leaflet en React
 const defaultIcon = L.icon({
   iconUrl: 'https://unpkg.com',
   shadowUrl: 'https://unpkg.com',
@@ -62,7 +63,7 @@ const UNIDADES_INICIALES: UnidadCustodio[] = [
 ];
 export default function SeguimientoRutasPage() {
   const [unidades, setUnidades] = useState<UnidadCustodio[]>(UNIDADES_INICIALES);
-  const [selectedUnidad, setSelectedUnidad] = useState<UnidadCustodio>(UNIDADES_INICIALES[0]);
+  const [selectedUnidad, setSelectedUnidad] = useState<UnidadCustodio>(UNIDADES_INICIALES);
   const [mapCenter, setMapCenter] = useState<[number, number]>([10.4806, -66.9036]);
   const [isSimulating, setIsSimulating] = useState(true);
 
