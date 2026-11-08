@@ -5,12 +5,12 @@ import L from 'leaflet';
 
 import 'leaflet/dist/leaflet.css';
 
-// CORRECCIÓN SINTÁCTICA: Dimensiones estándar numéricas añadidas para Leaflet en React
+// CORRECCIÓN SINTÁCTICA: Usando objetos L.point para evitar conflictos de formato
 const defaultIcon = L.icon({
   iconUrl: 'https://unpkg.com',
   shadowUrl: 'https://unpkg.com',
-  iconSize:,
-  iconAnchor:,
+  iconSize: L.point(25, 41),
+  iconAnchor: L.point(12, 41),
   popupAnchor: [1, -34],
 });
 
