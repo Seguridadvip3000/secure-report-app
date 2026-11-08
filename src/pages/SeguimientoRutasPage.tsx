@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import { RefreshCw, Navigation, Compass, User, AlertCircle } from 'lucide-react';
 import L from 'leaflet';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 
 import 'leaflet/dist/leaflet.css';
 
