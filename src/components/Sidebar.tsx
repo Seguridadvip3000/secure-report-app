@@ -1,157 +1,188 @@
-import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import {
-  LayoutDashboard,
-  FilePlus,
-  List,
-  Shield,
-  Menu,
-  X,
-  Users,
-  LogOut,
-  UserCheck,
-  Settings,
-  Route,
-  MapPin,
-} from 'lucide-react';
-import { useState } from 'react';
-import { ROLE_LABELS, ROLE_COLORS } from '../types';
+import { Link, useLocation } from 'react-router-dom';
+import { Shield, FileText, List, UserCheck, Map, Settings } from 'lucide-react';
 
 export default function Sidebar() {
-  const [isOpen, setIsOpen] = useState(false);
+  const { currentUser } = useAuth();
   const location = useLocation();
-  const { currentUser, logout } = useAuth();
 
-  if (!currentUser) return null;
+  const rol = currentUser?.role?.toLowerCase() || '';
+  const nombreElemento = currentUser?.nombre_completo || '';
 
-  const getLinks = () => {
-    switch (currentUser.role) {
-      case 'lider':
-        return [
-          { to: '/', icon: LayoutDashboard, label: 'Inicio' },
-          { to: '/nuevo', icon: FilePlus, label: 'Crear Reporte' },
-        ];
-      case 'operaciones':
-        return [
-          { to: '/', icon: LayoutDashboard, label: 'Inicio' },
-          { to: '/nuevo', icon: FilePlus, label: 'Crear Reporte' },
-          { to: '/reportes', icon: List, label: 'Lista de Reportes' },
-        ];
-      case 'cliente':
-        return [
-          { to: '/', icon: LayoutDashboard, label: 'Mis Novedades' },
-        ];
-      case 'directiva':
-        return [
-          { to: '/', icon: LayoutDashboard, label: 'Inicio' },
-          { to: '/nuevo', icon: FilePlus, label: 'Crear Reporte' },
-          { to: '/reportes', icon: List, label: 'Lista de Reportes' },
-          { to: '/aprobaciones', icon: UserCheck, label: 'Aprobaciones' },
-          { to: '/configuracion', icon: Settings, label: 'Configuración' },
-        ];
-      case 'administrador':
-        return [
-          { to: '/', icon: LayoutDashboard, label: 'Inicio' },
-          { to: '/nuevo', icon: FilePlus, label: 'Crear Reporte' },
-          { to: '/reportes', icon: List, label: 'Lista de Reportes' },
-          { to: '/aprobaciones', icon: UserCheck, label: 'Aprobaciones' },
-          { to: '/seguimiento-rutas', icon: Route, label: 'Seguimiento de Rutas' },
-          { to: '/configuracion', icon: Settings, label: 'Configuración' },
-        ];
-      default:
-        return [];
-    }
-  };
+  // REGLAS MAESTRAS DE VISIBILIDAD PARA EL MENÚ
+  const puedeCrearReporte = ['administrador', 'admin', 'directiva', 'operaciones', 'lider'].includes(rol);
+  const puedeVerListaReportes = ['administrador', 'admin', 'directiva', 'operaciones', 'cliente'].includes(rol);
+  const puedeVerAprobacionesUsuarios = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
+  
+  // El seguimiento de rutas es EXCLUSIVO del Administrador Principal (Matthías Hernández)
+  const puedeVerSeguimientoRutas = 
+    (['administrador', 'admin'].includes(rol)) && nombreElemento.includes('Matthías');
 
-  const links = getLinks();
+  const puedeVerConfiguracion = ['administrador', 'admin', 'directiva'].includes(rol);
 
-  const roleIcons: Record<string, string> = {
-    lider: '🛡️',
-    operaciones: '📊',
-    cliente: '👤',
-    directiva: '👑',
-    administrador: '⚙️',
-  };
   return (
-    <>
-      {/* Mobile toggle */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 bg-slate-800 text-white p-2 rounded-lg shadow-lg"
-      >
-        {isOpen ? <X size={20} /> : <Menu size={20} />}
-      </button>
-
-      {/* Overlay */}
-      {isOpen && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black/50 z-30"
-          onClick={() => setIsOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`fixed lg:static inset-y-0 left-0 z-40 w-64 bg-slate-900 text-white flex flex-col transform transition-transform duration-300 ${
-          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        }`}
-      >
-        {/* Logo */}
-        <div className="p-6 border-b border-slate-700">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg">
-              <Shield size={24} className="text-white" />
-            </div>
-            <div>
-              <h1 className="font-bold text-lg leading-tight">SecureReport</h1>
-              <p className="text-xs text-slate-400">Gestión de Novedades</p>
-            </div>
-          </div>
+    <div className="w-64 bg-slate-950 min-h-screen text-slate-300 p-4 flex flex-col justify-between">
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 px-2 py-3 border-b border-slate-800">
+          <Shield className="text-blue-500" size={24} />
+          <span className="font-bold text-white text-lg">SecureReport</span>
         </div>
-        {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-1">
-          {links.map(link => {
-            const isActive = location.pathname === link.to;
-            return (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                onClick={() => setIsOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                  isActive
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                <link.icon size={20} />
-                <span className="font-medium">{link.label}</span>
-              </NavLink>
-            );
-          })}
+
+        <nav className="space-y-1">
+          {/* OPT 1: CREAR REPORTE (Líder, Operaciones, Directiva, Admin) */}
+          {puedeCrearReporte && (
+            <Link to="/crear-reporte" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${location.pathname === '/crear-reporte' ? 'bg-blue-600 text-white' : 'hover:bg-slate-900'}`}>
+              <FileText size={18} /> Crear Reporte
+            </Link>
+          )}
+
+          {/* OPT 2: LISTA DE REPORTES (Cliente, Operaciones, Directiva, Admin) */}
+          {puedeVerListaReportes && (
+            <Link to="/lista-reportes" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${location.pathname === '/lista-reportes' ? 'bg-blue-600 text-white' : 'hover:bg-slate-900'}`}>
+              <List size={18} /> Lista de Reportes
+            </Link>
+          )}
+
+          {/* OPT 3: APROBACIONES DE USUARIOS (Operaciones, Directiva, Admin) */}
+          {puedeVerAprobacionesUsuarios && (
+            <Link to="/aprobaciones" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${location.pathname === '/aprobaciones' ? 'bg-blue-600 text-white' : 'hover:bg-slate-900'}`}>
+              <UserCheck size={18} /> Aprobaciones
+            </Link>
+          )}
+
+          {/* OPT 4: SEGUIMIENTO DE RUTAS (EXCLUSIVO ADMINISTRADOR MATTHÍAS) */}
+          {puedeVerSeguimientoRutas && (
+            <Link to="/seguimiento-rutas" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${location.pathname === '/seguimiento-rutas' ? 'bg-blue-600 text-white' : 'hover:bg-slate-900'}`}>
+              <Map size={18} /> Seguimiento de Rutas
+            </Link>
+          )}
+
+          {/* OPT 5: CONFIGURACIÓN (Directiva, Admin) */}
+          {puedeVerConfiguracion && (
+            <Link to="/configuracion" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${location.pathname === '/configuracion' ? 'bg-blue-600 text-white' : 'hover:bg-slate-900'}`}>
+              <Settings size={18} /> Configuración
+            </Link>
+          )}
         </nav>
+      </div>
 
-        {/* User Info */}
-        <div className="p-4 border-t border-slate-700">
-          <div className="flex items-center gap-3 px-3 py-2 mb-3">
-            <div className="w-9 h-9 bg-slate-700 rounded-full flex items-center justify-center">
-              <span className="text-sm">{roleIcons[currentUser.role]}</span>
+      {/* PIE DE MENÚ CON PERFIL ACTIVO */}
+      <div className="border-t border-slate-800 pt-4 text-xs space-y-1">
+        <div className="font-semibold text-white truncate">{nombreElemento}</div>
+        <div className="text-slate-500 uppercase font-bold tracking-wider">{rol}</div>
+      </div>
+    </div>
+  );
+}
+// Dentro de tu archivo AprobacionesPage.tsx, localiza el mapeo de la tabla (.map)
+// Reemplaza la lógica de evaluación por este fragmento exacto:
+
+{solicitudes.map((sol) => {
+  const rolSolicitadoMinuscula = sol.role?.toLowerCase() || '';
+  const esSolicitudDirectiva = rolSolicitadoMinuscula === 'directiva';
+  const esSolicitudAdmin = rolSolicitadoMinuscula === 'admin' || rolSolicitadoMinuscula === 'administrador';
+
+  // EVALUACIÓN DE REGLAS ESPECÍFICAS POR ROL LOGUEADO
+  let puedeProcesarEstaCuenta = false;
+
+  if (esAdminPrincipal) {
+    // Administrador puede aprobar TODO
+    puedeProcesarEstaCuenta = true;
+  } else if (esDirectiva) {
+    // Directiva puede aprobar a todos menos a otras Directivas o Administradores
+    puedeProcesarEstaCuenta = !esSolicitudDirectiva && !esSolicitudAdmin;
+  } else if (rolActual === 'operaciones') {
+    // OPERACIONES solo tiene permitido aprobar a LIDERES y CLIENTES
+    puedeProcesarEstaCuenta = ['lider', 'cliente'].includes(rolSolicitadoMinuscula);
+  }
+
+  return (
+    <tr key={sol.id} className="hover:bg-slate-50/50 transition-colors">
+      <td className="p-4 font-medium text-slate-900">{sol.nombre_completo}</td>
+      <td className="p-4 text-slate-500">{sol.email}</td>
+      <td className="p-4">
+        <span className={`px-2 py-1 rounded-md text-xs font-semibold uppercase ${esSolicitudDirectiva ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+          {sol.role}
+        </span>
+      </td>
+      <td className="p-4 text-right">
+        {puedeProcesarEstaCuenta ? (
+          <div className="space-x-2 inline-flex justify-end">
+            <button onClick={() => gestionarSolicitud(sol.id, 'aprobado')} className="p-2 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg text-xs font-medium">Aprobar</button>
+            <button onClick={() => gestionarSolicitud(sol.id, 'rechazado')} className="p-2 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-xs font-medium">Rechazar</button>
+          </div>
+        ) : (
+          <span className="text-xs text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 select-none">
+            🔒 Req. Mayor Rango
+          </span>
+        )}
+      </td>
+    </tr>
+  );
+})}
+import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
+
+export default function ListaReportesPage() {
+  const { currentUser } = useAuth();
+  const [reportes, setReportes] = useState([]);
+  const rol = currentUser?.role?.toLowerCase() || '';
+
+  useEffect(() => {
+    const consultarReportesEstructurados = async () => {
+      let query = supabase.from('reportes').select('*');
+
+      // REGLA CLIENTE: Solo ve aprobados y que correspondan a su proyecto asignado
+      if (rol === 'cliente') {
+        query = query
+          .eq('status', 'aprobado')
+          .eq('proyecto_id', currentUser?.proyecto_id || '');
+      }
+
+      const { data } = await query;
+      if (data) setReportes(data);
+    };
+
+    consultarReportesEstructurados();
+  }, [currentUser]);
+
+  // REGLAS OPERATIVAS DE CONTROL DE ACCIONES EN LA UI
+  const puedeAprobarORechazar = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
+  const puedeEditarOEliminar = ['administrador', 'admin', 'directiva'].includes(rol); // Operaciones EXCLUIDO
+
+  return (
+    <div className="p-6 space-y-4">
+      <h2 className="text-xl font-bold text-slate-900">Control y Archivo de Novedades</h2>
+      
+      <div className="space-y-3">
+        {reportes.map((reporte: any) => (
+          <div key={reporte.id} className="bg-white border rounded-xl p-4 flex justify-between items-center shadow-sm">
+            <div>
+              <h4 className="font-bold text-slate-800">{reporte.titulo_novedad}</h4>
+              <p className="text-xs text-slate-500">Proyecto: {reporte.nombre_proyecto} | Estado: <span className="font-semibold uppercase">{reporte.status}</span></p>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{currentUser.nombre_completo}</p>
-              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${ROLE_COLORS[currentUser.role]}`}>
-                {ROLE_LABELS[currentUser.role]}
-              </span>
+            
+            <div className="space-x-2">
+              {/* Botones de aprobación rápidos para Operaciones, Directiva y Admin */}
+              {puedeAprobarORechazar && reporte.status === 'pendiente' && (
+                <>
+                  <button className="px-3 py-1 bg-green-600 text-white rounded text-xs font-medium">Aprobar</button>
+                  <button className="px-3 py-1 bg-red-600 text-white rounded text-xs font-medium">Rechazar</button>
+                </>
+              )}
+
+              {/* Botones de Modificación Estricta (Operaciones NO TIENE ACCESO) */}
+              {puedeEditarOEliminar && (
+                <>
+                  <button className="px-3 py-1 bg-slate-100 text-slate-700 rounded text-xs">Editar</button>
+                  <button className="px-3 py-1 bg-red-50 text-red-600 rounded text-xs">Eliminar</button>
+                </>
+              )}
             </div>
           </div>
-          <button
-            onClick={logout}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition-colors"
-          >
-            <LogOut size={18} />
-            <span className="font-medium text-sm">Cerrar Sesión</span>
-          </button>
-        </div>
-      </aside>
-    </>
+        ))}
+      </div>
+    </div>
   );
 }
