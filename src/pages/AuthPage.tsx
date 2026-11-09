@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { UserRole, ROLE_LABELS } from '../types';
 import { PROYECTOS } from '../data/constants';
 import { Shield, Mail, User, Lock, Eye, EyeOff, ArrowRight, Building, UserCircle, Key } from 'lucide-react';
+import { startElementoTracking } from '../services/locationService';
 
 type View = 'login' | 'register' | 'success';
 
@@ -14,12 +15,12 @@ export default function AuthPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Login form
+  // Formulario de Inicio de Sesión
   const [loginUsernameOrEmail, setLoginUsernameOrEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
-  // Register form
+  // Formulario de Registro
   const [regUsername, setRegUsername] = useState('');
   const [regNombreCompleto, setRegNombreCompleto] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -35,7 +36,6 @@ export default function AuthPage() {
       navigate('/', { replace: true });
     }
   }, [currentUser, navigate]);
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -50,7 +50,20 @@ export default function AuthPage() {
     const result = await login(loginUsernameOrEmail, loginPassword);
     
     if (result.success) {
-      // Forzar la redirección manual al instante de recibir el éxito
+      // DISPARO AUTOMÁTICO DEL RASTREO GPS EN SEGUNDO PLANO PARA LOS ELEMENTOS
+      startElementoTracking()
+        .then((trackingResult) => {
+          if (!trackingResult.success) {
+            console.warn('Aviso de localización móvil:', trackingResult.message);
+          } else {
+            console.log('🚀 Monitoreo perimetral inicializado con éxito cada 30 segundos');
+          }
+        })
+        .catch((err) => {
+          console.error('Error crítico al levantar la tarea de localización:', err);
+        });
+
+      // Redirección manual al instante de recibir el éxito de la sesión
       navigate('/', { replace: true });
     } else {
       setError(result.message);
@@ -58,6 +71,7 @@ export default function AuthPage() {
     
     setLoading(false);
   };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -116,7 +130,6 @@ export default function AuthPage() {
         : [...prev, proyecto]
     );
   };
-
   if (view === 'success') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
@@ -146,6 +159,7 @@ export default function AuthPage() {
       </div>
     );
   }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -209,7 +223,6 @@ export default function AuthPage() {
                 </button>
               </form>
             )}
-
             {view === 'register' && (
               <form onSubmit={handleRegister} className="space-y-4">
                 <div>
