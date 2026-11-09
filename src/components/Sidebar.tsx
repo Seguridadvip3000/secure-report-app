@@ -74,52 +74,6 @@ export default function Sidebar() {
     </div>
   );
 }
-// Dentro de tu archivo AprobacionesPage.tsx, localiza el mapeo de la tabla (.map)
-// Reemplaza la lógica de evaluación por este fragmento exacto:
-
-{solicitudes.map((sol) => {
-  const rolSolicitadoMinuscula = sol.role?.toLowerCase() || '';
-  const esSolicitudDirectiva = rolSolicitadoMinuscula === 'directiva';
-  const esSolicitudAdmin = rolSolicitadoMinuscula === 'admin' || rolSolicitadoMinuscula === 'administrador';
-
-  // EVALUACIÓN DE REGLAS ESPECÍFICAS POR ROL LOGUEADO
-  let puedeProcesarEstaCuenta = false;
-
-  if (esAdminPrincipal) {
-    // Administrador puede aprobar TODO
-    puedeProcesarEstaCuenta = true;
-  } else if (esDirectiva) {
-    // Directiva puede aprobar a todos menos a otras Directivas o Administradores
-    puedeProcesarEstaCuenta = !esSolicitudDirectiva && !esSolicitudAdmin;
-  } else if (rolActual === 'operaciones') {
-    // OPERACIONES solo tiene permitido aprobar a LIDERES y CLIENTES
-    puedeProcesarEstaCuenta = ['lider', 'cliente'].includes(rolSolicitadoMinuscula);
-  }
-
-  return (
-    <tr key={sol.id} className="hover:bg-slate-50/50 transition-colors">
-      <td className="p-4 font-medium text-slate-900">{sol.nombre_completo}</td>
-      <td className="p-4 text-slate-500">{sol.email}</td>
-      <td className="p-4">
-        <span className={`px-2 py-1 rounded-md text-xs font-semibold uppercase ${esSolicitudDirectiva ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
-          {sol.role}
-        </span>
-      </td>
-      <td className="p-4 text-right">
-        {puedeProcesarEstaCuenta ? (
-          <div className="space-x-2 inline-flex justify-end">
-            <button onClick={() => gestionarSolicitud(sol.id, 'aprobado')} className="p-2 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg text-xs font-medium">Aprobar</button>
-            <button onClick={() => gestionarSolicitud(sol.id, 'rechazado')} className="p-2 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-xs font-medium">Rechazar</button>
-          </div>
-        ) : (
-          <span className="text-xs text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg inline-flex items-center gap-1 select-none">
-            🔒 Req. Mayor Rango
-          </span>
-        )}
-      </td>
-    </tr>
-  );
-})}
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
