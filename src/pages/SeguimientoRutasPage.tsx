@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Battery, BatteryMedium, BatteryLow } from 'lucide-react';
 import L from 'leaflet';
 import { supabase } from '../lib/supabase';
 
@@ -91,10 +91,7 @@ export default function SeguimientoRutasPage() {
         const listaCombinada = usersData
           .filter((user: any) => user.role && rolesPermitidos.includes(user.role.toLowerCase()))
           .map((user: any) => {
-            // Extraemos todas las posiciones de este usuario para trazar la línea
             const posicionesUsuario = locationsData?.filter((loc) => loc.user_id === user.id) || [];
-            
-            // La última ubicación será la punta final de la ruta
             const ultimaLoc = posicionesUsuario.length > 0 ? posicionesUsuario[posicionesUsuario.length - 1] : null;
             const rolMinuscula = user.role.toLowerCase();
 
@@ -103,14 +100,13 @@ export default function SeguimientoRutasPage() {
               nombreProyectoDisplay = 'Acceso Global / Todos';
             }
 
-            // Convertimos el histórico al formato [latitud, longitud] requerido por Leaflet Polyline
             const trazadoRuta = posicionesUsuario.map((loc): [number, number] => [loc.latitude, loc.longitude]);
             
             return {
               ...user,
               latitude: ultimaLoc?.latitude,
               longitude: ultimaLoc?.longitude,
-              bateria: ultimaLoc?.bateria,
+              bateria: ultimaLoc?.bateria, // Sincronización del nivel de energía
               nombre_proyecto: nombreProyectoDisplay,
               historial_coordenadas: trazadoRuta
             };
@@ -143,7 +139,7 @@ export default function SeguimientoRutasPage() {
                   ...c, 
                   latitude: payload.new.latitude, 
                   longitude: payload.new.longitude, 
-                  bateria: payload.new.bateria,
+                  bateria: payload.new.bateria, // Actualización en vivo mediante WebSocket
                   historial_coordenadas: nuevoHistorial
                 };
               }
@@ -164,7 +160,15 @@ export default function SeguimientoRutasPage() {
     const coincideRol = rolSeleccionado ? (c.role ? c.role.toLowerCase() === rolSeleccionado.toLowerCase() : false) : true;
     return coincideTexto && coincideRol;
   });
-   return (
+  // Función auxiliar para renderizar el icono de batería adecuado según el porcentaje
+  const renderIconoBateria = (porcentaje: number | undefined) => {
+    if (porcentaje === undefined) return null;
+    if (porcentaje > 50) return <Battery size={16} color="#28a745" style={{ marginRight: '4px' }} />;
+    if (porcentaje > 20) return <BatteryMedium size={16} color="#f5a623" style={{ marginRight: '4px' }} />;
+    return <BatteryLow size={16} color="#dc3545" style={{ marginRight: '4px' }} className="animate-pulse" />;
+  };
+
+  return (
     <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div>
@@ -235,7 +239,7 @@ export default function SeguimientoRutasPage() {
                       <strong style={{ color: '#0070f3' }}>{elemento.nombre_completo}</strong><br />
                       <strong>Rol:</strong> {elemento.role ? elemento.role.toUpperCase() : ''}<br />
                       <strong>Ruta:</strong> {elemento.nombre_proyecto}<br />
-                      {elemento.bateria && <span><strong>Batería:</strong> {elemento.bateria}%</span>}
+                      {elemento.bateria !== undefined && <span><strong>Batería:</strong> {elemento.bateria}%</span>}
                     </div>
                   </Popup>
                 </Marker>
@@ -244,20 +248,28 @@ export default function SeguimientoRutasPage() {
           </MapContainer>
         </div>
 
-        {/* PANEL LATERAL */}
+        {/* PANEL LATERAL CON BATERÍA INTEGRADA */}
         <div style={{ background: '#fff', border: '1px solid #e9ecef', borderRadius: '12px', padding: '15px', maxHeight: '500px', overflowY: 'auto' }}>
           <h4 style={{ margin: '0 0 10px 0', borderBottom: '2px solid #f1f3f5', paddingBottom: '8px' }}>Monitoreo ({listaFiltrada.length})</h4>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {listaFiltrada.map((c) => (
               <li key={c.id} style={{ padding: '10px 0', borderBottom: '1px solid #f1f3f5' }}>
-                <div style={{ fontWeight: 'bold' }}>{c.nombre_completo}</div>
-                <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontWeight: 'bold' }}>{c.nombre_completo}</div>
+                  {c.bateria !== undefined && (
+                    <div style={{ display: 'flex', alignItems: 'center', fontSize: '12px', color: '#6c757d' }}>
+                      {renderIconoBateria(c.bateria)}
+                      <span>{c.bateria}%</span>
+                    </div>
+                  )}
+                </div>
+                <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '2px' }}>
                   {c.role ? c.role.toUpperCase() : ''} | {c.nombre_proyecto}
                 </div>
                 {c.latitude ? (
-                  <span style={{ fontSize: '11px', color: '#28a745', background: '#d4edda', padding: '2px 6px', borderRadius: '4px', display: 'inline-block', marginTop: '4px' }}>En Ruta</span>
+                  <span style={{ fontSize: '11px', color: '#28a745', background: '#d4edda', padding: '2px 6px', borderRadius: '4px', display: 'inline-block', marginTop: '6px' }}>En Ruta</span>
                 ) : (
-                  <span style={{ fontSize: '11px', color: '#dc3545', background: '#f8d7da', padding: '2px 6px', borderRadius: '4px', display: 'inline-block', marginTop: '4px' }}>Sin señal GPS</span>
+                  <span style={{ fontSize: '11px', color: '#dc3545', background: '#f8d7da', padding: '2px 6px', borderRadius: '4px', display: 'inline-block', marginTop: '6px' }}>Sin señal GPS</span>
                 )}
               </li>
             ))}
