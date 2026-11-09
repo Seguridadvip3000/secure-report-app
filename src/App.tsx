@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ReportProvider } from './context/ReportContext';
 import Sidebar from './components/Sidebar';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 
 // Lazy load de todos los componentes de páginas
 const AuthPage = lazy(() => import('./pages/AuthPage'));
@@ -34,8 +34,6 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
   
   if (!currentUser) return <Navigate to="/auth" replace />;
-  
-  // Sincronizado estrictamente con los estados en español corregidos de la base de datos
   if (currentUser.status !== 'aprobado') return <Navigate to="/auth" replace />;
   
   return <>{children}</>;
@@ -45,7 +43,14 @@ function RoleRoute({ roles, children }: { roles: string[]; children: ReactNode }
   const { currentUser } = useAuth();
   
   if (!currentUser) return <Navigate to="/auth" replace />;
-  if (!roles.includes(currentUser.role)) return <Navigate to="/" replace />;
+  
+  // Normalización de caja para evitar que fallas por mayúsculas/minúsculas expulsen al elemento
+  const rolNormalizado = currentUser.role ? currentUser.role.toLowerCase() : '';
+  const rolesPermitidosNormalizados = roles.map(r => r.toLowerCase());
+  
+  if (!rolesPermitidosNormalizados.includes(rolNormalizado)) {
+    return <Navigate to="/" replace />;
+  }
   
   return <>{children}</>;
 }
@@ -56,7 +61,10 @@ function RootRedirect() {
   
   if (!currentUser) return <Navigate to="/auth" replace />;
   
-  switch (currentUser.role) {
+  const rolNormalizado = currentUser.role ? currentUser.role.toLowerCase() : '';
+  
+  switch (rolNormalizado) {
+    case 'admin':
     case 'administrador':
       return <Navigate to="/home-admin" replace />;
     case 'directiva':
@@ -80,36 +88,45 @@ export default function App() {
               <Route path="/auth" element={<AuthPage />} />
               
               <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                {/* La raíz ahora evalúa el rol del usuario dinámicamente */}
+                {/* La raíz evalúa el rol del usuario dinámicamente */}
                 <Route index element={<RootRedirect />} />
                 
-                <Route path="nuevo" element={
-                  <RoleRoute roles={['lider', 'operaciones', 'directiva', 'administrador']}>
+                {/* 1. CREAR REPORTE: Sincronizado a /crear-reporte con accesos de tu matriz */}
+                <Route path="crear-reporte" element={
+                  <RoleRoute roles={['lider', 'operaciones', 'directiva', 'administrador', 'admin']}>
                     <NewReport />
                   </RoleRoute>
                 } />
-                <Route path="reportes" element={
-                  <RoleRoute roles={['operaciones', 'directiva', 'administrador']}>
+                
+                {/* 2. LISTA DE REPORTES: Sincronizado a /lista-reportes incluyendo el rol cliente */}
+                <Route path="lista-reportes" element={
+                  <RoleRoute roles={['operaciones', 'directiva', 'administrador', 'admin', 'cliente']}>
                     <ReportList />
                   </RoleRoute>
                 } />
-                <Route path="reportes/:id" element={
-                  <RoleRoute roles={['lider', 'operaciones', 'directiva', 'administrador', 'cliente']}>
+                
+                <Route path="lista-reportes/:id" element={
+                  <RoleRoute roles={['lider', 'operaciones', 'directiva', 'administrador', 'admin', 'cliente']}>
                     <ReportDetail />
                   </RoleRoute>
                 } />
+                
+                {/* 3. APROBACIONES DE USUARIOS: Abierto para controles internos de Operaciones, Directiva y Admin */}
                 <Route path="aprobaciones" element={
-                  <RoleRoute roles={['administrador']}>
+                  <RoleRoute roles={['operaciones', 'directiva', 'administrador', 'admin']}>
                     <AprobacionesPage />
                   </RoleRoute>
                 } />
+                
                 <Route path="configuracion" element={
-                  <RoleRoute roles={['directiva', 'administrador']}>
+                  <RoleRoute roles={['directiva', 'administrador', 'admin']}>
                     <ConfiguracionPage />
                   </RoleRoute>
                 } />
+                
+                {/* 4. SEGUIMIENTO DE RUTAS: Exclusivo del Administrador Principal */}
                 <Route path="seguimiento-rutas" element={
-                  <RoleRoute roles={['administrador']}>
+                  <RoleRoute roles={['administrador', 'admin']}>
                     <SeguimientoRutasPage />
                   </RoleRoute>
                 } />
@@ -129,10 +146,13 @@ export default function App() {
                   </RoleRoute>
                 } />
                 <Route path="home-admin" element={
-                  <RoleRoute roles={['administrador']}>
+                  <RoleRoute roles={['administrador', 'admin']}>
                     <AdministradorHome />
                   </RoleRoute>
                 } />
+                
+                {/* Redirección preventiva por si se introduce un sub-path roto */}
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
             </Routes>
           </Suspense>
