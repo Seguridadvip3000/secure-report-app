@@ -6,13 +6,8 @@ import { supabase } from '../lib/supabase';
 
 import 'leaflet/dist/leaflet.css';
 
-// DESHABILITACIÓN ABSOLUTA DE LOS ICONOS POR DEFECTO PARA ELIMINAR EL ERROR 404 EN VERCEL
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconUrl: '',
-  iconRetinaUrl: '',
-  shadowUrl: '',
-});
+// PARCHE GLOBAL PARA CORREGIR EL ERROR 404 DE LEAFLET EN ENTORNO DE COMPILACIÓN VERCEL
+L.Icon.Default.imagePath = 'https://cloudflare.com';
 
 // Función para cambiar el color del pin circular según tus roles reales nativos
 const crearIconoPersonalizado = (role: string) => {
@@ -21,7 +16,7 @@ const crearIconoPersonalizado = (role: string) => {
 
   if (rolMinuscula === 'directiva') colorFondo = '#dc3545'; // Rojo
   if (rolMinuscula === 'lider') colorFondo = '#28a745';    // Verde
-  if (rolMinuscula === 'administrador') colorFondo = '#f5a623'; // Dorado/Amarillo
+  if (rolMinuscula === 'administrador' || rolMinuscula === 'admin') colorFondo = '#f5a623'; // Dorado/Amarillo
 
   return L.divIcon({
     className: 'custom-pin-gps',
@@ -84,7 +79,7 @@ export default function SeguimientoRutasPage() {
       if (locationsError) throw locationsError;
 
       if (usersData) {
-        const rolesPermitidos = ['lider', 'operaciones', 'directiva', 'administrador'];
+        const rolesPermitidos = ['lider', 'operaciones', 'directiva', 'administrador', 'admin'];
         
         const listaCombinada = usersData
           .filter((user: any) => user.role && rolesPermitidos.includes(user.role.toLowerCase()))
