@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import { RefreshCw, Navigation, Compass, User, AlertCircle } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import L from 'leaflet';
 import { supabase } from '../lib/supabase';
 
@@ -14,11 +14,13 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cloudflare.com',
 });
 
-// Función para cambiar el color del pin según el rol en tiempo real
+// Función para cambiar el color del pin según tus roles reales de la organización
 const crearIconoPersonalizado = (role: string) => {
-  let color = 'blue'; 
-  if (role === 'supervisor') color = 'green';
-  if (role === 'lider') color = 'red';
+  let color = 'blue'; // Por defecto OPERACIONES
+  const rolMinuscula = role.toLowerCase();
+  
+  if (rolMinuscula === 'directiva') color = 'red';
+  if (rolMinuscula === 'lider') color = 'green';
 
   return new L.Icon({
     iconUrl: `https://githubusercontent.com{color}.png`,
@@ -47,6 +49,7 @@ function ChangeView({ center }: { center: [number, number] }) {
   }, [center, map]);
   return null;
 }
+
 export default function SeguimientoRutasPage() {
   const [custodios, setCustodios] = useState<Custodio[]>([]);
   const [filtroTexto, setFiltroTexto] = useState('');
@@ -57,10 +60,11 @@ export default function SeguimientoRutasPage() {
 
   const cargarDatos = async () => {
     setLoading(true);
+    // Consulta con tus roles exactos mapeados en la base de datos
     const { data: usersData } = await supabase
       .from('users')
       .select('id, nombre_completo, role, proyectos(nombre_proyecto)')
-      .in('role', ['lider', 'operaciones', 'supervisor', 'administrador']);
+      .in('role', ['LIDER', 'OPERACIONES', 'DIRECTIVA', 'lider', 'operaciones', 'directiva']);
 
     const { data: locationsData } = await supabase
       .from('user_locations')
@@ -100,9 +104,7 @@ export default function SeguimientoRutasPage() {
           );
         }
       )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') console.log('✅ Canal Realtime Activo');
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(canalUbicaciones);
@@ -111,9 +113,10 @@ export default function SeguimientoRutasPage() {
 
   const listaFiltrada = custodios.filter((c) => {
     const coincideTexto = c.nombre_completo.toLowerCase().includes(filtroTexto.toLowerCase());
-    const coincideRol = rolSeleccionado ? c.role === rolSeleccionado : true;
+    const coincideRol = rolSeleccionado ? c.role.toLowerCase() === rolSeleccionado.toLowerCase() : true;
     return coincideTexto && coincideRol;
   });
+
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -126,7 +129,7 @@ export default function SeguimientoRutasPage() {
         </button>
       </div>
 
-      {/* BARRA SUPERIOR DE FILTROS */}
+      {/* BARRA SUPERIOR DE FILTROS ACTUALIZADA */}
       <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', background: '#f8f9fa', padding: '15px', borderRadius: '10px', border: '1px solid #e9ecef', alignItems: 'center' }}>
         <input
           type="text"
@@ -139,11 +142,14 @@ export default function SeguimientoRutasPage() {
           <button onClick={() => setRolSeleccionado(null)} style={{ padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', border: '1px solid #0070f3', background: !rolSeleccionado ? '#0070f3' : '#fff', color: !rolSeleccionado ? '#fff' : '#0070f3' }}>
             Todos
           </button>
-          <button onClick={() => setRolSeleccionado('supervisor')} style={{ padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', border: '1px solid #28a745', background: rolSeleccionado === 'supervisor' ? '#28a745' : '#fff', color: rolSeleccionado === 'supervisor' ? '#fff' : '#28a745' }}>
-            Supervisores
+          <button onClick={() => setRolSeleccionado('directiva')} style={{ padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', border: '1px solid #dc3545', background: rolSeleccionado === 'directiva' ? '#dc3545' : '#fff', color: rolSeleccionado === 'directiva' ? '#fff' : '#dc3545' }}>
+            🔴 Directiva
           </button>
-          <button onClick={() => setRolSeleccionado('lider')} style={{ padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', border: '1px solid #dc3545', background: rolSeleccionado === 'lider' ? '#dc3545' : '#fff', color: rolSeleccionado === 'lider' ? '#fff' : '#dc3545' }}>
-            Líderes
+          <button onClick={() => setRolSeleccionado('lider')} style={{ padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', border: '1px solid #28a745', background: rolSeleccionado === 'lider' ? '#28a745' : '#fff', color: rolSeleccionado === 'lider' ? '#fff' : '#28a745' }}>
+            🟢 Líderes
+          </button>
+          <button onClick={() => setRolSeleccionado('operaciones')} style={{ padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', border: '1px solid #0070f3', background: rolSeleccionado === 'operaciones' ? '#0070f3' : '#fff', color: rolSeleccionado === 'operaciones' ? '#fff' : '#0070f3' }}>
+            🔵 Operaciones
           </button>
         </div>
       </div>
