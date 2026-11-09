@@ -17,7 +17,7 @@ L.Icon.Default.mergeOptions({
 // Función para cambiar el color del pin según tus roles reales con tamaños definidos
 const crearIconoPersonalizado = (role: string) => {
   let color = 'blue'; 
-  const rolMinuscula = role.toLowerCase();
+  const rolMinuscula = role ? role.toLowerCase() : '';
   
   if (rolMinuscula === 'directiva') color = 'red';
   if (rolMinuscula === 'lider') color = 'green';
@@ -50,7 +50,6 @@ function ChangeView({ center }: { center: [number, number] }) {
   }, [center, map]);
   return null;
 }
-
 export default function SeguimientoRutasPage() {
   const [elementos, setElementos] = useState<Elemento[]>([]);
   const [filtroTexto, setFiltroTexto] = useState('');
@@ -61,34 +60,43 @@ export default function SeguimientoRutasPage() {
 
   const cargarDatos = async () => {
     setLoading(true);
-    // Consulta corregida para incluir "administrador" y variaciones de caja
-    const { data: usersData } = await supabase
-      .from('users')
-      .select('id, nombre_completo, role, proyectos(nombre_proyecto)')
-      .in('role', [
-        'LIDER', 'OPERACIONES', 'DIRECTIVA', 'ADMINISTRADOR',
-        'lider', 'operaciones', 'directiva', 'administrador',
-        'Líder', 'Líderes', 'Administrador'
-      ]);
+    try {
+      // Traemos todos los usuarios elegibles para el monitoreo
+      const { data: usersData, error: usersError } = await supabase
+        .from('users')
+        .select('id, nombre_completo, role, proyectos(nombre_proyecto)')
+        .in('role', [
+          'LIDER', 'OPERACIONES', 'DIRECTIVA', 'ADMINISTRADOR',
+          'lider', 'operaciones', 'directiva', 'administrador',
+          'Líder', 'Líderes', 'Administrador'
+        ]);
 
-    const { data: locationsData } = await supabase
-      .from('user_locations')
-      .select('user_id, latitude, longitude, bateria')
-      .order('updated_at', { ascending: false });
+      if (usersError) throw usersError;
 
-    if (usersData) {
-      const listaCombinada = usersData.map((user: any) => {
-        const ultimaLoc = locationsData?.find((loc) => loc.user_id === user.id);
-        return {
-          ...user,
-          latitude: ultimaLoc?.latitude,
-          longitude: ultimaLoc?.longitude,
-          bateria: ultimaLoc?.bateria,
-        };
-      });
-      setElementos(listaCombinada);
+      const { data: locationsData, error: locationsError } = await supabase
+        .from('user_locations')
+        .select('user_id, latitude, longitude, bateria')
+        .order('updated_at', { ascending: false });
+
+      if (locationsError) throw locationsError;
+
+      if (usersData) {
+        const listaCombinada = usersData.map((user: any) => {
+          const ultimaLoc = locationsData?.find((loc) => loc.user_id === user.id);
+          return {
+            ...user,
+            latitude: ultimaLoc?.latitude,
+            longitude: ultimaLoc?.longitude,
+            bateria: ultimaLoc?.bateria,
+          };
+        });
+        setElementos(listaCombinada);
+      }
+    } catch (err) {
+      console.error('Error procesando los datos para el mapa:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -117,11 +125,10 @@ export default function SeguimientoRutasPage() {
   }, []);
 
   const listaFiltrada = elementos.filter((c) => {
-    const coincideTexto = c.nombre_completo.toLowerCase().includes(filtroTexto.toLowerCase());
-    const coincideRol = rolSeleccionado ? c.role.toLowerCase() === rolSeleccionado.toLowerCase() : true;
+    const coincideTexto = c.nombre_completo ? c.nombre_completo.toLowerCase().includes(filtroTexto.toLowerCase()) : false;
+    const coincideRol = rolSeleccionado ? (c.role ? c.role.toLowerCase() === rolSeleccionado.toLowerCase() : false) : true;
     return coincideTexto && coincideRol;
   });
-
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -179,7 +186,7 @@ export default function SeguimientoRutasPage() {
                   <Popup>
                     <div style={{ fontSize: '13px' }}>
                       <strong style={{ color: '#0070f3' }}>{elemento.nombre_completo}</strong><br />
-                      <strong>Rol:</strong> {elemento.role.toUpperCase()}<br />
+                      <strong>Rol:</strong> {elemento.role ? elemento.role.toUpperCase() : ''}<br />
                       <strong>Ruta:</strong> {elemento.proyectos?.nombre_proyecto || 'Zona Operativa Registrada 1'}<br />
                       {elemento.bateria && <span><strong>Batería:</strong> {elemento.bateria}%</span>}
                     </div>
@@ -198,7 +205,7 @@ export default function SeguimientoRutasPage() {
               <li key={c.id} style={{ padding: '10px 0', borderBottom: '1px solid #f1f3f5' }}>
                 <div style={{ fontWeight: 'bold' }}>{c.nombre_completo}</div>
                 <div style={{ fontSize: '12px', color: '#6c757d' }}>
-                  {c.role.toUpperCase()} | {c.proyectos?.nombre_proyecto || 'Zona Operativa 1'}
+                  {c.role ? c.role.toUpperCase() : ''} | {c.proyectos?.nombre_proyecto || 'Zona Operativa 1'}
                 </div>
                 {c.latitude ? (
                   <span style={{ fontSize: '11px', color: '#28a745', background: '#d4edda', padding: '2px 6px', borderRadius: '4px', display: 'inline-block', marginTop: '4px' }}>En Ruta</span>
