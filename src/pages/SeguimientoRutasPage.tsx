@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import { RefreshCw } from 'lucide-react';
 import L from 'leaflet';
 import { supabase } from '../lib/supabase';
@@ -49,6 +49,7 @@ interface Elemento {
   latitude?: number;
   longitude?: number;
   bateria?: number;
+  historial_coordenadas?: [number, number][];
 }
 
 function ChangeView({ center }: { center: [number, number] }) {
@@ -76,18 +77,11 @@ export default function SeguimientoRutasPage() {
 
       if (usersError) throw usersError;
 
-      // 2. CARGAMOS LOS PROYECTOS EVITANDO COLUMNAS IDENTIFICATORIAS QUE PUEDAN FALLAR
-      const { data: proyectosData, error: proyectosError } = await supabase
-        .from('proyectos')
-        .select('nombre_proyecto');
-
-      if (proyectosError) console.warn('Aviso sobre la tabla proyectos:', proyectosError.message);
-
-      // 3. CARGAMOS LAS ÚLTIMAS UBICACIONES
+      // 2. CARGAMOS EL HISTÓRICO DE UBICACIONES ORDENADO CRONOLÓGICAMENTE
       const { data: locationsData, error: locationsError } = await supabase
         .from('user_locations')
-        .select('user_id, latitude, longitude, bateria')
-        .order('updated_at', { ascending: false });
+        .select('user_id, latitude, longitude, bateria, updated_at')
+        .order('updated_at', { ascending: true });
 
       if (locationsError) throw locationsError;
 
@@ -97,26 +91,28 @@ export default function SeguimientoRutasPage() {
         const listaCombinada = usersData
           .filter((user: any) => user.role && rolesPermitidos.includes(user.role.toLowerCase()))
           .map((user: any) => {
-            const ultimaLoc = locationsData?.find((loc) => loc.user_id === user.id);
+            // Extraemos todas las posiciones de este usuario para trazar la línea
+            const posicionesUsuario = locationsData?.filter((loc) => loc.user_id === user.id) || [];
+            
+            // La última ubicación será la punta final de la ruta
+            const ultimaLoc = posicionesUsuario.length > 0 ? posicionesUsuario[posicionesUsuario.length - 1] : null;
             const rolMinuscula = user.role.toLowerCase();
 
-            // Mapeo seguro basado en accesos globales y protecciones perimetrales
             let nombreProyectoDisplay = 'Zona Operativa Asignada';
-            
             if (['administrador', 'directiva', 'operaciones'].includes(rolMinuscula)) {
               nombreProyectoDisplay = 'Acceso Global / Todos';
-            } else {
-              if (proyectosData && proyectosData.length > 0) {
-                nombreProyectoDisplay = proyectosData[0].nombre_proyecto || 'Ruta VIP 3000';
-              }
             }
+
+            // Convertimos el histórico al formato [latitud, longitud] requerido por Leaflet Polyline
+            const trazadoRuta = posicionesUsuario.map((loc): [number, number] => [loc.latitude, loc.longitude]);
             
             return {
               ...user,
               latitude: ultimaLoc?.latitude,
               longitude: ultimaLoc?.longitude,
               bateria: ultimaLoc?.bateria,
-              nombre_proyecto: nombreProyectoDisplay
+              nombre_proyecto: nombreProyectoDisplay,
+              historial_coordenadas: trazadoRuta
             };
           });
 
@@ -139,11 +135,20 @@ export default function SeguimientoRutasPage() {
         { event: 'INSERT', schema: 'public', table: 'user_locations' },
         (payload) => {
           setElementos((prev) =>
-            prev.map((c) =>
-              c.id === payload.new.user_id
-                ? { ...c, latitude: payload.new.latitude, longitude: payload.new.longitude, bateria: payload.new.bateria }
-                : c
-            )
+            prev.map((c) => {
+              if (c.id === payload.new.user_id) {
+                const nuevaCoord: [number, number] = [payload.new.latitude, payload.new.longitude];
+                const nuevoHistorial = c.historial_coordenadas ? [...c.historial_coordenadas, nuevaCoord] : [nuevaCoord];
+                return { 
+                  ...c, 
+                  latitude: payload.new.latitude, 
+                  longitude: payload.new.longitude, 
+                  bateria: payload.new.bateria,
+                  historial_coordenadas: nuevoHistorial
+                };
+              }
+              return c;
+            })
           );
         }
       )
@@ -206,6 +211,18 @@ export default function SeguimientoRutasPage() {
             />
             <ChangeView center={centroCaracas} />
             
+            {/* RENDERIZADO DE LÍNEAS DE RECORRIDO (POLYLINE) */}
+            {listaFiltrada.map((elemento) => (
+              elemento.historial_coordenadas && elemento.historial_coordenadas.length > 1 ? (
+                <Polyline 
+                  key={`line-${elemento.id}`} 
+                  positions={elemento.historial_coordenadas} 
+                  pathOptions={{ color: '#0070f3', weight: 4, opacity: 0.7, dashArray: '5, 10' }} 
+                />
+              ) : null
+            ))}
+
+            {/* RENDERIZADO DE MARCADORES */}
             {listaFiltrada.map((elemento) => (
               elemento.latitude && elemento.longitude ? (
                 <Marker 
