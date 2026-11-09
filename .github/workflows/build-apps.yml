@@ -1,0 +1,55 @@
+name: Compilar Apps Seguridad VIP 3000
+
+on:
+  push:
+    branches:
+      - main # Cambia a master si tu rama principal se llama así
+
+jobs:
+  build_android:
+    name: Compilar para Android (APK)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar Código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Instalar EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Instalar Dependencias
+        run: npm install
+
+      - name: Compilar APK en Expo
+        run: eas build --platform android --profile production --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  build_ios:
+    name: Compilar para iPhone (iOS)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar Código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Instalar EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Instalar Dependencias
+        run: npm install
+
+      - name: Compilar iOS en Expo
+        run: eas build --platform ios --profile production --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
