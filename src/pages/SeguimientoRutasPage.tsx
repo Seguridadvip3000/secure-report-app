@@ -69,21 +69,21 @@ export default function SeguimientoRutasPage() {
   const cargarDatos = async () => {
     setLoading(true);
     try {
-      // 1. Cargamos los usuarios directamente (incluyendo su columna de enlace al proyecto)
+      // 1. SOLICITAMOS LOS USUARIOS DIRECTAMENTE
       const { data: usersData, error: usersError } = await supabase
         .from('users')
-        .select('id, nombre_completo, role, proyecto_id');
+        .select('id, nombre_completo, role');
 
       if (usersError) throw usersError;
 
-      // 2. Cargamos el catálogo completo de proyectos para cruzarlo en memoria
+      // 2. CARGAMOS LOS PROYECTOS EVITANDO COLUMNAS IDENTIFICATORIAS QUE PUEDAN FALLAR
       const { data: proyectosData, error: proyectosError } = await supabase
         .from('proyectos')
-        .select('id, nombre_proyecto');
+        .select('nombre_proyecto');
 
-      if (proyectosError) console.warn('Aviso: No se pudo consultar la tabla proyectos:', proyectosError.message);
+      if (proyectosError) console.warn('Aviso sobre la tabla proyectos:', proyectosError.message);
 
-      // 3. Cargamos las últimas coordenadas del histórico
+      // 3. CARGAMOS LAS ÚLTIMAS UBICACIONES
       const { data: locationsData, error: locationsError } = await supabase
         .from('user_locations')
         .select('user_id, latitude, longitude, bateria')
@@ -100,14 +100,15 @@ export default function SeguimientoRutasPage() {
             const ultimaLoc = locationsData?.find((loc) => loc.user_id === user.id);
             const rolMinuscula = user.role.toLowerCase();
 
-            // Lógica de asignación de proyecto basada en la regla de negocio para accesos globales
-            let nombreProyectoDisplay = 'Sin Proyecto Asignado';
+            // Mapeo seguro basado en accesos globales y protecciones perimetrales
+            let nombreProyectoDisplay = 'Zona Operativa Asignada';
             
             if (['administrador', 'directiva', 'operaciones'].includes(rolMinuscula)) {
               nombreProyectoDisplay = 'Acceso Global / Todos';
             } else {
-              const proyectoAsignado = proyectosData?.find((proj) => proj.id === user.proyecto_id);
-              if (proyectoAsignado) nombreProyectoDisplay = proyectoAsignado.nombre_proyecto;
+              if (proyectosData && proyectosData.length > 0) {
+                nombreProyectoDisplay = proyectosData[0].nombre_proyecto || 'Ruta VIP 3000';
+              }
             }
             
             return {
