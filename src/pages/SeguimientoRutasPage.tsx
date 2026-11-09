@@ -22,10 +22,10 @@ const crearIconoPersonalizado = (role: string) => {
   if (rolMinuscula === 'directiva') color = 'red';
   if (rolMinuscula === 'lider') color = 'green';
   if (rolMinuscula === 'operaciones') color = 'blue';
-  if (rolMinuscula === 'administrador') color = 'gold'; // Color especial para tu rol de Administrador
+  if (rolMinuscula === 'administrador') color = 'gold';
 
   return new L.Icon({
-    iconUrl: `https://githubusercontent.com{color}.png`,
+    iconUrl: 'https://githubusercontent.com' + color + '.png',
     shadowUrl: 'https://cloudflare.com',
     iconSize: L.point(25, 41),
     iconAnchor: L.point(12, 41),
