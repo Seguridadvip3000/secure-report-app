@@ -160,20 +160,29 @@ function Layout() {
     const rolActual = currentUser.role ? currentUser.role.toLowerCase() : '';
     const proyectoUsuario = currentUser.proyecto_id || '';
 
-    // ESCUCHA ATENTA Y DIRECTA DE INSERCIONES DE LA TABLA REPORTS EN TIEMPO REAL
-    const canalPanicoTablas = supabase
-      .channel('alertas-db-reports')
+    // CANAL UNIFICADO: Escucha Broadcast Directo + Cambios en la Base de Datos en paralelo
+    const canalPanicoVIP3000 = supabase
+      .channel('alertas-panico-global')
+      // 1. Escucha de Broadcast Directo (Mensajería instantánea entre clientes)
+      .on('broadcast', { event: 'SOS_EMERGENCIA' }, (response) => {
+        const datosSOS = response.payload;
+        const esPersonalInterno = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rolActual);
+        const esClienteAfectado = rolActual === 'cliente' && datosSOS.proyecto_id === proyectoUsuario;
+
+        if (esPersonalInterno || esClienteAfectado) {
+          setAlertaEmergencia(datosSOS);
+          dispararAlarmaSonora();
+        }
+      })
+      // 2. Escucha de Cambios en Tablas (Inserciones en reports)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'reports' },
         (payload) => {
           const nuevoReporte = payload.new;
-
-          // Detectamos si el registro es una activación del botón de pánico
           const esAlertaPanico = nuevoReporte.titulo_novedad && nuevoReporte.titulo_novedad.includes('PÁNICO');
 
           if (esAlertaPanico) {
-            // MATRIZ DE SEGURIDAD VIP 3000: Admin, Directiva y Operaciones ven todo. Cliente si es su proyecto.
             const esPersonalInterno = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rolActual);
             const esClienteAfectado = rolActual === 'cliente' && nuevoReporte.proyecto === proyectoUsuario;
 
@@ -181,32 +190,34 @@ function Layout() {
               setAlertaEmergencia({
                 nombre_completo: nuevoReporte.quien_reporta || 'Líder en Ruta',
                 proyecto_id: nuevoReporte.proyecto || 'Zona Operativa VIP 3000',
-                latitude: 10.4914, // Telemetría base Caracas de contingencia
+                latitude: 10.4914,
                 longitude: -66.8486,
-                bateria: 92,
+                bateria: 95,
                 fecha_alerta: nuevoReporte.created_at || new Date().toISOString()
               });
-
-              // Disparo de tono sonoro de auxilio en el navegador
-              try {
-                const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-                const osc = context.createOscillator();
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(587.33, context.currentTime); // Nota Re5 (Tono de sirena de alerta)
-                osc.connect(context.destination);
-                osc.start();
-                osc.stop(context.currentTime + 0.6);
-              } catch (e) {
-                console.warn('Audio en espera de interacción');
-              }
+              dispararAlarmaSonora();
             }
           }
         }
       )
       .subscribe();
 
+    const dispararAlarmaSonora = () => {
+      try {
+        const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const osc = context.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(587.33, context.currentTime);
+        osc.connect(context.destination);
+        osc.start();
+        osc.stop(context.currentTime + 0.6);
+      } catch (e) {
+        console.warn('Audio en espera de interacción');
+      }
+    };
+
     return () => {
-      supabase.removeChannel(canalPanicoTablas);
+      supabase.removeChannel(canalPanicoVIP3000);
     };
   }, [currentUser]);
 
