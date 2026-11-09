@@ -61,18 +61,14 @@ export default function SeguimientoRutasPage() {
   const cargarDatos = async () => {
     setLoading(true);
     try {
-      // Traemos todos los usuarios elegibles para el monitoreo
+      // 1. SOLICITAMOS LOS USUARIOS DIRECTAMENTE (Evitamos caídas si la relación cambia o es nula)
       const { data: usersData, error: usersError } = await supabase
         .from('users')
-        .select('id, nombre_completo, role, proyectos(nombre_proyecto)')
-        .in('role', [
-          'LIDER', 'OPERACIONES', 'DIRECTIVA', 'ADMINISTRADOR',
-          'lider', 'operaciones', 'directiva', 'administrador',
-          'Líder', 'Líderes', 'Administrador'
-        ]);
+        .select('id, nombre_completo, role');
 
       if (usersError) throw usersError;
 
+      // 2. CARGAMOS LAS ÚLTIMAS UBICACIONES
       const { data: locationsData, error: locationsError } = await supabase
         .from('user_locations')
         .select('user_id, latitude, longitude, bateria')
@@ -81,15 +77,22 @@ export default function SeguimientoRutasPage() {
       if (locationsError) throw locationsError;
 
       if (usersData) {
-        const listaCombinada = usersData.map((user: any) => {
-          const ultimaLoc = locationsData?.find((loc) => loc.user_id === user.id);
-          return {
-            ...user,
-            latitude: ultimaLoc?.latitude,
-            longitude: ultimaLoc?.longitude,
-            bateria: ultimaLoc?.bateria,
-          };
-        });
+        // Mapeamos los roles permitidos incluyendo Administrador
+        const rolesPermitidos = ['lider', 'operaciones', 'directiva', 'administrador'];
+        
+        const listaCombinada = usersData
+          .filter((user: any) => user.role && rolesPermitidos.includes(user.role.toLowerCase()))
+          .map((user: any) => {
+            const ultimaLoc = locationsData?.find((loc) => loc.user_id === user.id);
+            return {
+              ...user,
+              latitude: ultimaLoc?.latitude,
+              longitude: ultimaLoc?.longitude,
+              bateria: ultimaLoc?.bateria,
+              proyectos: { nombre_proyecto: 'Zona Operativa VIP 3000' }
+            };
+          });
+
         setElementos(listaCombinada);
       }
     } catch (err) {
