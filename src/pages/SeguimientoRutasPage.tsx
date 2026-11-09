@@ -6,15 +6,15 @@ import { supabase } from '../lib/supabase';
 
 import 'leaflet/dist/leaflet.css';
 
-// CORRECCIÓN DEFINITIVA DE ICONOS PARA VERCEL (CDN Oficial)
+// DESHABILITACIÓN ABSOLUTA DE LOS ICONOS POR DEFECTO PARA ELIMINAR EL ERROR 404 EN VERCEL
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconUrl: 'https://cloudflare.com',
-  iconRetinaUrl: 'https://cloudflare.com',
-  shadowUrl: 'https://cloudflare.com',
+  iconUrl: '',
+  iconRetinaUrl: '',
+  shadowUrl: '',
 });
 
-// Función para cambiar el color del pin según tus roles reales con tamaños definidos
+// Función para cambiar el color del pin circular según tus roles reales nativos
 const crearIconoPersonalizado = (role: string) => {
   const rolMinuscula = role ? role.toLowerCase() : '';
   let colorFondo = '#0070f3'; // Azul por defecto (OPERACIONES)
@@ -23,7 +23,6 @@ const crearIconoPersonalizado = (role: string) => {
   if (rolMinuscula === 'lider') colorFondo = '#28a745';    // Verde
   if (rolMinuscula === 'administrador') colorFondo = '#f5a623'; // Dorado/Amarillo
 
-  // Generamos un pin moderno y circular mediante HTML puro para evitar errores de carga de imágenes
   return L.divIcon({
     className: 'custom-pin-gps',
     html: `<div style="
@@ -95,7 +94,7 @@ export default function SeguimientoRutasPage() {
             const rolMinuscula = user.role.toLowerCase();
 
             let nombreProyectoDisplay = 'Zona Operativa Asignada';
-            if (['administrador', 'directiva', 'operaciones'].includes(rolMinuscula)) {
+            if (['administrador', 'admin', 'directiva', 'operaciones'].includes(rolMinuscula)) {
               nombreProyectoDisplay = 'Acceso Global / Todos';
             }
 
@@ -154,7 +153,6 @@ export default function SeguimientoRutasPage() {
     };
   }, []);
 
-  // Lógica de Filtrado Multi-Criterio (Nombre, Rol y Nombre del Proyecto)
   const listaFiltrada = elementos.filter((c) => {
     const coincideTexto = c.nombre_completo ? c.nombre_completo.toLowerCase().includes(filtroTexto.toLowerCase()) : false;
     const coincideProyecto = c.nombre_proyecto ? c.nombre_proyecto.toLowerCase().includes(filtroProyecto.toLowerCase()) : false;
@@ -180,7 +178,7 @@ export default function SeguimientoRutasPage() {
         </button>
       </div>
 
-      {/* BARRA SUPERIOR CON FILTROS Y BUSCADOR DE PROYECTO */}
+      {/* BARRA SUPERIOR CON FILTROS Y BUSCADORES COMBINADOS */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', marginBottom: '20px', background: '#f8f9fa', padding: '15px', borderRadius: '10px', border: '1px solid #e9ecef', alignItems: 'center' }}>
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
           <input
@@ -188,7 +186,7 @@ export default function SeguimientoRutasPage() {
             placeholder="Buscar elemento por nombre..."
             value={filtroTexto}
             onChange={(e) => setFiltroTexto(e.target.value)}
-            style={{ padding: '10px 10px 10px 35px', width: '250px', borderRadius: '6px', border: '1px solid #ced4da' }}
+            style={{ padding: '10px 10px 10px 35px', width: '230px', borderRadius: '6px', border: '1px solid #ced4da' }}
           />
           <Search size={16} color="#9ca3af" style={{ position: 'absolute', left: '12px' }} />
         </div>
@@ -199,7 +197,7 @@ export default function SeguimientoRutasPage() {
             placeholder="Buscar por proyecto o ruta..."
             value={filtroProyecto}
             onChange={(e) => setFiltroProyecto(e.target.value)}
-            style={{ padding: '10px 10px 10px 35px', width: '250px', borderRadius: '6px', border: '1px solid #ced4da' }}
+            style={{ padding: '10px 10px 10px 35px', width: '230px', borderRadius: '6px', border: '1px solid #ced4da' }}
           />
           <Briefcase size={16} color="#9ca3af" style={{ position: 'absolute', left: '12px' }} />
         </div>
@@ -220,7 +218,7 @@ export default function SeguimientoRutasPage() {
         </div>
       </div>
 
-      {/* MAPA Y LISTADO */}
+      {/* CUERPO DEL MAPA Y PANEL LATERAL */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
         <div style={{ height: '500px', width: '100%', position: 'relative' }}>
           <MapContainer center={centroCaracas} zoom={13} style={{ height: '100%', width: '100%', borderRadius: '12px' }}>
@@ -230,7 +228,6 @@ export default function SeguimientoRutasPage() {
             />
             <ChangeView center={centroCaracas} />
             
-            {/* RENDERIZADO DE LÍNEAS DE RECORRIDO (POLYLINE) */}
             {listaFiltrada.map((elemento) => (
               elemento.historial_coordenadas && elemento.historial_coordenadas.length > 1 ? (
                 <Polyline 
@@ -241,7 +238,6 @@ export default function SeguimientoRutasPage() {
               ) : null
             ))}
 
-            {/* RENDERIZADO DE MARCADORES */}
             {listaFiltrada.map((elemento) => (
               elemento.latitude && elemento.longitude ? (
                 <Marker 
@@ -263,7 +259,6 @@ export default function SeguimientoRutasPage() {
           </MapContainer>
         </div>
 
-        {/* PANEL LATERAL */}
         <div style={{ background: '#fff', border: '1px solid #e9ecef', borderRadius: '12px', padding: '15px', maxHeight: '500px', overflowY: 'auto' }}>
           <h4 style={{ margin: '0 0 10px 0', borderBottom: '2px solid #f1f3f5', paddingBottom: '8px' }}>Monitoreo ({listaFiltrada.length})</h4>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
