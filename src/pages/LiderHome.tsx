@@ -1,18 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Alert, Vibration } from 'react-native';
+import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext'; // Asegúrate de que extraiga el usuario actual
+import { Shield, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function LiderHome() {
   const { currentUser } = useAuth();
   const [isSending, setIsLoading] = useState(false);
   const [canalAlerta, setCanalAlerta] = useState<any>(null);
+  const [notificacion, setNotificacion] = useState<{ tipo: 'exito' | 'error'; mensaje: string } | null>(null);
 
   const nombreLider = currentUser?.nombre_completo || 'Líder en Ruta';
   const proyectoAsignado = currentUser?.proyecto_id || 'Ruta Vip No Asignada';
 
   useEffect(() => {
-    // Inicializamos el canal de transmisión inmediata (Broadcast)
+    // Inicialización del canal de transmisión inmediata nativo del navegador web
     const channel = supabase.channel('alertas-panico-global');
     channel.subscribe();
     setCanalAlerta(channel);
@@ -21,22 +22,21 @@ export default function LiderHome() {
       supabase.removeChannel(channel);
     };
   }, []);
-  const dispararBotonPanico = async () => {
+  const dispararBotonPanicoWeb = async () => {
     setIsLoading(true);
-    // Hacemos que el teléfono del Líder vibre con un patrón de SOS como confirmación táctil
-    Vibration.vibrate([0, 500, 200, 500, 200, 500]);
+    setNotificacion(null);
 
     try {
-      // 1. Solicitamos la última coordenada guardada de este Líder de forma express
+      // 1. Extraemos la última posición disponible en la base de datos remota
       const { data: locData } = await supabase
         .from('user_locations')
         .select('latitude, longitude, bateria')
         .eq('user_id', currentUser?.id)
         .order('updated_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      // 2. Transmitimos la alerta por el canal Broadcast instantáneo
+      // 2. Transmisión instantánea por canal Broadcast Web
       if (canalAlerta) {
         await canalAlerta.send({
           type: 'broadcast',
@@ -45,7 +45,7 @@ export default function LiderHome() {
             lider_id: currentUser?.id,
             nombre_completo: nombreLider,
             proyecto_id: proyectoAsignado,
-            latitude: locData?.latitude || 10.4914, // Coordenada de contingencia Caracas si no hay GPS
+            latitude: locData?.latitude || 10.4914,
             longitude: locData?.longitude || -66.8486,
             bateria: locData?.bateria || 100,
             fecha_alerta: new Date().toISOString()
@@ -53,65 +53,80 @@ export default function LiderHome() {
         });
       }
 
-      // 3. Dejamos un registro histórico de seguridad inalterable en la tabla de reportes como PENDIENTE
+      // 3. Registro persistente en el catálogo global de reports
       await supabase.from('reports').insert([
         {
-          titulo_novedad: `🚨 ¡BOTÓN DE PÁNICO ACTIVADO EN VIVO POR EL LÍDER! Requiere asistencia inmediata en los perímetros de la ruta corporativa.`,
+          titulo_novedad: `🚨 ¡BOTÓN DE PÁNICO ACTIVADO DESDE DASHBOARD POR EL LÍDER! Se requiere verificación perimetral inmediata de la ruta.`,
           proyecto: proyectoAsignado,
           status: 'pendiente',
-          visibleForClient: true, // El cliente afiliado debe verlo de inmediato
+          visibleForClient: true,
           created_at: new Date().toISOString()
         }
       ]);
 
-      Alert.alert(
-        '¡ALERTA ENVIADA!',
-        'La señal de pánico ha sido transmitida en tiempo real al Centro de Operaciones, Directiva y al Administrador principal. Mantenga la calma, la asistencia va en camino.'
-      );
+      setNotificacion({
+        tipo: 'exito',
+        mensaje: '¡S.O.S Emitido! La alerta ha sido enviada en tiempo real a Operaciones, Directiva y Administrador.'
+      });
     } catch (err: any) {
-      console.error('Error al emitir pánico:', err.message);
-      Alert.alert('Fallo de Red', 'No se pudo transmitir la señal. Intente comunicarse por canal de radio VHF.');
+      console.error('Fallo al emitir pánico web:', err);
+      setNotificacion({
+        tipo: 'error',
+        value: 'Fallo de conexión. No se pudo transmitir la señal de pánico satelital.'
+      } as any);
     } finally {
       setIsLoading(false);
     }
   };
   return (
-    <View style={styles.container}>
-      <View style={styles.headerCard}>
-        <Text style={styles.empresa}>SEGURIDAD VIP 3000 C.A.</Text>
-        <Text style={styles.usuario}>{nombreLider}</Text>
-        <Text style={styles.rol}>Estatus: En Ruta Operativa</Text>
-        <Text style={styles.proyecto}>Ruta: {proyectoAsignado}</Text>
-      </View>
+    <div className="p-6 max-w-4xl mx-auto space-y-8">
+      {/* Tarjeta de Identificación Operativa */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-blue-600 flex flex-col md:flex-row justify-between justify-center md:items-center gap-4">
+        <div>
+          <span className="text-xs font-bold text-blue-600 tracking-wider block">SEGURIDAD VIP 3000 C.A.</span>
+          <h2 className="text-2xl font-bold text-slate-800 mt-1">{nombreLider}</h2>
+          <p className="text-sm text-slate-500 mt-1">Proyecto Asignado: <span className="font-semibold text-slate-700">{proyectoAsignado}</span></p>
+        </div>
+        <div>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium uppercase tracking-wider">
+            ● Estatus: Activo en Ruta
+          </span>
+        </div>
+      </div>
 
-      <View style={styles.panicoContainer}>
-        <Text style={styles.alertaTexto}>BOTÓN DE EMERGENCIA SATELITAL</Text>
-        <Text style={styles.subTexto}>Presione el botón en caso de riesgo inminente, agresión o compromisos perimetrales.</Text>
-        
-        <TouchableOpacity 
-          style={[styles.botonPanico, isSending && styles.botonDeshabilitado]} 
-          onPress={dispararBotonPanico}
-          disabled={isSending}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.panicoTexto}>{isSending ? 'EMITIENDO...' : 'S.O.S'}</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+      {/* Panel del Botón de Emergencia Táctico Web */}
+      <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-8 text-center space-y-6 max-w-xl mx-auto">
+        <div>
+          <h3 className="text-lg font-bold text-red-600 tracking-wide uppercase flex items-center justify-center gap-2">
+            <AlertCircle size={20} /> Botón de Emergencia Satelital
+          </h3>
+          <p className="text-slate-500 text-sm mt-2 px-4">
+            Presione el pulsador en caso de riesgo inminente, agresión física o compromisos de seguridad críticos en el perímetro de su ruta.
+          </p>
+        </div>
+
+        {notificacion && (
+          <div className={`p-4 rounded-xl text-sm border flex items-center gap-2 text-left ${notificacion.tipo === 'exito' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+            {notificacion.tipo === 'exito' ? <CheckCircle2 size={18} className="shrink-0" /> : <AlertCircle size={18} className="shrink-0" />}
+            <span>{notificacion.mensaje}</span>
+          </div>
+        )}
+
+        <div className="py-4 flex justify-center">
+          <button
+            onClick={dispararBotonPanicoWeb}
+            disabled={isSending}
+            className={`w-48 h-180 rounded-full font-black text-3xl tracking-widest text-white shadow-xl transition-all duration-300 border-8 border-slate-100 outline-none
+              ${isSending 
+                ? 'bg-red-800 cursor-not-allowed animate-pulse' 
+                : 'bg-red-600 hover:bg-red-700 hover:shadow-red-500/30 active:scale-95 shadow-red-600/20'
+              }`}
+            style={{ height: '192px', width: '192px' }}
+          >
+            {isSending ? 'SOS...' : 'S.O.S'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa', padding: 20, justifyContent: 'center' },
-  headerCard: { backgroundColor: '#ffffff', padding: 20, borderRadius: 16, borderLeftWidth: 5, borderLeftColor: '#0070f3', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, marginBottom: 40 },
-  empresa: { fontSize: 11, fontWeight: 'bold', color: '#0070f3', trackingWidth: 1 },
-  usuario: { fontSize: 20, fontWeight: 'bold', color: '#1a1a1a', marginTop: 4 },
-  rol: { fontSize: 13, color: '#28a745', marginTop: 2, fontWeight: '500' },
-  proyecto: { fontSize: 13, color: '#6c757d', marginTop: 2 },
-  panicoContainer: { alignItems: 'center', paddingHorizontal: 10 },
-  alertaTexto: { fontSize: 16, fontWeight: 'bold', color: '#dc3545', marginBottom: 5, letterSpacing: 0.5 },
-  subTexto: { fontSize: 13, color: '#6c757d', textAlign: 'center', marginBottom: 30, paddingHorizontal: 20, lineHeight: 18 },
-  botonPanico: { width: 180, height: 180, borderRadius: 90, backgroundColor: '#dc3545', justifyContent: 'center', alignItems: 'center', shadowColor: '#dc3545', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 15, elevation: 8, borderWidth: 6, borderColor: '#ffffff' },
-  botonDeshabilitado: { backgroundColor: '#bd2130', opacity: 0.6 },
-  panicoTexto: { color: '#ffffff', fontSize: 32, fontWeight: 'bold', letterSpacing: 1 }
-});
