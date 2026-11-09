@@ -14,7 +14,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cloudflare.com',
 });
 
-// Función para cambiar el color del pin según tus roles reales de la organización
+// Función para cambiar el color del pin según tus roles reales con tamaños definidos
 const crearIconoPersonalizado = (role: string) => {
   let color = 'blue'; // Por defecto OPERACIONES
   const rolMinuscula = role.toLowerCase();
