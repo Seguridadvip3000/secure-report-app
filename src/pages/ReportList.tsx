@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { RefreshCw, FileText, Check, X, Edit, Trash2 } from 'lucide-react';
+import { RefreshCw, Check, X, Edit, Trash2 } from 'lucide-react';
 
 interface Reporte {
   id: string;
   titulo_novedad: string;
-  nombre_proyecto: string;
-  proyecto_id?: string;
+  proyecto: string; // Sincronizado con la consola
   status: string;
+  visibleForClient?: boolean; // Sincronizado con la consola
   created_at: string;
 }
 export default function ReportList() {
@@ -20,20 +20,22 @@ export default function ReportList() {
   const cargarReportes = async () => {
     setLoading(true);
     try {
-      let query = supabase.from('reportes').select('*').order('created_at', { ascending: false });
+      // APUNTAMOS A LA TABLA REAL 'reports'
+      let query = supabase.from('reports').select('*').order('created_at', { ascending: false });
 
-      // REGLA MATRIZ: El cliente solo visualiza los aprobados de su proyecto asignado
+      // REGLA MATRIZ: El cliente solo visualiza si visibleForClient es true y pertenece a su proyecto
       if (rol === 'cliente') {
         query = query
           .eq('status', 'aprobado')
-          .eq('nombre_proyecto', currentUser?.proyecto_id || ''); 
+          .eq('visibleForClient', true)
+          .eq('proyecto', currentUser?.proyecto_id || ''); 
       }
 
       const { data, error } = await query;
       if (error) throw error;
       setReportes(data || []);
     } catch (err) {
-      console.error('Error al cargar la lista de reportes:', err);
+      console.error('Error al cargar la lista de reports:', err);
     } finally {
       setLoading(false);
     }
@@ -46,7 +48,7 @@ export default function ReportList() {
   const cambiarEstadoReporte = async (id: string, nuevoEstado: string) => {
     try {
       const { error } = await supabase
-        .from('reportes')
+        .from('reports') // Tabla real 'reports'
         .update({ status: nuevoEstado })
         .eq('id', id);
       if (error) throw error;
@@ -75,23 +77,23 @@ export default function ReportList() {
         <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>Sincronizando archivo de novedades...</div>
       ) : reportes.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '50px', background: '#f8f9fa', borderRadius: '12px', border: '1px dashed #ccc', color: '#666' }}>
-          No se encontraron reportes archivados para su nivel de acceso.
+          No se encontraron reportes archivados en el sistema actualmente.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
           {reportes.map((reporte) => (
             <div key={reporte.id} style={{ background: '#fff', border: '1px solid #e9ecef', borderRadius: '12px', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
               <div>
-                <h4 style={{ margin: '0 0 5px 0', color: '#212529', fontSize: '16px' }}>{reporte.titulo_novedad}</h4>
+                <h4 style={{ margin: '0 0 5px 0', color: '#212529', fontSize: '16px' }}>{reporte.titulo_novedad || 'Novedad Registrada'}</h4>
                 <div style={{ fontSize: '12px', color: '#6c757d' }}>
-                  Proyecto: <span style={{ color: '#0070f3', fontWeight: 'bold' }}>{reporte.nombre_proyecto}</span> | 
+                  Proyecto: <span style={{ color: '#0070f3', fontWeight: 'bold' }}>{reporte.proyecto || 'Asignación General'}</span> | 
                   Estado: <span style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>{reporte.status}</span>
                 </div>
               </div>
 
               <div style={{ display: 'flex', gap: '8px' }}>
                 {/* Control Operativo de Aprobaciones */}
-                {puedeAprobarORechazar && reporte.status?.toLowerCase() === 'pendiente' && (
+                {puedeAprobarORechazar && (reporte.status?.toLowerCase() === 'pendiente' || reporte.status?.toLowerCase() === 'en revisión') && (
                   <>
                     <button onClick={() => cambiarEstadoReporte(reporte.id, 'aprobado')} style={{ padding: '6px 12px', background: '#28a745', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Aprobar</button>
                     <button onClick={() => cambiarEstadoReporte(reporte.id, 'rechazado')} style={{ padding: '6px 12px', background: '#dc3545', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Rechazar</button>
