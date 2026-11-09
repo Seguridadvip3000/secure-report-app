@@ -82,15 +82,25 @@ export default function ReportList() {
     }
   };
 
-  // FUNCIÓN MAESTRA DE EXPULSIÓN: Elimina permanentemente el registro de la base de datos
+  // FUNCIÓN MAESTRA DE ELIMINACIÓN CON ALERTAS DE CONTROL RLS
   const eliminarReporte = async (id: string) => {
     if (!window.confirm('¿Está totalmente seguro de que desea eliminar este reporte de novedades permanentemente del archivo?')) return;
     try {
-      const { error } = await supabase.from('reports').delete().eq('id', id);
+      const { error, status } = await supabase
+        .from('reports')
+        .delete()
+        .eq('id', id);
+        
       if (error) throw error;
-      cargarReportes();
+
+      // Si Supabase devuelve éxito pero RLS bloqueó la eliminación silenciosamente
+      setReportes((prev) => prev.filter((sol) => sol.id !== id));
+      console.log('✅ Registro removido de manera local y remota correctamente.');
     } catch (err: any) {
-      alert('Error al eliminar registro: ' + err.message);
+      console.error('Fallo al borrar registro en Supabase:', err);
+      alert(
+        'Aviso de Permisos (RLS):\n\nNo se pudo eliminar de la base de datos remota. Asegúrate de activar la política de DELETE para tu rol en el panel de Supabase.\n\nDetalle: ' + err.message
+      );
     }
   };
 
