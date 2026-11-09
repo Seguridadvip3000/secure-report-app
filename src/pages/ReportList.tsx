@@ -1,139 +1,115 @@
-import { useState, useMemo } from 'react';
-import { useReports } from '../context/ReportContext';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { ReportStatus } from '../types';
-import { Search, Filter } from 'lucide-react';
-import ReportCard from '../components/ReportCard';
+import { supabase } from '../lib/supabase';
+import { RefreshCw, FileText, Check, X, Edit, Trash2 } from 'lucide-react';
 
+interface Reporte {
+  id: string;
+  titulo_novedad: string;
+  nombre_proyecto: string;
+  proyecto_id?: string;
+  status: string;
+  created_at: string;
+}
 export default function ReportList() {
-  const { reports, approveForClient, rejectReport } = useReports();
   const { currentUser } = useAuth();
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<ReportStatus | 'todos'>('todos');
-  const [showFilters, setShowFilters] = useState(false);
+  const [reportes, setReportes] = useState<Reporte[]>([]);
+  const [loading, setLoading] = useState(true);
+  const rol = currentUser?.role?.toLowerCase() || '';
 
-  // Filter reports based on role
-  const visibleReports = useMemo(() => {
-    if (!currentUser) return [];
-    let filtered = [...reports];
-    if (currentUser.role === 'cliente') {
-      filtered = filtered.filter(r => r.visibleForClient);
-    }
-    if (currentUser.role === 'lider') {
-      filtered = filtered.filter(r => r.createdBy === currentUser.id);
-    }
-    return filtered;
-  }, [reports, currentUser]);
+  const cargarReportes = async () => {
+    setLoading(true);
+    try {
+      let query = supabase.from('reportes').select('*').order('created_at', { ascending: false });
 
-  const filteredReports = useMemo(() => {
-    return visibleReports.filter(r => {
-      const matchesSearch =
-        search === '' ||
-        r.tituloNovedad.toLowerCase().includes(search.toLowerCase()) ||
-        r.desarrollo.toLowerCase().includes(search.toLowerCase()) ||
-        r.proyecto.toLowerCase().includes(search.toLowerCase()) ||
-        r.quienReporta.toLowerCase().includes(search.toLowerCase());
-      const matchesStatus = statusFilter === 'todos' || r.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [visibleReports, search, statusFilter]);
+      // REGLA MATRIZ: El cliente solo visualiza los aprobados de su proyecto asignado
+      if (rol === 'cliente') {
+        query = query
+          .eq('status', 'aprobado')
+          .eq('nombre_proyecto', currentUser?.proyecto_id || ''); 
+      }
 
-  const sortedReports = [...filteredReports].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
-
-  const activeFilters = statusFilter !== 'todos' ? 1 : 0;
-  const canApprove = currentUser?.role === 'operaciones' || currentUser?.role === 'directiva';
-
-  const handleToggleApproval = (reportId: string) => {
-    const report = reports.find(r => r.id === reportId);
-    if (report && !report.visibleForClient) {
-      approveForClient(reportId, currentUser!.id);
+      const { data, error } = await query;
+      if (error) throw error;
+      setReportes(data || []);
+    } catch (err) {
+      console.error('Error al cargar la lista de reportes:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
+  useEffect(() => {
+    cargarReportes();
+  }, [currentUser]);
+
+  const cambiarEstadoReporte = async (id: string, nuevoEstado: string) => {
+    try {
+      const { error } = await supabase
+        .from('reportes')
+        .update({ status: nuevoEstado })
+        .eq('id', id);
+      if (error) throw error;
+      cargarReportes();
+    } catch (err) {
+      console.error('Error al actualizar estado:', err);
+    }
+  };
+
+  // REGLAS OPERATIVAS DE CONTROL DE INTERFAZ
+  const puedeAprobarORechazar = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
+  const puedeEditarOEliminar = ['administrador', 'admin', 'directiva'].includes(rol); // Operaciones EXCLUIDO
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">
-          {currentUser?.role === 'cliente' ? 'Reportes Verificados' :
-           currentUser?.role === 'lider' ? 'Mis Reportes' :
-           'Todos los Reportes'}
-        </h1>
-        <p className="text-slate-500">
-          {filteredReports.length} de {visibleReports.length} reportes
-        </p>
-        {canApprove && (
-          <p className="text-xs text-blue-600 mt-1">
-            ✓ Marque la casilla para hacer visible el reporte al cliente
-          </p>
-        )}
-      </div>
-
-      {/* Search & Filters */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
-        <div className="flex gap-3">
-          <div className="flex-1 relative">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar reportes..."
-              className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            />
-          </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-4 py-2.5 border rounded-lg transition-colors font-medium ${
-              showFilters || activeFilters > 0
-                ? 'bg-blue-50 border-blue-200 text-blue-700'
-                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            <Filter size={18} />
-            <span className="hidden sm:inline">Filtros</span>
-          </button>
+    <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif', maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div>
+          <h2 style={{ color: '#333', margin: 0 }}>CONTROL Y ARCHIVO DE NOVEDADES</h2>
+          <small style={{ color: '#666' }}>Seguridad Vip 3000 C.A. — Gestión de Registros</small>
         </div>
-
-        {showFilters && (
-          <div className="pt-3 border-t border-slate-100">
-            <select
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value as any)}
-              className="w-full sm:w-auto px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              <option value="todos">Todos los estados</option>
-              <option value="pendiente">Pendiente</option>
-              <option value="en_proceso">En Proceso</option>
-              <option value="aprobado">Aprobado</option>
-              <option value="rechazado">Rechazado</option>
-            </select>
-          </div>
-        )}
+        <button onClick={cargarReportes} style={{ padding: '10px', borderRadius: '5px', cursor: 'pointer', background: '#fff', border: '1px solid #ccc' }}>
+          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+        </button>
       </div>
 
-      {/* Report Cards */}
-      <div className="space-y-3">
-        {sortedReports.map(report => (
-          <ReportCard
-            key={report.id}
-            report={report}
-            showCheckbox={canApprove}
-            onToggleApproval={() => handleToggleApproval(report.id)}
-            onReject={() => rejectReport(report.id)}
-          />
-        ))}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>Sincronizando archivo de novedades...</div>
+      ) : reportes.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '50px', background: '#f8f9fa', borderRadius: '12px', border: '1px dashed #ccc', color: '#666' }}>
+          No se encontraron reportes archivados para su nivel de acceso.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+          {reportes.map((reporte) => (
+            <div key={reporte.id} style={{ background: '#fff', border: '1px solid #e9ecef', borderRadius: '12px', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+              <div>
+                <h4 style={{ margin: '0 0 5px 0', color: '#212529', fontSize: '16px' }}>{reporte.titulo_novedad}</h4>
+                <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                  Proyecto: <span style={{ color: '#0070f3', fontWeight: 'bold' }}>{reporte.nombre_proyecto}</span> | 
+                  Estado: <span style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>{reporte.status}</span>
+                </div>
+              </div>
 
-        {sortedReports.length === 0 && (
-          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-            <div className="text-4xl mb-3">📋</div>
-            <h3 className="text-lg font-medium text-slate-600">No se encontraron reportes</h3>
-            <p className="text-slate-400 mt-1">Intenta ajustar los filtros de búsqueda</p>
-          </div>
-        )}
-      </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {/* Control Operativo de Aprobaciones */}
+                {puedeAprobarORechazar && reporte.status?.toLowerCase() === 'pendiente' && (
+                  <>
+                    <button onClick={() => cambiarEstadoReporte(reporte.id, 'aprobado')} style={{ padding: '6px 12px', background: '#28a745', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Aprobar</button>
+                    <button onClick={() => cambiarEstadoReporte(reporte.id, 'rechazado')} style={{ padding: '6px 12px', background: '#dc3545', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Rechazar</button>
+                  </>
+                )}
+
+                {/* Control Maestro de Edición (Operaciones Excluido) */}
+                {puedeEditarOEliminar && (
+                  <>
+                    <button style={{ padding: '6px 10px', background: '#f8f9fa', border: '1px solid #ced4da', borderRadius: '6px', cursor: 'pointer' }}><Edit size={14} color="#495057" /></button>
+                    <button style={{ padding: '6px 10px', background: '#fff0f1', border: '1px solid #ffccd1', borderRadius: '6px', cursor: 'pointer' }}><Trash2 size={14} color="#dc3545" /></button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
