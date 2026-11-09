@@ -16,16 +16,19 @@ L.Icon.Default.mergeOptions({
 
 // Función para cambiar el color del pin según tus roles reales con tamaños definidos
 const crearIconoPersonalizado = (role: string) => {
-  let color = 'blue'; 
   const rolMinuscula = role ? role.toLowerCase() : '';
-  
-  if (rolMinuscula === 'directiva') color = 'red';
-  if (rolMinuscula === 'lider') color = 'green';
-  if (rolMinuscula === 'operaciones') color = 'blue';
-  if (rolMinuscula === 'administrador') color = 'gold';
+  let urlIcono = 'https://githubusercontent.com';
+
+  if (rolMinuscula === 'directiva') {
+    urlIcono = 'https://githubusercontent.com';
+  } else if (rolMinuscula === 'lider') {
+    urlIcono = 'https://githubusercontent.com';
+  } else if (rolMinuscula === 'administrador') {
+    urlIcono = 'https://githubusercontent.com';
+  }
 
   return new L.Icon({
-    iconUrl: 'https://githubusercontent.com' + color + '.png',
+    iconUrl: urlIcono,
     shadowUrl: 'https://cloudflare.com',
     iconSize: L.point(25, 41),
     iconAnchor: L.point(12, 41),
