@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
-import { RefreshCw, Battery, BatteryMedium, BatteryLow } from 'lucide-react';
+import { RefreshCw, Battery, BatteryMedium, BatteryLow, Search, Briefcase } from 'lucide-react';
 import L from 'leaflet';
 import { supabase } from '../lib/supabase';
 
@@ -62,6 +62,7 @@ function ChangeView({ center }: { center: [number, number] }) {
 export default function SeguimientoRutasPage() {
   const [elementos, setElementos] = useState<Elemento[]>([]);
   const [filtroTexto, setFiltroTexto] = useState('');
+  const [filtroProyecto, setFiltroProyecto] = useState('');
   const [rolSeleccionado, setRolSeleccionado] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   
@@ -70,14 +71,12 @@ export default function SeguimientoRutasPage() {
   const cargarDatos = async () => {
     setLoading(true);
     try {
-      // 1. SOLICITAMOS LOS USUARIOS DIRECTAMENTE
       const { data: usersData, error: usersError } = await supabase
         .from('users')
         .select('id, nombre_completo, role');
 
       if (usersError) throw usersError;
 
-      // 2. CARGAMOS EL HISTÓRICO DE UBICACIONES ORDENADO CRONOLÓGICAMENTE
       const { data: locationsData, error: locationsError } = await supabase
         .from('user_locations')
         .select('user_id, latitude, longitude, bateria, updated_at')
@@ -106,7 +105,7 @@ export default function SeguimientoRutasPage() {
               ...user,
               latitude: ultimaLoc?.latitude,
               longitude: ultimaLoc?.longitude,
-              bateria: ultimaLoc?.bateria, // Sincronización del nivel de energía
+              bateria: ultimaLoc?.bateria,
               nombre_proyecto: nombreProyectoDisplay,
               historial_coordenadas: trazadoRuta
             };
@@ -139,7 +138,7 @@ export default function SeguimientoRutasPage() {
                   ...c, 
                   latitude: payload.new.latitude, 
                   longitude: payload.new.longitude, 
-                  bateria: payload.new.bateria, // Actualización en vivo mediante WebSocket
+                  bateria: payload.new.bateria,
                   historial_coordenadas: nuevoHistorial
                 };
               }
@@ -155,12 +154,13 @@ export default function SeguimientoRutasPage() {
     };
   }, []);
 
+  // Lógica de Filtrado Multi-Criterio (Nombre, Rol y Nombre del Proyecto)
   const listaFiltrada = elementos.filter((c) => {
     const coincideTexto = c.nombre_completo ? c.nombre_completo.toLowerCase().includes(filtroTexto.toLowerCase()) : false;
+    const coincideProyecto = c.nombre_proyecto ? c.nombre_proyecto.toLowerCase().includes(filtroProyecto.toLowerCase()) : false;
     const coincideRol = rolSeleccionado ? (c.role ? c.role.toLowerCase() === rolSeleccionado.toLowerCase() : false) : true;
-    return coincideTexto && coincideRol;
+    return coincideTexto && coincideProyecto && coincideRol;
   });
-  // Función auxiliar para renderizar el icono de batería adecuado según el porcentaje
   const renderIconoBateria = (porcentaje: number | undefined) => {
     if (porcentaje === undefined) return null;
     if (porcentaje > 50) return <Battery size={16} color="#28a745" style={{ marginRight: '4px' }} />;
@@ -180,15 +180,30 @@ export default function SeguimientoRutasPage() {
         </button>
       </div>
 
-      {/* BARRA SUPERIOR DE FILTROS ACTUALIZADA */}
-      <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', background: '#f8f9fa', padding: '15px', borderRadius: '10px', border: '1px solid #e9ecef', alignItems: 'center' }}>
-        <input
-          type="text"
-          placeholder="Buscar elemento por nombre..."
-          value={filtroTexto}
-          onChange={(e) => setFiltroTexto(e.target.value)}
-          style={{ padding: '10px', width: '280px', borderRadius: '6px', border: '1px solid #ced4da' }}
-        />
+      {/* BARRA SUPERIOR CON FILTROS Y BUSCADOR DE PROYECTO */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', marginBottom: '20px', background: '#f8f9fa', padding: '15px', borderRadius: '10px', border: '1px solid #e9ecef', alignItems: 'center' }}>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <input
+            type="text"
+            placeholder="Buscar elemento por nombre..."
+            value={filtroTexto}
+            onChange={(e) => setFiltroTexto(e.target.value)}
+            style={{ padding: '10px 10px 10px 35px', width: '250px', borderRadius: '6px', border: '1px solid #ced4da' }}
+          />
+          <Search size={16} color="#9ca3af" style={{ position: 'absolute', left: '12px' }} />
+        </div>
+
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <input
+            type="text"
+            placeholder="Buscar por proyecto o ruta..."
+            value={filtroProyecto}
+            onChange={(e) => setFiltroProyecto(e.target.value)}
+            style={{ padding: '10px 10px 10px 35px', width: '250px', borderRadius: '6px', border: '1px solid #ced4da' }}
+          />
+          <Briefcase size={16} color="#9ca3af" style={{ position: 'absolute', left: '12px' }} />
+        </div>
+
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={() => setRolSeleccionado(null)} style={{ padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', border: '1px solid #0070f3', background: !rolSeleccionado ? '#0070f3' : '#fff', color: !rolSeleccionado ? '#fff' : '#0070f3' }}>
             Todos
@@ -248,7 +263,7 @@ export default function SeguimientoRutasPage() {
           </MapContainer>
         </div>
 
-        {/* PANEL LATERAL CON BATERÍA INTEGRADA */}
+        {/* PANEL LATERAL */}
         <div style={{ background: '#fff', border: '1px solid #e9ecef', borderRadius: '12px', padding: '15px', maxHeight: '500px', overflowY: 'auto' }}>
           <h4 style={{ margin: '0 0 10px 0', borderBottom: '2px solid #f1f3f5', paddingBottom: '8px' }}>Monitoreo ({listaFiltrada.length})</h4>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
