@@ -44,7 +44,8 @@ interface Elemento {
   id: string;
   nombre_completo: string;
   role: string;
-  proyectos?: { nombre_proyecto: string } | any;
+  proyecto_id?: string;
+  nombre_proyecto?: string;
   latitude?: number;
   longitude?: number;
   bateria?: number;
@@ -68,14 +69,21 @@ export default function SeguimientoRutasPage() {
   const cargarDatos = async () => {
     setLoading(true);
     try {
-      // 1. SOLICITAMOS LOS USUARIOS DIRECTAMENTE (Evitamos caídas si la relación cambia o es nula)
+      // 1. Cargamos los usuarios directamente (incluyendo su columna de enlace al proyecto)
       const { data: usersData, error: usersError } = await supabase
         .from('users')
-        .select('id, nombre_completo, role');
+        .select('id, nombre_completo, role, proyecto_id');
 
       if (usersError) throw usersError;
 
-      // 2. CARGAMOS LAS ÚLTIMAS UBICACIONES
+      // 2. Cargamos el catálogo completo de proyectos para cruzarlo en memoria
+      const { data: proyectosData, error: proyectosError } = await supabase
+        .from('proyectos')
+        .select('id, nombre_proyecto');
+
+      if (proyectosError) console.warn('Aviso: No se pudo consultar la tabla proyectos:', proyectosError.message);
+
+      // 3. Cargamos las últimas coordenadas del histórico
       const { data: locationsData, error: locationsError } = await supabase
         .from('user_locations')
         .select('user_id, latitude, longitude, bateria')
@@ -84,19 +92,30 @@ export default function SeguimientoRutasPage() {
       if (locationsError) throw locationsError;
 
       if (usersData) {
-        // Mapeamos los roles permitidos incluyendo Administrador
         const rolesPermitidos = ['lider', 'operaciones', 'directiva', 'administrador'];
         
         const listaCombinada = usersData
           .filter((user: any) => user.role && rolesPermitidos.includes(user.role.toLowerCase()))
           .map((user: any) => {
             const ultimaLoc = locationsData?.find((loc) => loc.user_id === user.id);
+            const rolMinuscula = user.role.toLowerCase();
+
+            // Lógica de asignación de proyecto basada en la regla de negocio para accesos globales
+            let nombreProyectoDisplay = 'Sin Proyecto Asignado';
+            
+            if (['administrador', 'directiva', 'operaciones'].includes(rolMinuscula)) {
+              nombreProyectoDisplay = 'Acceso Global / Todos';
+            } else {
+              const proyectoAsignado = proyectosData?.find((proj) => proj.id === user.proyecto_id);
+              if (proyectoAsignado) nombreProyectoDisplay = proyectoAsignado.nombre_proyecto;
+            }
+            
             return {
               ...user,
               latitude: ultimaLoc?.latitude,
               longitude: ultimaLoc?.longitude,
               bateria: ultimaLoc?.bateria,
-              proyectos: { nombre_proyecto: 'Zona Operativa VIP 3000' }
+              nombre_proyecto: nombreProyectoDisplay
             };
           });
 
@@ -197,7 +216,7 @@ export default function SeguimientoRutasPage() {
                     <div style={{ fontSize: '13px' }}>
                       <strong style={{ color: '#0070f3' }}>{elemento.nombre_completo}</strong><br />
                       <strong>Rol:</strong> {elemento.role ? elemento.role.toUpperCase() : ''}<br />
-                      <strong>Ruta:</strong> {elemento.proyectos?.nombre_proyecto || 'Zona Operativa Registrada 1'}<br />
+                      <strong>Ruta:</strong> {elemento.nombre_proyecto}<br />
                       {elemento.bateria && <span><strong>Batería:</strong> {elemento.bateria}%</span>}
                     </div>
                   </Popup>
@@ -215,7 +234,7 @@ export default function SeguimientoRutasPage() {
               <li key={c.id} style={{ padding: '10px 0', borderBottom: '1px solid #f1f3f5' }}>
                 <div style={{ fontWeight: 'bold' }}>{c.nombre_completo}</div>
                 <div style={{ fontSize: '12px', color: '#6c757d' }}>
-                  {c.role ? c.role.toUpperCase() : ''} | {c.proyectos?.nombre_proyecto || 'Zona Operativa 1'}
+                  {c.role ? c.role.toUpperCase() : ''} | {c.nombre_proyecto}
                 </div>
                 {c.latitude ? (
                   <span style={{ fontSize: '11px', color: '#28a745', background: '#d4edda', padding: '2px 6px', borderRadius: '4px', display: 'inline-block', marginTop: '4px' }}>En Ruta</span>
