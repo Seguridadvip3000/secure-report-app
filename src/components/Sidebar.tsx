@@ -42,7 +42,6 @@ export default function Sidebar() {
               <List size={18} /> Lista de Reportes
             </Link>
           )}
-
           {/* OPT 3: APROBACIONES DE USUARIOS (Operaciones, Directiva, Admin) */}
           {puedeVerAprobacionesUsuarios && (
             <Link to="/aprobaciones" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${location.pathname === '/aprobaciones' ? 'bg-blue-600 text-white' : 'hover:bg-slate-900'}`}>
@@ -70,72 +69,6 @@ export default function Sidebar() {
       <div className="border-t border-slate-800 pt-4 text-xs space-y-1">
         <div className="font-semibold text-white truncate">{nombreElemento}</div>
         <div className="text-slate-500 uppercase font-bold tracking-wider">{rol}</div>
-      </div>
-    </div>
-  );
-}
-import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
-
-export default function ListaReportesPage() {
-  const { currentUser } = useAuth();
-  const [reportes, setReportes] = useState([]);
-  const rol = currentUser?.role?.toLowerCase() || '';
-
-  useEffect(() => {
-    const consultarReportesEstructurados = async () => {
-      let query = supabase.from('reportes').select('*');
-
-      // REGLA CLIENTE: Solo ve aprobados y que correspondan a su proyecto asignado
-      if (rol === 'cliente') {
-        query = query
-          .eq('status', 'aprobado')
-          .eq('proyecto_id', currentUser?.proyecto_id || '');
-      }
-
-      const { data } = await query;
-      if (data) setReportes(data);
-    };
-
-    consultarReportesEstructurados();
-  }, [currentUser]);
-
-  // REGLAS OPERATIVAS DE CONTROL DE ACCIONES EN LA UI
-  const puedeAprobarORechazar = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
-  const puedeEditarOEliminar = ['administrador', 'admin', 'directiva'].includes(rol); // Operaciones EXCLUIDO
-
-  return (
-    <div className="p-6 space-y-4">
-      <h2 className="text-xl font-bold text-slate-900">Control y Archivo de Novedades</h2>
-      
-      <div className="space-y-3">
-        {reportes.map((reporte: any) => (
-          <div key={reporte.id} className="bg-white border rounded-xl p-4 flex justify-between items-center shadow-sm">
-            <div>
-              <h4 className="font-bold text-slate-800">{reporte.titulo_novedad}</h4>
-              <p className="text-xs text-slate-500">Proyecto: {reporte.nombre_proyecto} | Estado: <span className="font-semibold uppercase">{reporte.status}</span></p>
-            </div>
-            
-            <div className="space-x-2">
-              {/* Botones de aprobación rápidos para Operaciones, Directiva y Admin */}
-              {puedeAprobarORechazar && reporte.status === 'pendiente' && (
-                <>
-                  <button className="px-3 py-1 bg-green-600 text-white rounded text-xs font-medium">Aprobar</button>
-                  <button className="px-3 py-1 bg-red-600 text-white rounded text-xs font-medium">Rechazar</button>
-                </>
-              )}
-
-              {/* Botones de Modificación Estricta (Operaciones NO TIENE ACCESO) */}
-              {puedeEditarOEliminar && (
-                <>
-                  <button className="px-3 py-1 bg-slate-100 text-slate-700 rounded text-xs">Editar</button>
-                  <button className="px-3 py-1 bg-red-50 text-red-600 rounded text-xs">Eliminar</button>
-                </>
-              )}
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );
