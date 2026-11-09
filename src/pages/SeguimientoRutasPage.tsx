@@ -164,7 +164,7 @@ export default function SeguimientoRutasPage() {
     const coincideRol = rolSeleccionado ? (c.role ? c.role.toLowerCase() === rolSeleccionado.toLowerCase() : false) : true;
     return coincideTexto && coincideRol;
   });
-  return (
+   return (
     <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div>
@@ -182,7 +182,7 @@ export default function SeguimientoRutasPage() {
           type="text"
           placeholder="Buscar elemento por nombre..."
           value={filtroTexto}
-          onChange={{e => setFiltroTexto(e.target.value)} as any}
+          onChange={(e) => setFiltroTexto(e.target.value)}
           style={{ padding: '10px', width: '280px', borderRadius: '6px', border: '1px solid #ced4da' }}
         />
         <div style={{ display: 'flex', gap: '8px' }}>
