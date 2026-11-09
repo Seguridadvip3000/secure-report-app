@@ -16,19 +16,20 @@ L.Icon.Default.mergeOptions({
 
 // Función para cambiar el color del pin según tus roles reales con tamaños definidos
 const crearIconoPersonalizado = (role: string) => {
-  let color = 'blue'; // Por defecto OPERACIONES
+  let color = 'blue'; 
   const rolMinuscula = role.toLowerCase();
   
   if (rolMinuscula === 'directiva') color = 'red';
   if (rolMinuscula === 'lider') color = 'green';
+  if (rolMinuscula === 'operaciones') color = 'blue';
 
   return new L.Icon({
-    iconUrl: `https://githubusercontent.com{color}.png`,
+    iconUrl: 'https://githubusercontent.com' + color + '.png',
     shadowUrl: 'https://cloudflare.com',
-    iconSize:,
-    iconAnchor:,
+    iconSize: L.point(25, 41),
+    iconAnchor: L.point(12, 41),
     popupAnchor: [1, -34],
-    shadowSize: [41, 41]
+    shadowSize: L.point(41, 41)
   });
 };
 
