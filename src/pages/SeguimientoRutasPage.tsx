@@ -17,23 +17,26 @@ L.Icon.Default.mergeOptions({
 // Función para cambiar el color del pin según tus roles reales con tamaños definidos
 const crearIconoPersonalizado = (role: string) => {
   const rolMinuscula = role ? role.toLowerCase() : '';
-  let urlIcono = 'https://githubusercontent.com';
+  let colorFondo = '#0070f3'; // Azul por defecto (OPERACIONES)
 
-  if (rolMinuscula === 'directiva') {
-    urlIcono = 'https://githubusercontent.com';
-  } else if (rolMinuscula === 'lider') {
-    urlIcono = 'https://githubusercontent.com';
-  } else if (rolMinuscula === 'administrador') {
-    urlIcono = 'https://githubusercontent.com';
-  }
+  if (rolMinuscula === 'directiva') colorFondo = '#dc3545'; // Rojo
+  if (rolMinuscula === 'lider') colorFondo = '#28a745';    // Verde
+  if (rolMinuscula === 'administrador') colorFondo = '#f5a623'; // Dorado/Amarillo
 
-  return new L.Icon({
-    iconUrl: urlIcono,
-    shadowUrl: 'https://cloudflare.com',
-    iconSize: L.point(25, 41),
-    iconAnchor: L.point(12, 41),
-    popupAnchor: [1, -34],
-    shadowSize: L.point(41, 41)
+  // Generamos un pin moderno y circular mediante HTML puro para evitar errores de carga de imágenes
+  return L.divIcon({
+    className: 'custom-pin-gps',
+    html: `<div style="
+      width: 18px; 
+      height: 18px; 
+      background-color: ${colorFondo}; 
+      border: 3px solid #ffffff; 
+      border-radius: 50%; 
+      box-shadow: 0px 2px 6px rgba(0,0,0,0.4);
+    "></div>`,
+    iconSize: L.point(18, 18),
+    iconAnchor: L.point(9, 9),
+    popupAnchor: [0, -10]
   });
 };
 
