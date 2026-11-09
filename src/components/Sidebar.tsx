@@ -11,6 +11,8 @@ export default function Sidebar() {
 
   // REGLAS MAESTRAS DE VISIBILIDAD PARA EL MENÚ
   const puedeCrearReporte = ['administrador', 'admin', 'directiva', 'operaciones', 'lider'].includes(rol);
+  
+  // EL LÍDER QUEDA EXCLUIDO DE LA LISTA DE REPORTES. Solo entran Administrador, Directiva, Operaciones y Cliente.
   const puedeVerListaReportes = ['administrador', 'admin', 'directiva', 'operaciones', 'cliente'].includes(rol);
   const puedeVerAprobacionesUsuarios = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
   
@@ -29,14 +31,14 @@ export default function Sidebar() {
         </div>
 
         <nav className="space-y-1">
-          {/* OPT 1: CREAR REPORTE (Enlazado a la ruta real de tu proyecto) */}
+          {/* OPT 1: CREAR REPORTE */}
           {puedeCrearReporte && (
             <Link to="/crear-reporte" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${location.pathname === '/crear-reporte' ? 'bg-blue-600 text-white' : 'hover:bg-slate-900'}`}>
               <FileText size={18} /> Crear Reporte
             </Link>
           )}
 
-          {/* OPT 2: LISTA DE REPORTES (Sincronizado con /lista-reportes) */}
+          {/* OPT 2: LISTA DE REPORTES */}
           {puedeVerListaReportes && (
             <Link to="/lista-reportes" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${location.pathname === '/lista-reportes' ? 'bg-blue-600 text-white' : 'hover:bg-slate-900'}`}>
               <List size={18} /> Lista de Reportes

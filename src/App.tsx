@@ -3,9 +3,9 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ReportProvider } from './context/ReportContext';
 import Sidebar from './components/Sidebar';
-import { ReactNode, useEffect } from 'react';
+import { ReactNode } from 'react';
 
-// Lazy load de todos los componentes de páginas
+// Lazy load de todos los componentes de páginas para optimizar rendimiento
 const AuthPage = lazy(() => import('./pages/AuthPage'));
 const LiderHome = lazy(() => import('./pages/LiderHome'));
 const ClienteDashboard = lazy(() => import('./pages/ClienteDashboard'));
@@ -19,7 +19,7 @@ const AprobacionesPage = lazy(() => import('./pages/AprobacionesPage'));
 const ConfiguracionPage = lazy(() => import('./pages/ConfiguracionPage'));
 const SeguimientoRutasPage = lazy(() => import('./pages/SeguimientoRutasPage'));
 
-// Componente de carga visual
+// Componente de carga visual intermedio
 function LoadingScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center">
@@ -34,6 +34,8 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
   
   if (!currentUser) return <Navigate to="/auth" replace />;
+  
+  // Sincronizado estrictamente con los estados en español corregidos de la base de datos
   if (currentUser.status !== 'aprobado') return <Navigate to="/auth" replace />;
   
   return <>{children}</>;
@@ -44,7 +46,7 @@ function RoleRoute({ roles, children }: { roles: string[]; children: ReactNode }
   
   if (!currentUser) return <Navigate to="/auth" replace />;
   
-  // Normalización de caja para evitar que fallas por mayúsculas/minúsculas expulsen al elemento
+  // Normalización de caja para que coincida sin importar mayúsculas de la base de datos
   const rolNormalizado = currentUser.role ? currentUser.role.toLowerCase() : '';
   const rolesPermitidosNormalizados = roles.map(r => r.toLowerCase());
   
@@ -55,7 +57,7 @@ function RoleRoute({ roles, children }: { roles: string[]; children: ReactNode }
   return <>{children}</>;
 }
 
-// Redireccionador inteligente para la ruta raíz ("/") según el rol del usuario
+// Redireccionador inteligente para la ruta raíz ("/") según el rol operativo del usuario
 function RootRedirect() {
   const { currentUser } = useAuth();
   
@@ -91,14 +93,14 @@ export default function App() {
                 {/* La raíz evalúa el rol del usuario dinámicamente */}
                 <Route index element={<RootRedirect />} />
                 
-                {/* 1. CREAR REPORTE: Sincronizado a /crear-reporte con accesos de tu matriz */}
+                {/* 1. CREAR REPORTE: El Líder sí tiene acceso a elaborar reportes */}
                 <Route path="crear-reporte" element={
                   <RoleRoute roles={['lider', 'operaciones', 'directiva', 'administrador', 'admin']}>
                     <NewReport />
                   </RoleRoute>
                 } />
                 
-                {/* 2. LISTA DE REPORTES: Sincronizado a /lista-reportes incluyendo el rol cliente */}
+                {/* 2. LISTA DE REPORTES: EL LÍDER QUEDA EXCLUIDO. Cliente entra bajo restricciones de proyecto */}
                 <Route path="lista-reportes" element={
                   <RoleRoute roles={['operaciones', 'directiva', 'administrador', 'admin', 'cliente']}>
                     <ReportList />
@@ -111,13 +113,12 @@ export default function App() {
                   </RoleRoute>
                 } />
                 
-                {/* 3. APROBACIONES DE USUARIOS: Abierto para controles internos de Operaciones, Directiva y Admin */}
+                {/* 3. APROBACIONES DE USUARIOS: Administrador, Directiva y Operaciones */}
                 <Route path="aprobaciones" element={
                   <RoleRoute roles={['operaciones', 'directiva', 'administrador', 'admin']}>
                     <AprobacionesPage />
                   </RoleRoute>
                 } />
-                
                 <Route path="configuracion" element={
                   <RoleRoute roles={['directiva', 'administrador', 'admin']}>
                     <ConfiguracionPage />
@@ -130,6 +131,7 @@ export default function App() {
                     <SeguimientoRutasPage />
                   </RoleRoute>
                 } />
+                
                 <Route path="dashboard-cliente" element={
                   <RoleRoute roles={['cliente']}>
                     <ClienteDashboard />
@@ -151,7 +153,7 @@ export default function App() {
                   </RoleRoute>
                 } />
                 
-                {/* Redirección preventiva por si se introduce un sub-path roto */}
+                {/* Redirección preventiva en caso de sub-paths inexistentes */}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
             </Routes>
