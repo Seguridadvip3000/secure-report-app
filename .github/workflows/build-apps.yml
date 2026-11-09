@@ -3,7 +3,7 @@ name: Compilar Apps Seguridad VIP 3000
 on:
   push:
     branches:
-      - main # Cambia a master si tu rama principal se llama así
+      - master # Sincronizado exactamente con tu rama activa
 
 jobs:
   build_android:
@@ -29,7 +29,6 @@ jobs:
         run: eas build --platform android --profile production --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-
   build_ios:
     name: Compilar para iPhone (iOS)
     runs-on: ubuntu-latest
