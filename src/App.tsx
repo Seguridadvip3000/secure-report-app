@@ -122,7 +122,7 @@ export default function App() {
                 <Route path="dashboard-cliente" element={
                   <RoleRoute roles={['cliente']}>
                     <ClienteDashboard />
-                  </Route>
+                  </RoleRoute>
                 } />
                 <Route path="home-operaciones" element={
                   <RoleRoute roles={['operaciones']}>
@@ -132,12 +132,12 @@ export default function App() {
                 <Route path="home-directiva" element={
                   <RoleRoute roles={['directiva']}>
                     <DirectivaHome />
-                  </Route>
+                  </RoleRoute>
                 } />
                 <Route path="home-admin" element={
                   <RoleRoute roles={['administrador', 'admin']}>
                     <AdministradorHome />
-                  </Route>
+                  </RoleRoute>
                 } />
                 
                 <Route path="*" element={<Navigate to="/" replace />} />
@@ -160,21 +160,17 @@ function Layout() {
     const rolActual = currentUser.role ? currentUser.role.toLowerCase() : '';
     const proyectoUsuario = currentUser.proyecto_id || '';
 
-    // Suscripción al canal de pánico global mediante Broadcast
     const canalPanico = supabase
       .channel('alertas-panico-global')
       .on('broadcast', { event: 'SOS_EMERGENCIA' }, (response) => {
         const datosSOS = response.payload;
 
-        // FILTRO DE SEGURIDAD DE LA MATRIZ:
-        // Admin, Directiva y Operaciones reciben TODO. El Cliente SOLO si coincide con su proyecto.
         const esPersonalInterno = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rolActual);
         const esClienteAfectado = rolActual === 'cliente' && datosSOS.proyecto_id === proyectoUsuario;
 
         if (esPersonalInterno || esClienteAfectado) {
           setAlertaEmergencia(datosSOS);
           
-          // Emitir un tono beep repetitivo mediante la API del navegador
           try {
             const context = new (window.AudioContext || (window as any).webkitAudioContext)();
             const osc = context.createOscillator();
@@ -184,7 +180,7 @@ function Layout() {
             osc.start();
             osc.stop(context.currentTime + 0.8);
           } catch (e) {
-            console.warn('Audio bloqueado por directiva de interacción del navegador');
+            console.warn('Audio bloqueado por el navegador');
           }
         }
       })
@@ -202,11 +198,10 @@ function Layout() {
         <Outlet />
       </main>
 
-      {/* MODAL MAESTRO FLOTANTE DE ALERTA DE PÁNICO CRÍTICA */}
       {alertaEmergencia && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl border-4 border-red-600 max-w-md w-full overflow-hidden animate-bounce-short">
-            <div className="bg-red-600 p-4 text-white flex items-center gap-2 animate-pulse">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl border-4 border-red-600 max-w-md w-full overflow-hidden">
+            <div className="bg-red-600 p-4 text-white flex items-center gap-2">
               <AlertOctagon size={28} />
               <h3 className="text-lg font-black tracking-wider uppercase">¡ALERTA MÁXIMA S.O.S!</h3>
             </div>
