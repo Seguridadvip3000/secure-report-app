@@ -33,7 +33,7 @@ const crearIconoPersonalizado = (role: string) => {
   });
 };
 
-interface Custodio {
+interface Elemento {
   id: string;
   nombre_completo: string;
   role: string;
@@ -52,14 +52,16 @@ function ChangeView({ center }: { center: [number, number] }) {
 }
 
 export default function SeguimientoRutasPage() {
-  const [custodios, setCustodios] = useState<Custodio[]>([]);
+  const [elementos, setElementos] = useState<Elemento[]>([]);
   const [filtroTexto, setFiltroTexto] = useState('');
   const [rolSeleccionado, setRolSeleccionado] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   
   const centroCaracas: [number, number] = [10.4914, -66.8486];
 
-      // Consulta corregida para incluir "administrador" y variaciones de caja
+  const cargarDatos = async () => {
+    setLoading(true);
+    // Consulta corregida para incluir "administrador" y variaciones de caja
     const { data: usersData } = await supabase
       .from('users')
       .select('id, nombre_completo, role, proyectos(nombre_proyecto)')
@@ -84,7 +86,7 @@ export default function SeguimientoRutasPage() {
           bateria: ultimaLoc?.bateria,
         };
       });
-      setCustodios(listaCombinada);
+      setElementos(listaCombinada);
     }
     setLoading(false);
   };
@@ -98,7 +100,7 @@ export default function SeguimientoRutasPage() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'user_locations' },
         (payload) => {
-          setCustodios((prev) =>
+          setElementos((prev) =>
             prev.map((c) =>
               c.id === payload.new.user_id
                 ? { ...c, latitude: payload.new.latitude, longitude: payload.new.longitude, bateria: payload.new.bateria }
@@ -114,7 +116,7 @@ export default function SeguimientoRutasPage() {
     };
   }, []);
 
-  const listaFiltrada = custodios.filter((c) => {
+  const listaFiltrada = elementos.filter((c) => {
     const coincideTexto = c.nombre_completo.toLowerCase().includes(filtroTexto.toLowerCase());
     const coincideRol = rolSeleccionado ? c.role.toLowerCase() === rolSeleccionado.toLowerCase() : true;
     return coincideTexto && coincideRol;
@@ -167,19 +169,19 @@ export default function SeguimientoRutasPage() {
             />
             <ChangeView center={centroCaracas} />
             
-            {listaFiltrada.map((custodio) => (
-              custodio.latitude && custodio.longitude ? (
+            {listaFiltrada.map((elemento) => (
+              elemento.latitude && elemento.longitude ? (
                 <Marker 
-                  key={custodio.id} 
-                  position={[custodio.latitude, custodio.longitude]}
-                  icon={crearIconoPersonalizado(custodio.role)}
+                  key={elemento.id} 
+                  position={[elemento.latitude, elemento.longitude]}
+                  icon={crearIconoPersonalizado(elemento.role)}
                 >
                   <Popup>
                     <div style={{ fontSize: '13px' }}>
-                      <strong style={{ color: '#0070f3' }}>{custodio.nombre_completo}</strong><br />
-                      <strong>Rol:</strong> {custodio.role.toUpperCase()}<br />
-                      <strong>Ruta:</strong> {custodio.proyectos?.nombre_proyecto || 'Zona Operativa Registrada 1'}<br />
-                      {custodio.bateria && <span><strong>Batería:</strong> {custodio.bateria}%</span>}
+                      <strong style={{ color: '#0070f3' }}>{elemento.nombre_completo}</strong><br />
+                      <strong>Rol:</strong> {elemento.role.toUpperCase()}<br />
+                      <strong>Ruta:</strong> {elemento.proyectos?.nombre_proyecto || 'Zona Operativa Registrada 1'}<br />
+                      {elemento.bateria && <span><strong>Batería:</strong> {elemento.bateria}%</span>}
                     </div>
                   </Popup>
                 </Marker>
