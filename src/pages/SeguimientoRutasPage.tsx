@@ -59,13 +59,15 @@ export default function SeguimientoRutasPage() {
   
   const centroCaracas: [number, number] = [10.4914, -66.8486];
 
-  const cargarDatos = async () => {
-    setLoading(true);
-    // Consulta con tus roles exactos mapeados en la base de datos
+      // Consulta corregida para incluir "administrador" y variaciones de caja
     const { data: usersData } = await supabase
       .from('users')
       .select('id, nombre_completo, role, proyectos(nombre_proyecto)')
-      .in('role', ['LIDER', 'OPERACIONES', 'DIRECTIVA', 'lider', 'operaciones', 'directiva']);
+      .in('role', [
+        'LIDER', 'OPERACIONES', 'DIRECTIVA', 'ADMINISTRADOR',
+        'lider', 'operaciones', 'directiva', 'administrador',
+        'Líder', 'Líderes', 'Administrador'
+      ]);
 
     const { data: locationsData } = await supabase
       .from('user_locations')
@@ -134,7 +136,7 @@ export default function SeguimientoRutasPage() {
       <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', background: '#f8f9fa', padding: '15px', borderRadius: '10px', border: '1px solid #e9ecef', alignItems: 'center' }}>
         <input
           type="text"
-          placeholder="Buscar custodio por nombre..."
+          placeholder="Buscar elemento por nombre..."
           value={filtroTexto}
           onChange={(e) => setFiltroTexto(e.target.value)}
           style={{ padding: '10px', width: '280px', borderRadius: '6px', border: '1px solid #ced4da' }}
