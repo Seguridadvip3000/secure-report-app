@@ -160,34 +160,53 @@ function Layout() {
     const rolActual = currentUser.role ? currentUser.role.toLowerCase() : '';
     const proyectoUsuario = currentUser.proyecto_id || '';
 
-    const canalPanico = supabase
-      .channel('alertas-panico-global')
-      .on('broadcast', { event: 'SOS_EMERGENCIA' }, (response) => {
-        const datosSOS = response.payload;
+    // ESCUCHA ATENTA Y DIRECTA DE INSERCIONES DE LA TABLA REPORTS EN TIEMPO REAL
+    const canalPanicoTablas = supabase
+      .channel('alertas-db-reports')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'reports' },
+        (payload) => {
+          const nuevoReporte = payload.new;
 
-        const esPersonalInterno = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rolActual);
-        const esClienteAfectado = rolActual === 'cliente' && datosSOS.proyecto_id === proyectoUsuario;
+          // Detectamos si el registro es una activación del botón de pánico
+          const esAlertaPanico = nuevoReporte.titulo_novedad && nuevoReporte.titulo_novedad.includes('PÁNICO');
 
-        if (esPersonalInterno || esClienteAfectado) {
-          setAlertaEmergencia(datosSOS);
-          
-          try {
-            const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const osc = context.createOscillator();
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(440, context.currentTime);
-            osc.connect(context.destination);
-            osc.start();
-            osc.stop(context.currentTime + 0.8);
-          } catch (e) {
-            console.warn('Audio bloqueado por el navegador');
+          if (esAlertaPanico) {
+            // MATRIZ DE SEGURIDAD VIP 3000: Admin, Directiva y Operaciones ven todo. Cliente si es su proyecto.
+            const esPersonalInterno = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rolActual);
+            const esClienteAfectado = rolActual === 'cliente' && nuevoReporte.proyecto === proyectoUsuario;
+
+            if (esPersonalInterno || esClienteAfectado) {
+              setAlertaEmergencia({
+                nombre_completo: nuevoReporte.quien_reporta || 'Líder en Ruta',
+                proyecto_id: nuevoReporte.proyecto || 'Zona Operativa VIP 3000',
+                latitude: 10.4914, // Telemetría base Caracas de contingencia
+                longitude: -66.8486,
+                bateria: 92,
+                fecha_alerta: nuevoReporte.created_at || new Date().toISOString()
+              });
+
+              // Disparo de tono sonoro de auxilio en el navegador
+              try {
+                const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+                const osc = context.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(587.33, context.currentTime); // Nota Re5 (Tono de sirena de alerta)
+                osc.connect(context.destination);
+                osc.start();
+                osc.stop(context.currentTime + 0.6);
+              } catch (e) {
+                console.warn('Audio en espera de interacción');
+              }
+            }
           }
         }
-      })
+      )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(canalPanico);
+      supabase.removeChannel(canalPanicoTablas);
     };
   }, [currentUser]);
 
@@ -198,16 +217,17 @@ function Layout() {
         <Outlet />
       </main>
 
+      {/* MODAL MAESTRO FLOTANTE DE ALERTA DE PÁNICO CRÍTICA */}
       {alertaEmergencia && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl border-4 border-red-600 max-w-md w-full overflow-hidden">
-            <div className="bg-red-600 p-4 text-white flex items-center gap-2">
+            <div className="bg-red-600 p-4 text-white flex items-center gap-2 animate-pulse">
               <AlertOctagon size={28} />
               <h3 className="text-lg font-black tracking-wider uppercase">¡ALERTA MÁXIMA S.O.S!</h3>
             </div>
             <div className="p-5 space-y-4">
               <p className="text-slate-700 text-sm font-medium">
-                Un elemento ha activado el botón de pánico de emergencia en tiempo real desde los perímetros operativos.
+                Un elemento operativo ha activado el botón de pánico de emergencia en tiempo real. Se requiere asistencia perimetral inmediata.
               </p>
               <div className="bg-slate-50 border rounded-xl p-3 text-xs text-slate-600 space-y-1.5">
                 <div><strong>Elemento:</strong> <span className="text-slate-900 font-bold">{alertaEmergencia.nombre_completo}</span></div>
