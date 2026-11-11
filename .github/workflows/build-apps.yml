@@ -10,12 +10,16 @@ jobs:
     steps:
       - name: Descargar Código
         uses: actions/checkout@v4
+      - name: Limpiar Directorio de Trabajo
+        run: |
+          rm -f package.json package-lock.json vite.config.js index.html
+          rm -rf src public scripts .github/workflows/old 2>/dev/null || true
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Instalar Expo CLI y EAS CLI globales
-        run: npm install -g expo-cli eas-cli
+      - name: Instalar EAS CLI global
+        run: npm install -g eas-cli
       - name: Generar Estructura Móvil Base
         run: |
           npx create-expo-app@latest secure-report-tmp --template blank --no-install
