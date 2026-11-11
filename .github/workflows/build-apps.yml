@@ -20,7 +20,10 @@ jobs:
         run: |
           npx create-expo-app@latest app-movil-limpia --template blank
           if [ -f App.js ]; then cp App.js app-movil-limpia/App.js; fi
-      - name: Configurar app.json y eas.json en el Entorno Limpio
+      - name: Instalar Librería WebView
+        working-directory: ./app-movil-limpia
+        run: npx expo install react-native-webview
+      - name: Configurar app.json y eas.json con Permisos GPS y Cámara
         working-directory: ./app-movil-limpia
         run: |
           echo '{
@@ -31,7 +34,14 @@ jobs:
               "orientation": "portrait",
               "userInterfaceStyle": "dark",
               "android": {
-                "package": "com.seguridadvip3000.securereport"
+                "package": "com.seguridadvip3000.securereport",
+                "permissions": [
+                  "ACCESS_COARSE_LOCATION",
+                  "ACCESS_FINE_LOCATION",
+                  "CAMERA",
+                  "READ_EXTERNAL_STORAGE",
+                  "WRITE_EXTERNAL_STORAGE"
+                ]
               }
             }
           }' > app.json
