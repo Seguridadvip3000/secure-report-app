@@ -13,12 +13,40 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
-          cache: 'npm'
-      - name: Instalar EAS CLI
+          node-version: 22
+      - name: Instalar EAS CLI global
         run: npm install -g eas-cli
+      - name: Configurar app.json y eas.json si faltan
+        run: |
+          if [ ! -f app.json ]; then
+            echo '{
+              "expo": {
+                "name": "SecureReport",
+                "slug": "secure-report-app",
+                "version": "1.0.0",
+                "android": {
+                  "package": "com.seguridadvip3000.securereport"
+                }
+              }
+            }' > app.json
+          fi
+
+          if [ ! -f eas.json ]; then
+            echo '{
+              "cli": { "version": ">= 12.0.0", "appVersionSource": "remote" },
+              "build": {
+                "production": {
+                  "android": { "buildType": "apk" }
+                }
+              }
+            }' > eas.json
+          fi
       - name: Instalar Dependencias
-        run: npm install
+        run: npm install --legacy-peer-deps
+      - name: Vincular Proyecto en Expo
+        run: eas init --force --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       - name: Compilar APK en Expo
         run: eas build --platform android --profile production --non-interactive
         env:
