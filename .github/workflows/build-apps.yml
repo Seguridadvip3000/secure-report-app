@@ -17,7 +17,7 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Instalar EAS CLI global
         run: npm install -g eas-cli
       - name: Generar Estructura Móvil Base
@@ -26,23 +26,24 @@ jobs:
           mv secure-report-tmp/* ./ 2>/dev/null || true
           mv secure-report-tmp/.* ./ 2>/dev/null || true
           rm -rf secure-report-tmp
-      - name: Reinyectar app.json y eas.json Correctos
+      - name: Configurar app.json y eas.json Limpios
         run: |
           echo '{
             "expo": {
               "name": "SecureReport",
               "slug": "secure-report-app",
               "version": "1.0.0",
-              "extra": {
-                "eas": {
-                  "projectId": "cd454b67-4bb9-4bd9-9430-10904d9c73ef"
-                }
+              "android": {
+                "package": "com.seguridadvip3000.securereport"
               }
             }
           }' > app.json
 
           echo '{
-            "cli": { "version": ">= 12.0.0" },
+            "cli": { 
+              "version": ">= 12.0.0",
+              "appVersionSource": "remote"
+            },
             "build": {
               "production": {
                 "android": { "buildType": "apk" }
@@ -51,6 +52,10 @@ jobs:
           }' > eas.json
       - name: Instalar Dependencias del Entorno Móvil
         run: npm install --legacy-peer-deps
+      - name: Vincular Proyecto en Expo
+        run: eas init --force --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       - name: Compilar APK en Expo
         run: eas build --platform android --profile production --non-interactive
         env:
