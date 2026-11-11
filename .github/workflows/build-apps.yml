@@ -10,22 +10,18 @@ jobs:
     steps:
       - name: Descargar Código
         uses: actions/checkout@v4
-      - name: Forzar Limpieza de Configuración Antigua
-        run: |
-          rm -f app.json eas.json package.json package-lock.json 2>/dev/null || true
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
       - name: Instalar EAS CLI global
         run: npm install -g eas-cli
-      - name: Generar Estructura Móvil Base Oficial
+      - name: Crear Entorno Móvil Limpio y Aislado
         run: |
-          npx create-expo-app@latest secure-report-tmp --template blank --no-install
-          mv secure-report-tmp/* ./ 2>/dev/null || true
-          mv secure-report-tmp/.* ./ 2>/dev/null || true
-          rm -rf secure-report-tmp
-      - name: Forzar app.json y eas.json Limpios de Producción
+          npx create-expo-app@latest app-movil-limpia --template blank
+          if [ -f App.js ]; then cp App.js app-movil-limpia/App.js; fi
+      - name: Configurar app.json y eas.json en el Entorno Limpio
+        working-directory: ./app-movil-limpia
         run: |
           echo '{
             "expo": {
@@ -33,21 +29,8 @@ jobs:
               "slug": "secure-report-app",
               "version": "1.0.0",
               "orientation": "portrait",
-              "icon": "./assets/icon.png",
               "userInterfaceStyle": "dark",
-              "splash": {
-                "image": "./assets/splash.png",
-                "resizeMode": "contain",
-                "backgroundColor": "#0f172a"
-              },
-              "ios": {
-                "supportsTablet": true
-              },
               "android": {
-                "adaptiveIcon": {
-                  "foregroundImage": "./assets/adaptive-icon.png",
-                  "backgroundColor": "#0f172a"
-                },
                 "package": "com.seguridadvip3000.securereport"
               }
             }
@@ -64,13 +47,13 @@ jobs:
               }
             }
           }' > eas.json
-      - name: Instalar Dependencias del Entorno Móvil
-        run: npm install
       - name: Vincular Proyecto en Expo
+        working-directory: ./app-movil-limpia
         run: eas init --force --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       - name: Compilar APK en Expo
+        working-directory: ./app-movil-limpia
         run: eas build --platform android --profile production --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
