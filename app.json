@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "SecureReport",
+    "slug": "secure-report-app",
+    "version": "1.0.0",
+    "extra": {
+      "eas": {
+        "projectId": "cd454b67-4bb9-4bd9-9430-10904d9c73ef"
+      }
+    }
+  }
+}
