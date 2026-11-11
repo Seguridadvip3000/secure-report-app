@@ -10,37 +10,39 @@ jobs:
     steps:
       - name: Descargar Código
         uses: actions/checkout@v4
+      - name: Forzar Limpieza de Configuración Antigua
+        run: |
+          rm -f app.json eas.json 2>/dev/null || true
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Instalar EAS CLI global
         run: npm install -g eas-cli
-      - name: Configurar app.json y eas.json si faltan
+      - name: Configurar app.json y eas.json Limpios
         run: |
-          if [ ! -f app.json ]; then
-            echo '{
-              "expo": {
-                "name": "SecureReport",
-                "slug": "secure-report-app",
-                "version": "1.0.0",
-                "android": {
-                  "package": "com.seguridadvip3000.securereport"
-                }
+          echo '{
+            "expo": {
+              "name": "SecureReport",
+              "slug": "secure-report-app",
+              "version": "1.0.0",
+              "android": {
+                "package": "com.seguridadvip3000.securereport"
               }
-            }' > app.json
-          fi
+            }
+          }' > app.json
 
-          if [ ! -f eas.json ]; then
-            echo '{
-              "cli": { "version": ">= 12.0.0", "appVersionSource": "remote" },
-              "build": {
-                "production": {
-                  "android": { "buildType": "apk" }
-                }
+          echo '{
+            "cli": { 
+              "version": ">= 12.0.0",
+              "appVersionSource": "remote"
+            },
+            "build": {
+              "production": {
+                "android": { "buildType": "apk" }
               }
-            }' > eas.json
-          fi
+            }
+          }' > eas.json
       - name: Instalar Dependencias
         run: npm install --legacy-peer-deps
       - name: Vincular Proyecto en Expo
