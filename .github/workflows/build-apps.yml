@@ -13,13 +13,15 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: "npm"
       - name: Instalar EAS CLI
         run: npm install -g eas-cli
       - name: Instalar Dependencias
-        run: npm install
+        run: npm install --legacy-peer-deps
       - name: Compilar APK en Expo
         run: eas build --platform android --profile production --non-interactive
         env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
