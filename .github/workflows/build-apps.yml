@@ -23,5 +23,3 @@ jobs:
         run: eas build --platform android --profile production --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
