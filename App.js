@@ -4,7 +4,11 @@ import { WebView } from 'react-native-webview';
 
 export default function App() {
   const webViewRef = React.useRef(null);
-  const APP_URL = 'https://vercel.app';
+  
+  const protocolo = 'https://';
+  const proyecto = 'secure-report-app';
+  const dominio = '.vercel.app';
+  const APP_URL = protocolo + proyecto + dominio;
 
   React.useEffect(() => {
     const onBackPress = () => {
