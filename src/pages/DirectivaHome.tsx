@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useReports } from '../context/ReportContext';
-import { FilePlus, List, UserCheck, Settings, CheckCircle, Clock, FileText, MapPin } from 'lucide-react'; // Importado MapPin
+import { FilePlus, List, UserCheck, Settings, CheckCircle, Clock, FileText, MapPin } from 'lucide-react';
 
 export default function DirectivaHome() {
   const navigate = useNavigate();
@@ -16,7 +16,7 @@ export default function DirectivaHome() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4 md:p-6">
       {/* Header */}
       <div className="bg-gradient-to-r from-red-600 to-red-700 rounded-xl p-6 text-white">
         <h1 className="text-2xl font-bold">Panel de Directiva</h1>
@@ -58,7 +58,7 @@ export default function DirectivaHome() {
       {/* Main Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <button
-          onClick={() => navigate('/nuevo')}
+          onClick={() => navigate('/crear-reporte')}
           className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-blue-500 hover:bg-blue-50 transition-all group text-left"
         >
           <div className="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -69,14 +69,14 @@ export default function DirectivaHome() {
         </button>
 
         <button
-          onClick={() => navigate('/reportes')}
+          onClick={() => navigate('/lista-reportes')}
           className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-purple-500 hover:bg-purple-50 transition-all group text-left"
         >
           <div className="w-14 h-14 bg-purple-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
             <List size={28} className="text-purple-600" />
           </div>
           <h3 className="text-lg font-semibold text-slate-800 mb-1">2. Lista de Reportes</h3>
-          <p className="text-sm text-slate-500">Ver y aprobar reportes (con casilla de verificación)</p>
+          <p className="text-sm text-slate-500">Ver, editar y aprobar reportes</p>
         </button>
 
         <button
