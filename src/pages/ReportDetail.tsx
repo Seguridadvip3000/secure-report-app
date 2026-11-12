@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, Calendar, User, MapPin, CheckCircle, Clock, XCircle, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Calendar, User, MapPin, CheckCircle, Clock, XCircle, Image as ImageIcon, ExternalLink } from 'lucide-react';
 
 export default function ReportDetail() {
   const { id } = useParams<{ id: string }>();
@@ -57,15 +57,14 @@ export default function ReportDetail() {
       </div>
     );
   }
+  // Extraer arreglo de la columna exacta 'evidencias' (text[])
+  const listaFotos: string[] = Array.isArray(reporte.evidencias)
+    ? reporte.evidencias.filter((url: any) => typeof url === 'string' && url.trim() !== '')
+    : [];
 
-  // Extraer fotografías sin importar cómo estén guardadas en la columna de Supabase
-  const listaFotos: string[] = Array.isArray(reporte.fotos) 
-    ? reporte.fotos 
-    : Array.isArray(reporte.imagenes) 
-      ? reporte.imagenes 
-      : typeof reporte.foto_url === 'string' && reporte.foto_url 
-        ? [reporte.foto_url] 
-        : [];
+  // Verificar si tiene coordenadas válidas en 'ubicacion_gps' (jsonb)
+  const gps = reporte.ubicacion_gps;
+  const tieneGpsValido = gps && typeof gps.lat === 'number' && typeof gps.lng === 'number' && (gps.lat !== 0 || gps.lng !== 0);
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
@@ -105,14 +104,18 @@ export default function ReportDetail() {
             <span className="flex items-center gap-1.5">
               <Calendar size={14} /> Fecha: <strong>{new Date(reporte.created_at).toLocaleString('es-VE')}</strong>
             </span>
-            {reporte.ubicacion && (
-              <span className="flex items-center gap-1.5">
-                <MapPin size={14} /> Ubicación: <strong>{reporte.ubicacion}</strong>
-              </span>
+            {tieneGpsValido && (
+              <a
+                href={`https://google.com{gps.lat},${gps.lng}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-blue-600 hover:underline font-semibold"
+              >
+                <MapPin size={14} /> Ver Ubicación GPS ({gps.lat.toFixed(4)}, {gps.lng.toFixed(4)}) <ExternalLink size={12} />
+              </a>
             )}
           </div>
         </div>
-
         {/* Desarrollo completo de la novedad */}
         <div className="p-5 md:p-6 space-y-4">
           <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Desarrollo de la Novedad</h3>
@@ -121,7 +124,7 @@ export default function ReportDetail() {
           </div>
         </div>
 
-        {/* Galería de Fotografías */}
+        {/* Galería de Fotografías desde la columna 'evidencias' */}
         <div className="p-5 md:p-6 border-t border-slate-100 space-y-4">
           <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
             <ImageIcon size={16} /> Evidencia Fotográfica ({listaFotos.length})
@@ -132,8 +135,18 @@ export default function ReportDetail() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {listaFotos.map((url, index) => (
-                <a key={index} href={url} target="_blank" rel="noopener noreferrer" className="block rounded-lg overflow-hidden border border-slate-200 hover:opacity-95 transition-opacity">
-                  <img src={url} alt={`Evidencia ${index + 1}`} className="w-full h-64 object-cover" />
+                <a 
+                  key={index} 
+                  href={url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="block rounded-lg overflow-hidden border border-slate-200 hover:opacity-95 transition-opacity bg-slate-100"
+                >
+                  <img 
+                    src={url} 
+                    alt={`Evidencia ${index + 1}`} 
+                    className="w-full h-64 object-cover" 
+                  />
                 </a>
               ))}
             </div>
