@@ -27,35 +27,50 @@ export default function Sidebar() {
   const cerrarMenu = () => setMenuAbierto(false);
   return (
     <>
-      {/* BOTÓN FLOTANTE DE HAMBURGUESA EXCLUSIVO PARA TELÉFONOS */}
-      <button
-        onClick={() => setMenuAbierto(!menuAbierto)}
-        aria-label="Abrir menú"
-        className="md:hidden fixed top-3 left-3 z-50 p-2.5 rounded-lg bg-slate-900 text-white shadow-lg border border-slate-700 hover:bg-slate-800 transition-colors"
-      >
-        {menuAbierto ? <X size={22} /> : <Menu size={22} />}
-      </button>
+      {/* BARRA SUPERIOR EXCLUSIVA PARA MÓVILES (EVITA CHOQUE CON LA HORA/BATERÍA) */}
+      <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-slate-950 text-white px-4 pt-8 pb-3 flex items-center justify-between shadow-md border-b border-slate-800">
+        <div className="flex items-center gap-2">
+          <Shield className="text-blue-500" size={22} />
+          <span className="font-bold text-base tracking-wide">SecureReport</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setMenuAbierto(!menuAbierto)}
+          aria-label="Alternar menú"
+          className="p-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 active:scale-95 transition-all"
+        >
+          {menuAbierto ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      </header>
 
-      {/* FONDO OSCURO SEMITRANSPARENTE AL ABRIR EL MENÚ EN MÓVIL */}
+      {/* FONDO OSCURO AL ABRIR EL MENÚ EN MÓVIL */}
       {menuAbierto && (
         <div
           onClick={cerrarMenu}
-          className="fixed inset-0 bg-black/60 z-30 md:hidden backdrop-blur-xs"
+          className="fixed inset-0 bg-black/60 z-40 md:hidden"
         />
       )}
 
       {/* CONTENEDOR DEL MENÚ LATERAL RESPONSIVO */}
       <div
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-slate-950 min-h-screen text-slate-300 p-4 flex flex-col justify-between transform transition-transform duration-300 ease-in-out ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-950 min-h-screen text-slate-300 p-4 pt-10 md:pt-4 flex flex-col justify-between transform transition-transform duration-200 ease-out ${
           menuAbierto ? 'translate-x-0' : '-translate-x-full'
         } md:relative md:translate-x-0`}
       >
         <div className="space-y-6">
-          <div className="flex items-center justify-between px-2 py-3 border-b border-slate-800 mt-10 md:mt-0">
+          <div className="flex items-center justify-between px-2 py-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <Shield className="text-blue-500" size={24} />
               <span className="font-bold text-white text-lg">SecureReport</span>
             </div>
+            {/* BOTÓN EXTRA DE CIERRE DENTRO DEL MENÚ EN MÓVIL */}
+            <button
+              type="button"
+              onClick={cerrarMenu}
+              className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+            >
+              <X size={20} />
+            </button>
           </div>
 
           <nav className="space-y-1">

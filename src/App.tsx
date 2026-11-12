@@ -1,9 +1,8 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ReportProvider } from './context/ReportContext';
 import Sidebar from './components/Sidebar';
-import { ReactNode } from 'react';
 
 // Lazy load de todos los componentes de páginas para optimizar rendimiento
 const AuthPage = lazy(() => import('./pages/AuthPage'));
@@ -29,6 +28,7 @@ function LoadingScreen() {
     </div>
   );
 }
+
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
   
@@ -159,11 +159,12 @@ export default function App() {
 
 function Layout() {
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="flex flex-col md:flex-row min-h-screen bg-gray-50 overflow-x-hidden">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 w-full pt-20 md:pt-0 overflow-y-auto">
         <Outlet />
       </main>
     </div>
   );
 }
+
