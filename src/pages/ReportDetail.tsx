@@ -4,6 +4,14 @@ import { supabase } from '../lib/supabase';
 import { generateOfficialPDF } from '../utils/pdfGenerator';
 import { ArrowLeft, Calendar, User, MapPin, CheckCircle, Clock, XCircle, Image as ImageIcon, ExternalLink, Download } from 'lucide-react';
 
+declare global {
+  interface Window {
+    ReactNativeWebView?: {
+      postMessage: (message: string) => void;
+    };
+  }
+}
+
 export default function ReportDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -35,7 +43,6 @@ export default function ReportDetail() {
     cargarDetalle();
   }, [id]);
 
-  // CONEXIÓN CON TU GENERADOR OFICIAL (src/utils/pdfGenerator.ts)
   const manejarDescargaPDF = async () => {
     if (!reporte) return;
     setGenerandoPdf(true);
@@ -67,23 +74,43 @@ export default function ReportDetail() {
         }
       });
 
-      // Descarga directa compatible con navegadores y Android WebView
-      const urlBlob = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = urlBlob;
       const nombreLimpio = (reporte.proyecto || 'Reporte').replace(/[^a-zA-Z0-9]/g, '_');
-      link.download = `SecureReport_${nombreLimpio}_${reporte.id.slice(0, 6)}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(urlBlob);
+      const nombreArchivo = `SecureReport_${nombreLimpio}_${reporte.id.slice(0, 6)}.pdf`;
+
+      // Si estamos dentro de la app móvil (APK), enviar el PDF al sistema nativo de Android
+      if (window.ReactNativeWebView) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dataUrl = reader.result as string;
+          const base64Puro = dataUrl.split(',')[1];
+          window.ReactNativeWebView?.postMessage(
+            JSON.stringify({
+              type: 'DOWNLOAD_PDF',
+              filename: nombreArchivo,
+              base64: base64Puro
+            })
+          );
+        };
+        reader.readAsDataURL(blob);
+      } else {
+        // Descarga normal en navegador de computadora
+        const urlBlob = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = urlBlob;
+        link.download = nombreArchivo;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(urlBlob);
+      }
     } catch (error) {
       console.error('Error al generar el PDF oficial:', error);
-      alert('Ocurrió un error al generar el PDF. Verifica tu conexión a internet para cargar las evidencias.');
+      alert('Ocurrió un error al generar el PDF. Verifica tu conexión a internet.');
     } finally {
       setGenerandoPdf(false);
     }
   };
+
   if (loading) {
     return (
       <div className="p-8 text-center text-slate-500">
@@ -118,7 +145,6 @@ export default function ReportDetail() {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
-      {/* Barra superior con Volver y Botón de Descargar PDF Oficial */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           onClick={() => navigate('/lista-reportes')}
@@ -138,7 +164,6 @@ export default function ReportDetail() {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        {/* Encabezado del Reporte */}
         <div className="p-5 md:p-6 border-b border-slate-100 bg-slate-50/50 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded-full">
@@ -178,7 +203,7 @@ export default function ReportDetail() {
             )}
           </div>
         </div>
-        {/* Desarrollo completo de la novedad */}
+
         <div className="p-5 md:p-6 space-y-4">
           <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Desarrollo de la Novedad</h3>
           <div className="text-slate-700 text-base leading-relaxed whitespace-pre-line bg-slate-50 p-4 rounded-lg border border-slate-100">
@@ -186,7 +211,6 @@ export default function ReportDetail() {
           </div>
         </div>
 
-        {/* Galería de Fotografías desde la columna 'evidencias' */}
         <div className="p-5 md:p-6 border-t border-slate-100 space-y-4">
           <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
             <ImageIcon size={16} /> Evidencia Fotográfica ({listaFotos.length})
