@@ -1,10 +1,12 @@
 import React from 'react';
-import { StyleSheet, SafeAreaView, StatusBar, Platform, BackHandler } from 'react-native';
+import { StyleSheet, SafeAreaView, StatusBar, Platform, BackHandler, Alert } from 'react-native';
 import { WebView } from 'react-native-webview';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 
 export default function App() {
   const webViewRef = React.useRef(null);
-  
+
   const protocolo = 'https://';
   const proyecto = 'secure-report-app';
   const dominio = '.vercel.app';
@@ -25,6 +27,30 @@ export default function App() {
     }
   }, []);
 
+  const manejarMensajeWeb = async (event) => {
+    try {
+      const datos = JSON.parse(event.nativeEvent.data);
+      if (datos.type === 'DOWNLOAD_PDF' && datos.base64) {
+        const rutaArchivo = FileSystem.cacheDirectory + datos.filename;
+        await FileSystem.writeAsStringAsync(rutaArchivo, datos.base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        const puedeCompartir = await Sharing.isAvailableAsync();
+        if (puedeCompartir) {
+          await Sharing.shareAsync(rutaArchivo, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'Guardar o Compartir Reporte PDF',
+          });
+        } else {
+          Alert.alert('PDF Generado', 'El archivo se guardó en la memoria temporal de la app.');
+        }
+      }
+    } catch (error) {
+      console.error('Error al procesar el PDF en móvil:', error);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
@@ -32,6 +58,7 @@ export default function App() {
         ref={webViewRef}
         source={{ uri: APP_URL }}
         style={styles.webview}
+        onMessage={manejarMensajeWeb}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         geolocationEnabled={true}

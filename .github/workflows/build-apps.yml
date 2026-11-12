@@ -20,10 +20,10 @@ jobs:
         run: |
           npx create-expo-app@latest app-movil-limpia --template blank
           if [ -f App.js ]; then cp App.js app-movil-limpia/App.js; fi
-      - name: Instalar Librería WebView
+      - name: Instalar Librerías Nativas (WebView y Archivos PDF)
         working-directory: ./app-movil-limpia
-        run: npx expo install react-native-webview
-      - name: Configurar app.json y eas.json con Permisos GPS y Cámara
+        run: npx expo install react-native-webview expo-file-system expo-sharing
+      - name: Configurar app.json y eas.json con Permisos
         working-directory: ./app-movil-limpia
         run: |
           echo '{
