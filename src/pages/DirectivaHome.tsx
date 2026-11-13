@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useReports } from '../context/ReportContext';
-import { FilePlus, List, UserCheck, Settings, CheckCircle, Clock, FileText, MapPin } from 'lucide-react';
+import { FilePlus, List, UserCheck, Settings, CheckCircle, Clock, FileText } from 'lucide-react';
 
 export default function DirectivaHome() {
   const navigate = useNavigate();
@@ -54,9 +54,8 @@ export default function DirectivaHome() {
           <p className="text-xs text-slate-500">Usuarios Pendientes</p>
         </div>
       </div>
-
-      {/* Main Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Main Actions (Sin Seguimiento de Rutas) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <button
           onClick={() => navigate('/crear-reporte')}
           className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-blue-500 hover:bg-blue-50 transition-all group text-left"
@@ -78,18 +77,6 @@ export default function DirectivaHome() {
           <h3 className="text-lg font-semibold text-slate-800 mb-1">2. Lista de Reportes</h3>
           <p className="text-sm text-slate-500">Ver, editar y aprobar reportes</p>
         </button>
-
-        <button
-          onClick={() => navigate('/seguimiento-rutas')}
-          className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-emerald-500 hover:bg-emerald-50 transition-all group text-left"
-        >
-          <div className="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <MapPin size={28} className="text-emerald-600" />
-          </div>
-          <h3 className="text-lg font-semibold text-slate-800 mb-1">3. Seguimiento de Rutas</h3>
-          <p className="text-sm text-slate-500">Monitoreo de asistencia y GPS en tiempo real</p>
-        </button>
-
         <button
           onClick={() => navigate('/aprobaciones')}
           className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-amber-500 hover:bg-amber-50 transition-all group text-left relative"
@@ -102,7 +89,7 @@ export default function DirectivaHome() {
           <div className="w-14 h-14 bg-amber-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
             <UserCheck size={28} className="text-amber-600" />
           </div>
-          <h3 className="text-lg font-semibold text-slate-800 mb-1">4. Aprobaciones</h3>
+          <h3 className="text-lg font-semibold text-slate-800 mb-1">3. Aprobaciones</h3>
           <p className="text-sm text-slate-500">Aprobar registros de nuevos usuarios</p>
         </button>
 
@@ -113,7 +100,7 @@ export default function DirectivaHome() {
           <div className="w-14 h-14 bg-slate-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
             <Settings size={28} className="text-slate-600" />
           </div>
-          <h3 className="text-lg font-semibold text-slate-800 mb-1">5. Configuración</h3>
+          <h3 className="text-lg font-semibold text-slate-800 mb-1">4. Configuración</h3>
           <p className="text-sm text-slate-500">Panel de control avanzado (requiere clave)</p>
         </button>
       </div>
