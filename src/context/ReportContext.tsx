@@ -36,6 +36,31 @@ function saveLocalReports(reports: Report[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(reports));
 }
 
+// Comprime imágenes pesadas del teléfono para garantizar subida rápida y respaldo seguro
+const comprimirImagenBase64 = (base64Str: string, maxWidth = 900, quality = 0.7): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve(base64Str);
+  });
+};
+
 const ReportContext = createContext<ReportContextType | undefined>(undefined);
 
 export function ReportProvider({ children }: { children: ReactNode }) {
@@ -43,7 +68,6 @@ export function ReportProvider({ children }: { children: ReactNode }) {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(storageMode === 'supabase');
 
-  // Load reports based on storage mode
   useEffect(() => {
     if (storageMode === 'supabase') {
       loadReportsFromSupabase();
@@ -54,46 +78,30 @@ export function ReportProvider({ children }: { children: ReactNode }) {
 
   const loadReportsFromSupabase = async () => {
     try {
-      console.log('🔄 [ReportContext] Cargando reportes desde Supabase...');
       const supabaseReports = await reportService.getAllReports();
-      console.log('📊 [ReportContext] Reportes recibidos de Supabase:', supabaseReports.length);
-      
-      // Map database fields to frontend fields
-      const mappedReports = supabaseReports.map((r: any) => {
-        const mapped = {
-          id: r.id,
-          fechaHora: r.fecha_hora,
-          proyecto: r.proyecto,
-          tituloNovedad: r.titulo_novedad,
-          desarrollo: r.desarrollo,
-          evidencias: r.evidencias || [],
-          ubicacionGPS: r.ubicacion_gps,
-          quienReporta: r.quien_reporta,
-          createdBy: r.created_by,
-          status: r.status,
-          createdAt: r.created_at,
-          notes: r.notes,
-          approvedByOperaciones: r.approved_by_operaciones,
-          approvedAtOperaciones: r.approved_at_operaciones,
-          visibleForClient: r.visible_for_client,
-          pdfUrl: r.pdf_url,
-          emailEnviadoA: r.email_enviado_a,
-          emailEnviadoAt: r.email_enviado_at,
-        };
-        
-        // Log solo para reportes aprobados
-        if (r.status === 'aprobado' || r.visible_for_client) {
-          console.log(`📄 [ReportContext] Reporte mapeado: "${r.titulo_novedad}" - status: ${r.status}, visibleForClient: ${r.visible_for_client}, proyecto: ${r.proyecto}`);
-        }
-        
-        return mapped;
-      });
-      
-      console.log('✅ [ReportContext] Total de reportes mapeados:', mappedReports.length);
+      const mappedReports = supabaseReports.map((r: any) => ({
+        id: r.id,
+        fechaHora: r.fecha_hora,
+        proyecto: r.proyecto,
+        tituloNovedad: r.titulo_novedad,
+        desarrollo: r.desarrollo,
+        evidencias: Array.isArray(r.evidencias) ? r.evidencias : [],
+        ubicacionGPS: r.ubicacion_gps,
+        quienReporta: r.quien_reporta,
+        createdBy: r.created_by,
+        status: r.status,
+        createdAt: r.created_at,
+        notes: r.notes,
+        approvedByOperaciones: r.approved_by_operaciones,
+        approvedAtOperaciones: r.approved_at_operaciones,
+        visibleForClient: r.visible_for_client ?? r.visibleForClient,
+        pdfUrl: r.pdf_url,
+        emailEnviadoA: r.email_enviado_a,
+        emailEnviadoAt: r.email_enviado_at,
+      }));
       setReports(mappedReports);
     } catch (error) {
-      console.error('❌ [ReportContext] Error cargando reportes desde Supabase:', error);
-      // Fallback to local data
+      console.error('Error cargando reportes desde Supabase:', error);
       setReports(initialReports);
     } finally {
       setLoading(false);
@@ -106,7 +114,6 @@ export function ReportProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Save local reports when they change (only in local mode)
   useEffect(() => {
     if (storageMode === 'local' && reports.length > 0) {
       saveLocalReports(reports);
@@ -114,63 +121,50 @@ export function ReportProvider({ children }: { children: ReactNode }) {
   }, [reports, storageMode]);
 
   const addReport = async (report: Omit<Report, 'id' | 'createdAt' | 'visibleForClient'>) => {
-    console.log('📝 addReport llamado con:', report);
-    
     if (storageMode === 'supabase') {
       try {
-        // Validar que createdBy sea un UUID válido
-        console.log('🔍 Validando createdBy:', report.createdBy);
         if (!report.createdBy || report.createdBy === 'system' || !report.createdBy.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-          console.error('❌ createdBy no es un UUID válido:', report.createdBy);
-          throw new Error(`createdBy debe ser un UUID válido de Supabase. Valor recibido: ${report.createdBy}`);
+          throw new Error(`createdBy debe ser un UUID válido de Supabase.`);
         }
 
-        // 1. Crear el reporte primero para obtener el ID
         const newReportId = uuidv4();
-        console.log('🆔 Nuevo ID de reporte generado:', newReportId);
-        
-        // 2. Subir imágenes a Supabase Storage
-        let uploadedEvidenceUrls: string[] = [];
+        let finalEvidenceUrls: string[] = [];
+
         if (report.evidencias && report.evidencias.length > 0) {
-          console.log('📸 Subiendo evidencias a Supabase Storage...');
-          console.log(`📸 Cantidad de evidencias: ${report.evidencias.length}`);
-          
+          // 1. Comprimir las fotos tomadas por el teléfono
+          const fotosComprimidas = await Promise.all(
+            report.evidencias.map((img) => comprimirImagenBase64(img))
+          );
+
           try {
-            uploadedEvidenceUrls = await storageService.uploadImagesFromBase64(
-              report.evidencias,
-              newReportId
-            );
-            console.log(`✅ ${uploadedEvidenceUrls.length} evidencias subidas exitosamente`);
-            console.log('📸 URLs de evidencias:', uploadedEvidenceUrls);
+            // 2. Intentar subir al bucket Storage de Supabase
+            const uploaded = await storageService.uploadImagesFromBase64(fotosComprimidas, newReportId);
+            // Si el storage devolvió URLs válidas usarlas; si falló o devolvió vacío, usar respaldo directo
+            if (uploaded && uploaded.length > 0) {
+              finalEvidenceUrls = uploaded;
+            } else {
+              finalEvidenceUrls = fotosComprimidas;
+            }
           } catch (uploadError) {
-            console.error('❌ Error subiendo evidencias:', uploadError);
-            console.error('❌ Detalles:', uploadError instanceof Error ? uploadError.message : uploadError);
-            // Continuar sin evidencias si falla la subida
-            uploadedEvidenceUrls = [];
+            console.warn('Fallo subida a Storage, guardando evidencia comprimida directamente:', uploadError);
+            finalEvidenceUrls = fotosComprimidas;
           }
         }
 
-        // 3. Crear el reporte con las URLs de las evidencias
-        console.log('📤 Llamando a reportService.createReport...');
         await reportService.createReport({
           fechaHora: report.fechaHora,
           proyecto: report.proyecto,
           tituloNovedad: report.tituloNovedad,
           desarrollo: report.desarrollo,
-          evidencias: uploadedEvidenceUrls,
+          evidencias: finalEvidenceUrls,
           ubicacionGPS: report.ubicacionGPS,
           quienReporta: report.quienReporta,
           createdBy: report.createdBy,
         });
 
-        console.log('✅ Reporte creado exitosamente en Supabase');
         await refreshReports();
       } catch (error) {
-        console.error('❌ Error creating report:', error);
-        if (error instanceof Error) {
-          console.error('❌ Mensaje:', error.message);
-          console.error('❌ Stack:', error.stack);
-        }
+        console.error('Error creating report:', error);
         throw error;
       }
     } else {
@@ -193,9 +187,7 @@ export function ReportProvider({ children }: { children: ReactNode }) {
         console.error('Error updating report status:', error);
       }
     } else {
-      setReports(prev =>
-        prev.map(r => (r.id === id ? { ...r, status } : r))
-      );
+      setReports(prev => prev.map(r => (r.id === id ? { ...r, status } : r)));
     }
   };
 
@@ -205,108 +197,43 @@ export function ReportProvider({ children }: { children: ReactNode }) {
         const report = reports.find(r => r.id === id);
         if (!report) return;
 
-      // 1. Buscar cliente para este proyecto en Supabase
-      let clientEmail: string | undefined;
-      let clientName: string = 'Cliente';
-      try {
-        console.log('🔍 Buscando cliente para el proyecto:', report.proyecto);
-        const { data: clientUsers, error } = await supabase
-          .from('users')
-          .select('email, nombre_completo, proyectos')
-          .eq('role', 'cliente')
-          .eq('status', 'aprobado');
-        
-        if (error) {
-          console.error('❌ Error buscando clientes:', error);
-        } else if (clientUsers && clientUsers.length > 0) {
-          console.log('✅ Clientes encontrados:', clientUsers.length);
+        let clientEmail: string | undefined;
+        try {
+          const { data: clientUsers } = await supabase
+            .from('users')
+            .select('email, nombre_completo, proyectos')
+            .eq('role', 'cliente')
+            .eq('status', 'aprobado');
           
-          // Buscar cliente con acceso al proyecto específico o acceso global
-          const clientUser = clientUsers.find(
-            (u: any) => 
-              u.proyectos?.includes(report.proyecto) || 
-              u.proyectos?.includes('*')
-          );
-          
-          if (clientUser) {
-            clientEmail = clientUser.email;
-            clientName = clientUser.nombre_completo;
-            console.log('✅ Cliente encontrado:', clientEmail, clientName);
-          } else {
-            console.warn('⚠️ No se encontró cliente para el proyecto:', report.proyecto);
+          if (clientUsers && clientUsers.length > 0) {
+            const clientUser = clientUsers.find(
+              (u: any) => u.proyectos?.includes(report.proyecto) || u.proyectos?.includes('*')
+            );
+            if (clientUser) clientEmail = clientUser.email;
           }
-        } else {
-          console.warn('⚠️ No hay clientes aprobados en el sistema');
+        } catch (error) {
+          console.error('Error en búsqueda de cliente:', error);
         }
-      } catch (error) {
-        console.error('❌ Error en búsqueda de cliente:', error);
-      }
-        // 2. Generar PDF del reporte
+
         let pdfUrl: string | undefined;
         try {
-          console.log('📄 Generando PDF del reporte...');
           const pdfData = await generateReportPDF(report);
-          
-          // 3. Subir PDF a Supabase Storage
-          console.log('📤 Subiendo PDF a Supabase Storage...');
           pdfUrl = await storageService.uploadPDF(pdfData, report.id, report.proyecto);
-          console.log('✅ PDF subido:', pdfUrl);
         } catch (error) {
           console.error('Error generando/subiendo PDF:', error);
         }
 
-        // 4. Aprobar el reporte en la base de datos
         await reportService.approveReport(id, userId, clientEmail, pdfUrl);
         await refreshReports();
 
-        // 5. NOTIFICACIÓN 3: Enviar notificación push de reporte aprobado
         try {
-          notificationService.notifyReportApproved(
-            report.tituloNovedad,
-            report.proyecto
-          );
-          console.log('✅ [NOTIFICACIÓN 3] Push de reporte aprobado enviada');
+          await notificationService.notifyReportApproved(report.tituloNovedad, report.proyecto);
         } catch (notificationError) {
-          console.error('❌ [NOTIFICACIÓN 3] Error enviando notificación:', notificationError);
+          console.error('Error enviando notificación:', notificationError);
         }
       } catch (error) {
         console.error('Error approving report:', error);
       }
-    } else {
-      setReports(prev => {
-        const report = prev.find(r => r.id === id);
-        if (!report) return prev;
-
-        let clientEmail: string | undefined;
-        try {
-          const usersData = localStorage.getItem('securereport_users');
-          if (usersData) {
-            const users = JSON.parse(usersData);
-            const clientUser = users.find(
-              (u: any) => u.role === 'cliente' && u.proyectos?.includes(report.proyecto)
-            );
-            clientEmail = clientUser?.email;
-          }
-        } catch {}
-
-        if (clientEmail) {
-          console.log(`📧 Email enviado a ${clientEmail}: Nuevo reporte aprobado para ${report.proyecto}`);
-        }
-
-        return prev.map(r =>
-          r.id === id
-            ? {
-                ...r,
-                visibleForClient: true,
-                approvedByOperaciones: userId,
-                approvedAtOperaciones: new Date().toISOString(),
-                status: 'aprobado' as ReportStatus,
-                emailEnviadoA: clientEmail,
-                emailEnviadoAt: new Date().toISOString(),
-              }
-            : r
-        );
-      });
     }
   };
 
@@ -318,12 +245,6 @@ export function ReportProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.error('Error rejecting report:', error);
       }
-    } else {
-      setReports(prev =>
-        prev.map(r =>
-          r.id === id ? { ...r, status: 'rechazado' as ReportStatus, visibleForClient: false } : r
-        )
-      );
     }
   };
 
@@ -335,12 +256,6 @@ export function ReportProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.error('Error adding note:', error);
       }
-    } else {
-      setReports(prev =>
-        prev.map(r =>
-          r.id === id ? { ...r, notes: r.notes ? `${r.notes}\n${note}` : note } : r
-        )
-      );
     }
   };
 
@@ -352,14 +267,10 @@ export function ReportProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.error('Error deleting report:', error);
       }
-    } else {
-      setReports(prev => prev.filter(r => r.id !== id));
     }
   };
 
-  const getReportById = (id: string) => {
-    return reports.find(r => r.id === id);
-  };
+  const getReportById = (id: string) => reports.find(r => r.id === id);
 
   return (
     <ReportContext.Provider
@@ -383,8 +294,6 @@ export function ReportProvider({ children }: { children: ReactNode }) {
 
 export function useReports() {
   const context = useContext(ReportContext);
-  if (!context) {
-    throw new Error('useReports must be used within a ReportProvider');
-  }
+  if (!context) throw new Error('useReports must be used within a ReportProvider');
   return context;
 }

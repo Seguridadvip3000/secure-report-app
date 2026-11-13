@@ -43,6 +43,7 @@ export default function ReportDetail() {
     cargarDetalle();
   }, [id]);
 
+  // ABRE DIRECTAMENTE LA APLICACIÓN DE WHATSAPP INSTALADA EN EL TELÉFONO
   const compartirPorWhatsApp = () => {
     if (!reporte) return;
 
@@ -54,7 +55,7 @@ export default function ReportDetail() {
     const fotos: string[] = Array.isArray(reporte.evidencias)
       ? reporte.evidencias.filter((url: any) => typeof url === 'string' && url.trim() !== '')
       : [];
-    const textoFotos = fotos.length > 0 ? `\n📸 *Evidencias adjuntas:* ${fotos.length} fotografía(s) en sistema` : '';
+    const textoFotos = fotos.length > 0 ? `\n📸 *Evidencias:* ${fotos.length} foto(s) adjuntas` : '';
 
     const mensaje = `🛡️ *SEGURIDAD VIP 3000 C.A.*\n*REPORTE DE NOVEDAD*\n\n` +
       `📌 *Caso:* ${(reporte.titulo_novedad || 'Novedad Operativa').toUpperCase()}\n` +
@@ -65,10 +66,20 @@ export default function ReportDetail() {
       `📝 *Conocimiento del Caso:*\n${reporte.desarrollo || reporte.descripcion || 'Sin descripción adicional.'}` +
       `${enlaceMapa}${textoFotos}`;
 
-    const urlWhatsApp = `https://whatsapp.com{encodeURIComponent(mensaje)}`;
-    window.open(urlWhatsApp, '_blank');
-  };
+    const textoCodificado = encodeURIComponent(mensaje);
+    const enlaceNativo = `whatsapp://send?text=${textoCodificado}`;
 
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(
+        JSON.stringify({
+          type: 'OPEN_WHATSAPP',
+          url: enlaceNativo
+        })
+      );
+    } else {
+      window.location.href = enlaceNativo;
+    }
+  };
   const manejarDescargaPDF = async () => {
     if (!reporte) return;
     setGenerandoPdf(true);
@@ -134,12 +145,9 @@ export default function ReportDetail() {
       setGenerandoPdf(false);
     }
   };
+
   if (loading) {
-    return (
-      <div className="p-8 text-center text-slate-500">
-        Cargando detalles y fotografías del reporte...
-      </div>
-    );
+    return <div className="p-8 text-center text-slate-500">Cargando detalles y fotografías del reporte...</div>;
   }
 
   if (!reporte) {
@@ -147,18 +155,13 @@ export default function ReportDetail() {
       <div className="p-6 max-w-2xl mx-auto text-center space-y-4">
         <div className="bg-white p-8 rounded-xl border border-slate-200 shadow-sm">
           <h2 className="text-xl font-bold text-slate-800 mb-2">Reporte no encontrado</h2>
-          <p className="text-slate-500 text-sm mb-6">El registro solicitado no existe o fue eliminado de la base de datos.</p>
-          <button
-            onClick={() => navigate('/lista-reportes')}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
-          >
+          <button onClick={() => navigate('/lista-reportes')} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium">
             <ArrowLeft size={18} /> Volver a la lista
           </button>
         </div>
       </div>
     );
   }
-
   const listaFotos: string[] = Array.isArray(reporte.evidencias)
     ? reporte.evidencias.filter((url: any) => typeof url === 'string' && url.trim() !== '')
     : [];
@@ -169,28 +172,16 @@ export default function ReportDetail() {
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <button
-          onClick={() => navigate('/lista-reportes')}
-          className="inline-flex items-center gap-2 text-slate-600 hover:text-blue-600 font-medium text-sm"
-        >
+        <button onClick={() => navigate('/lista-reportes')} className="inline-flex items-center gap-2 text-slate-600 hover:text-blue-600 font-medium text-sm">
           <ArrowLeft size={18} /> Volver a la Lista
         </button>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={compartirPorWhatsApp}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg shadow-sm hover:bg-emerald-700 active:scale-95 transition-all cursor-pointer"
-          >
+          <button onClick={compartirPorWhatsApp} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg shadow-sm hover:bg-emerald-700 active:scale-95 transition-all cursor-pointer">
             <Share2 size={16} /> Compartir WhatsApp
           </button>
-
-          <button
-            onClick={manejarDescargaPDF}
-            disabled={generandoPdf}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-lg shadow-sm hover:bg-red-700 disabled:opacity-50 active:scale-95 transition-all cursor-pointer"
-          >
-            <Download size={16} />
-            {generandoPdf ? 'Generando...' : 'Descargar PDF'}
+          <button onClick={manejarDescargaPDF} disabled={generandoPdf} className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-lg shadow-sm hover:bg-red-700 disabled:opacity-50 active:scale-95 transition-all cursor-pointer">
+            <Download size={16} /> {generandoPdf ? 'Generando...' : 'Descargar PDF'}
           </button>
         </div>
       </div>
@@ -198,9 +189,7 @@ export default function ReportDetail() {
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-5 md:p-6 border-b border-slate-100 bg-slate-50/50 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded-full">
-              {reporte.proyecto || 'Sin Proyecto'}
-            </span>
+            <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded-full">{reporte.proyecto || 'Sin Proyecto'}</span>
             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase ${
               reporte.status === 'aprobado' ? 'bg-green-100 text-green-700' :
               reporte.status === 'rechazado' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
@@ -212,24 +201,13 @@ export default function ReportDetail() {
             </span>
           </div>
 
-          <h1 className="text-xl md:text-2xl font-bold text-slate-900">
-            {reporte.titulo_novedad || 'Reporte de Novedad'}
-          </h1>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-900">{reporte.titulo_novedad || 'Reporte de Novedad'}</h1>
 
           <div className="flex flex-wrap gap-4 text-xs text-slate-500 pt-1">
-            <span className="flex items-center gap-1.5">
-              <User size={14} /> Reportado por: <strong>{reporte.quien_reporta || reporte.quienReporta || 'Personal Operativo'}</strong>
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Calendar size={14} /> Fecha: <strong>{new Date(reporte.created_at).toLocaleString('es-VE')}</strong>
-            </span>
+            <span className="flex items-center gap-1.5"><User size={14} /> Reportado por: <strong>{reporte.quien_reporta || 'Personal Operativo'}</strong></span>
+            <span className="flex items-center gap-1.5"><Calendar size={14} /> Fecha: <strong>{new Date(reporte.created_at).toLocaleString('es-VE')}</strong></span>
             {tieneGpsValido && (
-              <a
-                href={`https://google.com{gps.lat},${gps.lng}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-blue-600 hover:underline font-semibold"
-              >
+              <a href={`https://google.com{gps.lat},${gps.lng}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline font-semibold">
                 <MapPin size={14} /> Ver Ubicación GPS ({gps.lat.toFixed(4)}, {gps.lng.toFixed(4)}) <ExternalLink size={12} />
               </a>
             )}
@@ -253,19 +231,9 @@ export default function ReportDetail() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {listaFotos.map((url, index) => (
-                <a 
-                  key={index} 
-                  href={url} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="block rounded-lg overflow-hidden border border-slate-200 hover:opacity-95 transition-opacity bg-slate-100"
-                >
-                  <img 
-                    src={url} 
-                    alt={`Evidencia ${index + 1}`} 
-                    className="w-full h-64 object-cover" 
-                  />
-                </a>
+                <div key={index} className="rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
+                  <img src={url} alt={`Evidencia ${index + 1}`} className="w-full h-64 object-cover" />
+                </div>
               ))}
             </div>
           )}
