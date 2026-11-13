@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { PROYECTOS, ROLE_LABELS } from '../data/constants';
+import { PROYECTOS } from '../data/constants';
+import { ROLE_LABELS } from '../types';
 import { Lock, Eye, EyeOff, CheckCircle, Settings, Key, Users, Edit, Save, X } from 'lucide-react';
 
 export default function ConfiguracionPage() {
