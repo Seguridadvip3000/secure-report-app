@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { RefreshCw, X, Edit, Trash2, Save, Eye, EyeOff, FileText } from 'lucide-react';
+import { notificationService } from '../services/notificationService';
+import { RefreshCw, X, Edit, Trash2, Save, Eye, EyeOff, FileText, Send, CheckCircle } from 'lucide-react';
 
 interface Reporte {
   id: string;
@@ -20,7 +21,6 @@ export default function ReportList() {
   const [reportes, setReportes] = useState<Reporte[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Estados para controlar la edición integral inline (incluyendo el desarrollo)
   const [idReporteEditando, setIdReporteEditando] = useState<string | null>(null);
   const [nuevoTitulo, setNuevoTitulo] = useState('');
   const [nuevoDesarrollo, setNuevoDesarrollo] = useState('');
@@ -36,10 +36,20 @@ export default function ReportList() {
       let query = supabase.from('reports').select('*').order('created_at', { ascending: false });
 
       if (rol === 'cliente') {
+        const misProyectos = Array.isArray(currentUser?.proyectos) ? currentUser.proyectos : [];
+        if (misProyectos.length === 0) {
+          setReportes([]);
+          setLoading(false);
+          return;
+        }
+        // El cliente SOLO ve los reportes aprobados que hayan sido enviados explícitamente al cliente
         query = query
           .eq('status', 'aprobado')
-          .eq('visibleForClient', true)
-          .eq('proyecto', currentUser?.proyecto_id || ''); 
+          .eq('visibleForClient', true);
+
+        if (!misProyectos.includes('*')) {
+          query = query.in('proyecto', misProyectos);
+        }
       }
 
       const { data, error } = await query;
@@ -56,9 +66,17 @@ export default function ReportList() {
     cargarReportes();
   }, [currentUser]);
 
-  const cambiarEstadoReporte = async (id: string, nuevoEstado: string) => {
+  // Aprobar o rechazar el reporte internamente (sin enviarlo aún al cliente)
+  const cambiarEstadoReporte = async (reporte: Reporte, nuevoEstado: string) => {
     try {
-      const { error } = await supabase.from('reports').update({ status: nuevoEstado }).eq('id', id);
+      const { error } = await supabase
+        .from('reports')
+        .update({ 
+          status: nuevoEstado,
+          visibleForClient: nuevoEstado === 'rechazado' ? false : reporte.visibleForClient
+        })
+        .eq('id', reporte.id);
+
       if (error) throw error;
       cargarReportes();
     } catch (err) {
@@ -66,7 +84,31 @@ export default function ReportList() {
     }
   };
 
-  // FUNCIÓN MAESTRA INTEGRAL: Guarda título, desarrollo, proyecto, estado y visibilidad
+  // NUEVA FUNCIÓN: Envía el reporte explícitamente al Cliente de ese proyecto y dispara su notificación
+  const enviarACliente = async (reporte: Reporte) => {
+    try {
+      const { error } = await supabase
+        .from('reports')
+        .update({ 
+          status: 'aprobado',
+          visibleForClient: true
+        })
+        .eq('id', reporte.id);
+
+      if (error) throw error;
+
+      await notificationService.notifyReportApproved(
+        reporte.titulo_novedad || 'Reporte de Novedad',
+        reporte.proyecto || 'General'
+      );
+
+      alert('✅ Reporte enviado al cliente correctamente.');
+      cargarReportes();
+    } catch (err: any) {
+      alert('Error al enviar reporte al cliente: ' + err.message);
+    }
+  };
+
   const guardarEdicionReporte = async (id: string) => {
     try {
       const { error } = await supabase
@@ -89,7 +131,7 @@ export default function ReportList() {
   };
 
   const eliminarReporte = async (id: string) => {
-    if (!window.confirm('¿Está totalmente seguro de que desea eliminar este reporte de novedades permanentemente del archivo?')) return;
+    if (!window.confirm('¿Está totalmente seguro de que desea eliminar este reporte permanentemente?')) return;
     try {
       const { error } = await supabase.from('reports').delete().eq('id', id);
       if (error) throw error;
@@ -108,8 +150,7 @@ export default function ReportList() {
     setNuevaVisibilidadCliente(!!reporte.visibleForClient);
   };
 
-  // POLÍTICAS EXCLUSIVAS DE CONTROL DE PRIVILEGIOS DE ACCESO
-  const puedeAprobarORechazar = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
+  const puedeGestionarYEnviar = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
   const puedeEditarOEliminar = ['administrador', 'admin', 'directiva'].includes(rol);
   return (
     <div style={{ padding: '16px', fontFamily: 'Arial, sans-serif', maxWidth: '1200px', margin: '0 auto' }}>
@@ -127,7 +168,7 @@ export default function ReportList() {
         <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>Sincronizando archivo de novedades...</div>
       ) : reportes.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '50px', background: '#f8f9fa', borderRadius: '12px', border: '1px dashed #ccc', color: '#666' }}>
-          No se encontraron reportes archivados en el sistema actualmente.
+          No se encontraron reportes archivados para tu perfil actualmente.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
@@ -136,65 +177,34 @@ export default function ReportList() {
 
             return (
               <div key={reporte.id} style={{ background: '#fff', border: '1px solid #e9ecef', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
-                
-                {/* ÁREA DE CONTENIDO INTEGRAL */}
                 <div style={{ flex: 1, width: '100%' }}>
                   {estaEditando ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#6c757d', marginBottom: '4px' }}>Título de la Novedad</label>
-                        <input 
-                          type="text"
-                          value={nuevoTitulo} 
-                          onChange={(e) => setNuevoTitulo(e.target.value)} 
-                          style={{ padding: '8px 10px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '14px', width: '100%' }}
-                        />
+                        <input type="text" value={nuevoTitulo} onChange={(e) => setNuevoTitulo(e.target.value)} style={{ padding: '8px 10px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '14px', width: '100%' }} />
                       </div>
-
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#6c757d', marginBottom: '4px' }}>Desarrollo Completo de la Novedad</label>
-                        <textarea 
-                          value={nuevoDesarrollo} 
-                          onChange={(e) => setNuevoDesarrollo(e.target.value)} 
-                          rows={5}
-                          placeholder="Escriba o modifique el relato detallado del reporte..."
-                          style={{ padding: '10px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '14px', width: '100%', fontFamily: 'Arial, sans-serif', resize: 'vertical' }}
-                        />
+                        <textarea value={nuevoDesarrollo} onChange={(e) => setNuevoDesarrollo(e.target.value)} rows={5} style={{ padding: '10px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '14px', width: '100%', fontFamily: 'Arial, sans-serif', resize: 'vertical' }} />
                       </div>
-                      
                       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                         <div style={{ flex: 1, minWidth: '150px' }}>
                           <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#6c757d', marginBottom: '4px' }}>Proyecto / Ruta</label>
-                          <input 
-                            type="text" 
-                            value={nuevoProyecto} 
-                            onChange={(e) => setNuevoProyecto(e.target.value)} 
-                            style={{ padding: '8px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '13px', width: '100%' }}
-                          />
+                          <input type="text" value={nuevoProyecto} onChange={(e) => setNuevoProyecto(e.target.value)} style={{ padding: '8px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '13px', width: '100%' }} />
                         </div>
-
                         <div style={{ width: '140px' }}>
                           <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#6c757d', marginBottom: '4px' }}>Estado Actual</label>
-                          <select 
-                            value={nuevoStatus} 
-                            onChange={(e) => setNuevoStatus(e.target.value)}
-                            style={{ padding: '8px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '13px', width: '100%', background: '#fff' }}
-                          >
+                          <select value={nuevoStatus} onChange={(e) => setNuevoStatus(e.target.value)} style={{ padding: '8px', border: '1px solid #ced4da', borderRadius: '6px', fontSize: '13px', width: '100%', background: '#fff' }}>
                             <option value="pendiente">Pendiente</option>
                             <option value="aprobado">Aprobado</option>
                             <option value="rechazado">Rechazado</option>
                           </select>
                         </div>
-
                         <div style={{ display: 'flex', alignItems: 'center', marginTop: '10px' }}>
                           <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', color: '#495057' }}>
-                            <input 
-                              type="checkbox" 
-                              checked={nuevaVisibilidadCliente} 
-                              onChange={(e) => setNuevaVisibilidadCliente(e.target.checked)}
-                              style={{ width: '16px', height: '16px' }}
-                            />
-                            Visible para el Cliente
+                            <input type="checkbox" checked={nuevaVisibilidadCliente} onChange={(e) => setNuevaVisibilidadCliente(e.target.checked)} style={{ width: '16px', height: '16px' }} />
+                            Enviado al Cliente
                           </label>
                         </div>
                       </div>
@@ -215,15 +225,13 @@ export default function ReportList() {
                         <span>Estado: <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: reporte.status === 'aprobado' ? '#28a745' : reporte.status === 'rechazado' ? '#dc3545' : '#f5a623' }}>{reporte.status}</span></span>
                         <span>|</span>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          {reporte.visibleForClient ? <Eye size={14} color="#28a745" /> : <EyeOff size={14} color="#dc3545" />}
-                          {reporte.visibleForClient ? 'Visible al Cliente' : 'Privado de Gestión'}
+                          {reporte.visibleForClient ? <Eye size={14} color="#28a745" /> : <EyeOff size={14} color="#64748b" />}
+                          {reporte.visibleForClient ? 'Enviado al Cliente' : 'Pendiente por enviar a cliente'}
                         </span>
                       </div>
                     </div>
                   )}
                 </div>
-
-                {/* BOTONERAS INTERACTIVAS */}
                 <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', borderTop: '1px solid #f1f5f9', paddingTop: '12px' }}>
                   {estaEditando ? (
                     <>
@@ -236,11 +244,27 @@ export default function ReportList() {
                         <FileText size={14} /> Leer / Fotos
                       </button>
 
-                      {puedeAprobarORechazar && (reporte.status?.toLowerCase() === 'pendiente' || reporte.status?.toLowerCase() === 'en revisión') && (
+                      {puedeGestionarYEnviar && (reporte.status?.toLowerCase() === 'pendiente' || reporte.status?.toLowerCase() === 'en revisión') && (
                         <>
-                          <button onClick={() => cambiarEstadoReporte(reporte.id, 'aprobado')} style={{ padding: '7px 12px', background: '#28a745', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Aprobar</button>
-                          <button onClick={() => cambiarEstadoReporte(reporte.id, 'rechazado')} style={{ padding: '7px 12px', background: '#dc3545', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Rechazar</button>
+                          <button onClick={() => cambiarEstadoReporte(reporte, 'aprobado')} style={{ padding: '7px 12px', background: '#28a745', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Aprobar</button>
+                          <button onClick={() => cambiarEstadoReporte(reporte, 'rechazado')} style={{ padding: '7px 12px', background: '#dc3545', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Rechazar</button>
                         </>
+                      )}
+
+                      {/* BOTÓN ENVIAR A CLIENTE PARA OPERACIONES, DIRECTIVA Y ADMINISTRADOR */}
+                      {puedeGestionarYEnviar && reporte.status?.toLowerCase() === 'aprobado' && !reporte.visibleForClient && (
+                        <button
+                          onClick={() => enviarACliente(reporte)}
+                          style={{ padding: '7px 12px', background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                        >
+                          <Send size={14} /> ENVIAR A CLIENTE
+                        </button>
+                      )}
+
+                      {puedeGestionarYEnviar && reporte.visibleForClient && (
+                        <span style={{ padding: '6px 10px', background: '#dcfce7', color: '#166534', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <CheckCircle size={13} /> Enviado al Cliente
+                        </span>
                       )}
 
                       {puedeEditarOEliminar && (
@@ -252,7 +276,6 @@ export default function ReportList() {
                     </>
                   )}
                 </div>
-
               </div>
             );
           })}

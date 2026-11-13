@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { generateOfficialPDF } from '../utils/pdfGenerator';
-import { ArrowLeft, Calendar, User, MapPin, CheckCircle, Clock, XCircle, Image as ImageIcon, ExternalLink, Download } from 'lucide-react';
+import { ArrowLeft, Calendar, User, MapPin, CheckCircle, Clock, XCircle, Image as ImageIcon, ExternalLink, Download, Share2 } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -43,6 +43,32 @@ export default function ReportDetail() {
     cargarDetalle();
   }, [id]);
 
+  const compartirPorWhatsApp = () => {
+    if (!reporte) return;
+
+    const fechaTexto = new Date(reporte.created_at || Date.now()).toLocaleString('es-VE');
+    const gps = reporte.ubicacion_gps;
+    const tieneGps = gps && typeof gps.lat === 'number' && typeof gps.lng === 'number' && (gps.lat !== 0 || gps.lng !== 0);
+    
+    const enlaceMapa = tieneGps ? `\n📍 *Ubicación GPS:* https://google.com{gps.lat},${gps.lng}` : '';
+    const fotos: string[] = Array.isArray(reporte.evidencias)
+      ? reporte.evidencias.filter((url: any) => typeof url === 'string' && url.trim() !== '')
+      : [];
+    const textoFotos = fotos.length > 0 ? `\n📸 *Evidencias adjuntas:* ${fotos.length} fotografía(s) en sistema` : '';
+
+    const mensaje = `🛡️ *SEGURIDAD VIP 3000 C.A.*\n*REPORTE DE NOVEDAD*\n\n` +
+      `📌 *Caso:* ${(reporte.titulo_novedad || 'Novedad Operativa').toUpperCase()}\n` +
+      `🏢 *Proyecto:* ${reporte.proyecto || 'Asignación General'}\n` +
+      `👤 *Reporta:* ${reporte.quien_reporta || reporte.quienReporta || 'Personal Operativo'}\n` +
+      `📅 *Fecha:* ${fechaTexto}\n` +
+      `📊 *Estado:* ${(reporte.status || 'Pendiente').toUpperCase()}\n\n` +
+      `📝 *Conocimiento del Caso:*\n${reporte.desarrollo || reporte.descripcion || 'Sin descripción adicional.'}` +
+      `${enlaceMapa}${textoFotos}`;
+
+    const urlWhatsApp = `https://whatsapp.com{encodeURIComponent(mensaje)}`;
+    window.open(urlWhatsApp, '_blank');
+  };
+
   const manejarDescargaPDF = async () => {
     if (!reporte) return;
     setGenerandoPdf(true);
@@ -77,7 +103,6 @@ export default function ReportDetail() {
       const nombreLimpio = (reporte.proyecto || 'Reporte').replace(/[^a-zA-Z0-9]/g, '_');
       const nombreArchivo = `SecureReport_${nombreLimpio}_${reporte.id.slice(0, 6)}.pdf`;
 
-      // Si estamos dentro de la app móvil (APK), enviar el PDF al sistema nativo de Android
       if (window.ReactNativeWebView) {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -93,7 +118,6 @@ export default function ReportDetail() {
         };
         reader.readAsDataURL(blob);
       } else {
-        // Descarga normal en navegador de computadora
         const urlBlob = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = urlBlob;
@@ -110,7 +134,6 @@ export default function ReportDetail() {
       setGenerandoPdf(false);
     }
   };
-
   if (loading) {
     return (
       <div className="p-8 text-center text-slate-500">
@@ -150,17 +173,26 @@ export default function ReportDetail() {
           onClick={() => navigate('/lista-reportes')}
           className="inline-flex items-center gap-2 text-slate-600 hover:text-blue-600 font-medium text-sm"
         >
-          <ArrowLeft size={18} /> Volver a la Lista de Reportes
+          <ArrowLeft size={18} /> Volver a la Lista
         </button>
 
-        <button
-          onClick={manejarDescargaPDF}
-          disabled={generandoPdf}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-lg shadow-sm hover:bg-red-700 disabled:opacity-50 active:scale-95 transition-all cursor-pointer"
-        >
-          <Download size={16} />
-          {generandoPdf ? 'Generando PDF...' : 'Descargar PDF Oficial'}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={compartirPorWhatsApp}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg shadow-sm hover:bg-emerald-700 active:scale-95 transition-all cursor-pointer"
+          >
+            <Share2 size={16} /> Compartir WhatsApp
+          </button>
+
+          <button
+            onClick={manejarDescargaPDF}
+            disabled={generandoPdf}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-lg shadow-sm hover:bg-red-700 disabled:opacity-50 active:scale-95 transition-all cursor-pointer"
+          >
+            <Download size={16} />
+            {generandoPdf ? 'Generando...' : 'Descargar PDF'}
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">

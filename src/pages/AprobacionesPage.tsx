@@ -14,12 +14,11 @@ interface SolicitudRegistro {
 }
 
 export default function AprobacionesPage() {
-  const { currentUser } = useAuth();
+  const { currentUser, approveUser, rejectUser } = useAuth();
   const [solicitudes, setSolicitudes] = useState<SolicitudRegistro[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // VALIDACIÓN ESTRICTA DE ROLES
   const nombreUsuarioActivo = currentUser?.nombre_completo || '';
   const rolActual = currentUser?.role?.toLowerCase().trim() || '';
 
@@ -31,7 +30,6 @@ export default function AprobacionesPage() {
   const esDirectiva = rolActual === 'directiva';
   const esOperaciones = rolActual === 'operaciones';
   
-  // Administrador, Directiva y Operaciones tienen acceso al panel de aprobaciones
   const tieneAccesoAprobaciones = esAdmin || esDirectiva || esOperaciones;
 
   const cargarSolicitudesRetenidas = async () => {
@@ -39,7 +37,6 @@ export default function AprobacionesPage() {
     setLoading(true);
     setError('');
     try {
-      // Busca tanto 'retenido' como 'pendiente' para evitar que queden ocultos
       const { data, error: dbError } = await supabase
         .from('users')
         .select('id, username, nombre_completo, email, role, status, created_at')
@@ -62,38 +59,31 @@ export default function AprobacionesPage() {
 
   const gestionarSolicitud = async (id: string, nuevoEstado: 'aprobado' | 'rechazado') => {
     try {
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ status: nuevoEstado })
-        .eq('id', id);
-
-      if (updateError) throw updateError;
+      if (nuevoEstado === 'aprobado') {
+        await approveUser(id);
+      } else {
+        await rejectUser(id, 'Solicitud rechazada por el nivel directivo.');
+      }
       setSolicitudes(prev => prev.filter(sol => sol.id !== id));
     } catch (err: any) {
       alert('Error al procesar la acción: ' + err.message);
     }
   };
 
-  // FUNCIÓN QUE EVALÚA QUIÉN PUEDE AUTORIZAR CADA ROL SOLICITADO
   const evaluarPermisoAprobacion = (rolSolicitadoRaw: string) => {
     const rolSol = (rolSolicitadoRaw || '').toLowerCase().trim();
 
-    if (esAdmin) {
-      return { permitido: true, motivoBloqueo: '' };
-    }
+    if (esAdmin) return { permitido: true, motivoBloqueo: '' };
 
     if (esDirectiva) {
       if (rolSol === 'directiva' || rolSol === 'administrador' || rolSol === 'admin') {
         return { permitido: false, motivoBloqueo: 'Req. Administrador' };
       }
-      // Directiva puede aprobar operaciones, cliente y lider
       return { permitido: true, motivoBloqueo: '' };
     }
 
     if (esOperaciones) {
-      if (rolSol === 'lider') {
-        return { permitido: true, motivoBloqueo: '' };
-      }
+      if (rolSol === 'lider') return { permitido: true, motivoBloqueo: '' };
       return { permitido: false, motivoBloqueo: 'Req. Directiva / Admin' };
     }
 
@@ -144,7 +134,6 @@ export default function AprobacionesPage() {
         </div>
       ) : (
         <>
-          {/* VISTA DE TABLA PARA COMPUTADORAS */}
           <div className="hidden md:block bg-white shadow-md rounded-xl overflow-hidden border border-slate-100">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -195,7 +184,6 @@ export default function AprobacionesPage() {
               </tbody>
             </table>
           </div>
-          {/* VISTA DE TARJETAS RESPONSIVAS PARA TELÉFONOS MÓVILES */}
           <div className="md:hidden space-y-3">
             {solicitudes.map((sol) => {
               const esSolicitudDirectiva = sol.role?.toLowerCase() === 'directiva';

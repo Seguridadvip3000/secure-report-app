@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useReports } from '../context/ReportContext';
 import { useAuth } from '../context/AuthContext';
 import { Search, FileText, CheckCircle, Calendar, Shield, RefreshCw } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import ReportCard from '../components/ReportCard';
 
@@ -12,45 +12,25 @@ export default function ClienteDashboard() {
   const [search, setSearch] = useState('');
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
-  // Auto-refresh reports when component mounts
   useEffect(() => {
-    console.log('🔄 [ClienteDashboard] Componente montado, recargando reportes...');
     refreshReports().then(() => {
       setLastUpdate(new Date());
-      console.log('✅ [ClienteDashboard] Reportes recargados exitosamente');
     });
   }, []);
 
   const handleRefresh = async () => {
-    console.log('🔄 [ClienteDashboard] Usuario solicitó recarga manual...');
     await refreshReports();
     setLastUpdate(new Date());
   };
 
-  // Client only sees approved reports for their projects
+  // El cliente SOLO ve reportes aprobados, visibles y que coincidan estrictamente con sus proyectos asignados
   const approvedReports = useMemo(() => {
-    console.log('🔍 [ClienteDashboard] Filtrando reportes...');
-    console.log('📊 Total de reportes cargados:', reports.length);
-    console.log('👤 Usuario actual:', currentUser?.nombre_completo);
-    console.log('📁 Proyectos del cliente:', currentUser?.proyectos);
-    
-    const filtered = reports
-      .filter(r => {
-        const isVisible = r.visibleForClient;
-        const isApproved = r.status === 'aprobado';
-        console.log(`📄 Reporte "${r.tituloNovedad}" - visibleForClient: ${isVisible}, status: ${r.status}`);
-        return isVisible && isApproved;
-      })
-      .filter(r => {
-        // Filter by client's assigned projects
-        if (currentUser?.proyectos && currentUser.proyectos.length > 0) {
-          const matches = currentUser.proyectos.includes(r.proyecto);
-          console.log(`📄 Reporte "${r.tituloNovedad}" - proyecto: ${r.proyecto}, coincide: ${matches}`);
-          return matches;
-        }
-        console.log(`📄 Reporte "${r.tituloNovedad}" - cliente sin proyectos asignados, mostrando todos`);
-        return true; // If no projects assigned, show all
-      })
+    const misProyectos = Array.isArray(currentUser?.proyectos) ? currentUser.proyectos : [];
+    if (misProyectos.length === 0) return [];
+
+    return reports
+      .filter(r => r.visibleForClient && r.status === 'aprobado')
+      .filter(r => misProyectos.includes('*') || misProyectos.includes(r.proyecto))
       .filter(r => {
         if (search === '') return true;
         return (
@@ -60,15 +40,10 @@ export default function ClienteDashboard() {
         );
       })
       .sort((a, b) => new Date(b.approvedAtOperaciones || b.createdAt).getTime() - new Date(a.approvedAtOperaciones || a.createdAt).getTime());
-    
-    console.log('✅ Reportes filtrados para el cliente:', filtered.length);
-    return filtered;
   }, [reports, search, currentUser]);
 
-  const totalApproved = reports.filter(r => r.visibleForClient && r.status === 'aprobado').length;
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4 md:p-6">
       {/* Header */}
       <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-6 text-white">
         <div className="flex items-center justify-between mb-2">
@@ -86,7 +61,7 @@ export default function ClienteDashboard() {
           </button>
         </div>
         <p className="text-green-100">
-          Reportes verificados y aprobados por el equipo de operaciones.
+          Reportes verificados de tus proyectos: <strong>{currentUser?.proyectos?.join(', ') || 'Ninguno asignado'}</strong>
         </p>
         <p className="text-green-200 text-xs mt-1">
           Última actualización: {format(lastUpdate, "HH:mm:ss", { locale: es })}
@@ -101,8 +76,8 @@ export default function ClienteDashboard() {
               <CheckCircle size={20} className="text-green-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{totalApproved}</p>
-              <p className="text-xs text-slate-500">Reportes Verificados</p>
+              <p className="text-2xl font-bold text-slate-800">{approvedReports.length}</p>
+              <p className="text-xs text-slate-500">Reportes de tu Proyecto</p>
             </div>
           </div>
         </div>
@@ -129,21 +104,10 @@ export default function ClienteDashboard() {
               <FileText size={20} className="text-purple-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-800">{approvedReports.length}</p>
-              <p className="text-xs text-slate-500">Disponibles</p>
+              <p className="text-2xl font-bold text-slate-800">{currentUser?.proyectos?.length || 0}</p>
+              <p className="text-xs text-slate-500">Proyectos Asignados</p>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Info banner */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
-        <CheckCircle size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
-        <div>
-          <p className="font-medium text-blue-800 text-sm">Información verificada</p>
-          <p className="text-xs text-blue-600 mt-0.5">
-            Todos los reportes mostrados han sido revisados y aprobados por el equipo de Operaciones.
-          </p>
         </div>
       </div>
 
@@ -168,9 +132,9 @@ export default function ClienteDashboard() {
         {approvedReports.length === 0 && (
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
             <div className="text-4xl mb-3">📋</div>
-            <h3 className="text-lg font-medium text-slate-600">No hay reportes aprobados</h3>
+            <h3 className="text-lg font-medium text-slate-600">No hay reportes aprobados para tu proyecto</h3>
             <p className="text-slate-400 mt-1 text-sm">
-              Los reportes aparecerán aquí una vez sean verificados por el equipo de operaciones.
+              Los reportes aparecerán aquí una vez sean verificados por Operaciones o Directiva.
             </p>
           </div>
         )}

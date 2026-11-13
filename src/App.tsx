@@ -1,7 +1,8 @@
-import { lazy, Suspense, ReactNode } from 'react';
+import React, { lazy, Suspense, ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ReportProvider } from './context/ReportContext';
+import { notificationService } from './services/notificationService';
 import Sidebar from './components/Sidebar';
 
 // Lazy load de todos los componentes de páginas para optimizar rendimiento
@@ -118,7 +119,6 @@ export default function App() {
                     <ConfiguracionPage />
                   </RoleRoute>
                 } />
-                
                 {/* 4. SEGUIMIENTO DE RUTAS */}
                 <Route path="seguimiento-rutas" element={
                   <RoleRoute roles={['administrador', 'admin']}>
@@ -158,6 +158,18 @@ export default function App() {
 }
 
 function Layout() {
+  const { currentUser } = useAuth();
+
+  React.useEffect(() => {
+    if (!currentUser) return;
+    notificationService.requestPermission();
+    const unsubscribe = notificationService.subscribeToUserNotifications(
+      currentUser.role,
+      currentUser.proyectos || []
+    );
+    return () => unsubscribe();
+  }, [currentUser]);
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-50 overflow-x-hidden">
       <Sidebar />
@@ -167,4 +179,3 @@ function Layout() {
     </div>
   );
 }
-

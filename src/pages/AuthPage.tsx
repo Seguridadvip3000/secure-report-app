@@ -108,12 +108,12 @@ export default function AuthPage() {
       return;
     }
 
-    // EXIGIR AUTORIZACIÓN OBLIGATORIA DE GPS PARA DIRECTIVA, OPERACIONES Y LÍDER
-    const rolesConGpsObligatorio = ['directiva', 'operaciones', 'lider'];
+    // EXIGIR AUTORIZACIÓN OBLIGATORIA DE GPS ÚNICAMENTE PARA OPERACIONES Y LÍDER
+    const rolesConGpsObligatorio = ['operaciones', 'lider'];
     if (rolesConGpsObligatorio.includes(regRole)) {
       const gpsAceptado = await solicitarPermisoGPSObligatorio();
       if (!gpsAceptado) {
-        setError('⚠️ ACCESO DENEGADO: Para registrarse como Directiva, Operaciones o Líder es obligatorio encender y autorizar el uso del GPS en su teléfono.');
+        setError('⚠️ ACCESO DENEGADO: Para registrarse como Operaciones o Líder es obligatorio encender y autorizar el uso del GPS en su teléfono.');
         setLoading(false);
         return;
       }
@@ -289,7 +289,7 @@ export default function AuthPage() {
                   </select>
                 </div>
 
-                {['directiva', 'operaciones', 'lider'].includes(regRole) && (
+                {['operaciones', 'lider'].includes(regRole) && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2.5 text-xs text-blue-800">
                     <MapPin size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
                     <span>
@@ -325,7 +325,7 @@ export default function AuthPage() {
                   </div>
                 )}
                 <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-6">
-                  {loading ? 'Validando GPS y creando cuenta...' : 'Completar Registro'}
+                  {loading ? 'Validando y creando cuenta...' : 'Completar Registro'}
                   {!loading && <ArrowRight size={18} />}
                 </button>
               </form>

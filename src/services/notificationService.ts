@@ -1,136 +1,114 @@
-/**
- * Servicio de Notificaciones Push Nativas
- * Utiliza la Web Notification API del navegador
- */
+import { supabase } from '../lib/supabase';
 
 export const notificationService = {
-  /**
-   * Solicitar permisos de notificación al usuario
-   */
   async requestPermission(): Promise<NotificationPermission> {
-    if (!('Notification' in window)) {
-      console.warn('⚠️ Este navegador no soporta notificaciones');
-      return 'denied';
-    }
-
-    if (Notification.permission === 'granted') {
-      console.log('✅ Permisos de notificación ya concedidos');
-      return 'granted';
-    }
-
+    if (!('Notification' in window)) return 'denied';
+    if (Notification.permission === 'granted') return 'granted';
     if (Notification.permission !== 'denied') {
-      const permission = await Notification.requestPermission();
-      console.log(`🔔 Permiso de notificación: ${permission}`);
-      return permission;
+      return await Notification.requestPermission();
     }
-
     return Notification.permission;
   },
 
-  /**
-   * Mostrar notificación push del sistema
-   */
-  showPushNotification(title: string, body: string, options?: NotificationOptions): Notification | null {
-    if (!('Notification' in window)) {
-      console.warn('⚠️ Notificaciones no soportadas');
-      return null;
-    }
+  showPushNotification(title: string, body: string, options?: NotificationOptions): void {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
-    if (Notification.permission !== 'granted') {
-      console.warn('⚠️ Permisos de notificación no concedidos');
-      return null;
-    }
-
-    // Configuración por defecto
     const defaultOptions: NotificationOptions = {
       body,
-      icon: '/icon-192.svg',
-      badge: '/icon-192.svg',
-      tag: title, // Evita duplicados
-      requireInteraction: false,
+      icon: '/logo-vip3000.jpg',
+      badge: '/logo-vip3000.jpg',
+      tag: `${title}-${Date.now()}`,
       ...options,
     };
 
-    // Intentar usar Service Worker si está disponible
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
       navigator.serviceWorker.ready.then((registration) => {
         registration.showNotification(title, defaultOptions);
       });
     } else {
-      // Fallback a notificación directa
       const notification = new Notification(title, defaultOptions);
-      
-      // Cerrar automáticamente después de 5 segundos
-      setTimeout(() => notification.close(), 5000);
-      
-      return notification;
+      setTimeout(() => notification.close(), 6000);
     }
-
-    return null;
   },
 
-  /**
-   * NOTIFICACIÓN 1: Alerta de Registro Pendiente
-   */
-  notifyNewUserRegistration(username: string, nombre_completo: string, role: string): void {
-    const title = '👤 Registro Pendiente';
-    const body = `El usuario ${username} (${nombre_completo}) solicita aprobación como ${role}.`;
-    
-    this.showPushNotification(title, body, {
-      tag: `new-user-${username}`,
-    });
+  // ESCUCHA EN TIEMPO REAL PARA EL USUARIO CONECTADO SEGÚN SU ROL Y PROYECTOS
+  subscribeToUserNotifications(userRole: string, userProjects: string[]) {
+    const rol = (userRole || '').toLowerCase().trim();
+    const proyectos = Array.isArray(userProjects) ? userProjects : [];
 
-    console.log(`🔔 [NOTIFICACIÓN 1] Push enviada: ${title}`);
-  },
+    const channel = supabase
+      .channel('public:notifications')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        (payload) => {
+          const notif = payload.new as {
+            title: string;
+            body: string;
+            target_roles: string[];
+            target_project?: string | null;
+          };
 
-  /**
-   * NOTIFICACIÓN 2: Alerta de Reporte Creado
-   */
-  notifyNewReportCreated(proyecto: string, tituloNovedad: string): void {
-    const title = '📄 Nuevo Reporte';
-    const body = `Se registró una novedad en ${proyecto}: ${tituloNovedad}`;
-    
-    this.showPushNotification(title, body, {
-      tag: `new-report-${proyecto}-${Date.now()}`,
-    });
+          const rolesDestino = (notif.target_roles || []).map((r) => r.toLowerCase());
+          const coincideRol = rolesDestino.includes(rol) || (rol === 'administrador' && rolesDestino.includes('admin'));
 
-    console.log(`🔔 [NOTIFICACIÓN 2] Push enviada: ${title}`);
-  },
+          if (!coincideRol) return;
 
-  /**
-   * NOTIFICACIÓN 3: Alerta de Reporte Aprobado
-   */
-  notifyReportApproved(tituloNovedad: string, proyecto: string): void {
-    const title = '✅ Reporte Aprobado';
-    const body = `${tituloNovedad} - ${proyecto}`;
-    
-    this.showPushNotification(title, body, {
-      tag: `approved-report-${tituloNovedad}-${Date.now()}`,
-    });
+          // Si es cliente, verificar que el reporte pertenezca estrictamente a su proyecto
+          if (rol === 'cliente' && notif.target_project) {
+            const tieneAcceso = proyectos.includes('*') || proyectos.includes(notif.target_project);
+            if (!tieneAcceso) return;
+          }
 
-    console.log(`🔔 [NOTIFICACIÓN 3] Push enviada: ${title}`);
-  },
-  // Alertas de asistencia en tiempo real con emojis
-  async notifyAttendance(userName: string, status: 'entrada' | 'salida', proyecto: string) {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+          this.showPushNotification(notif.title, notif.body);
+        }
+      )
+      .subscribe();
 
-    const emoji = status === 'entrada' ? '🟢' : '🔴';
-    const titulo = `${emoji} Asistencia: ${userName}`;
-    const opciones = {
-      body: `Marcó ${status} en: ${proyecto}\nHora: ${new Date().toLocaleTimeString()}`,
-      icon: '/icon-192x192.png'
+    return () => {
+      supabase.removeChannel(channel);
     };
+  },
 
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      if (registration) {
-        registration.showNotification(titulo, opciones);
-      } else {
-        new Notification(titulo, opciones);
-      }
-    } catch (error) {
-      console.warn('Error al despachar notificación push nativa:', error);
-      new Notification(titulo, opciones);
-    }
-  }
+  // 1. NUEVO REPORTE: Notifica a Operaciones, Directiva y Administrador
+  async notifyNewReportCreated(proyecto: string, tituloNovedad: string): Promise<void> {
+    await supabase.from('notifications').insert([
+      {
+        title: '📄 Nuevo Reporte Registrado',
+        body: `Proyecto ${proyecto}: ${tituloNovedad}`,
+        target_roles: ['operaciones', 'directiva', 'admin', 'administrador'],
+        target_project: proyecto,
+      },
+    ]);
+  },
+
+  // 2. NUEVO REGISTRO: Si es Líder notifica a Operaciones, Directiva y Admin; otros roles solo a Directiva y Admin
+  async notifyNewUserRegistration(username: string, nombre_completo: string, role: string): Promise<void> {
+    const rolNuevo = (role || '').toLowerCase().trim();
+    const rolesDestino =
+      rolNuevo === 'lider'
+        ? ['operaciones', 'directiva', 'admin', 'administrador']
+        : ['directiva', 'admin', 'administrador'];
+
+    await supabase.from('notifications').insert([
+      {
+        title: '👤 Nueva Solicitud de Registro',
+        body: `${nombre_completo} (@${username}) solicita acceso como ${role.toUpperCase()}.`,
+        target_roles: rolesDestino,
+        target_project: null,
+      },
+    ]);
+  },
+
+  // 3. REPORTE APROBADO: Notifica exclusivamente al Cliente asignado a ese proyecto
+  async notifyReportApproved(tituloNovedad: string, proyecto: string): Promise<void> {
+    await supabase.from('notifications').insert([
+      {
+        title: '✅ Nuevo Reporte Verificado',
+        body: `${proyecto}: ${tituloNovedad}`,
+        target_roles: ['cliente'],
+        target_project: proyecto,
+      },
+    ]);
+  },
 };
