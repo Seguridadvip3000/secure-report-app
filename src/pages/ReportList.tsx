@@ -11,7 +11,7 @@ interface Reporte {
   desarrollo?: string;
   proyecto: string;
   status: string;
-  visibleForClient?: boolean;
+  visible_for_client?: boolean;
   created_at: string;
 }
 
@@ -42,10 +42,9 @@ export default function ReportList() {
           setLoading(false);
           return;
         }
-        // El cliente SOLO ve los reportes aprobados que hayan sido enviados explícitamente al cliente
         query = query
           .eq('status', 'aprobado')
-          .eq('visibleForClient', true);
+          .eq('visible_for_client', true);
 
         if (!misProyectos.includes('*')) {
           query = query.in('proyecto', misProyectos);
@@ -66,32 +65,30 @@ export default function ReportList() {
     cargarReportes();
   }, [currentUser]);
 
-  // Aprobar o rechazar el reporte internamente (sin enviarlo aún al cliente)
   const cambiarEstadoReporte = async (reporte: Reporte, nuevoEstado: string) => {
     try {
       const { error } = await supabase
         .from('reports')
         .update({ 
           status: nuevoEstado,
-          visibleForClient: nuevoEstado === 'rechazado' ? false : reporte.visibleForClient
+          visible_for_client: nuevoEstado === 'rechazado' ? false : reporte.visible_for_client
         })
         .eq('id', reporte.id);
 
       if (error) throw error;
       cargarReportes();
-    } catch (err) {
-      console.error('Error al actualizar estado:', err);
+    } catch (err: any) {
+      alert('Error al actualizar estado: ' + err.message);
     }
   };
 
-  // NUEVA FUNCIÓN: Envía el reporte explícitamente al Cliente de ese proyecto y dispara su notificación
   const enviarACliente = async (reporte: Reporte) => {
     try {
       const { error } = await supabase
         .from('reports')
         .update({ 
           status: 'aprobado',
-          visibleForClient: true
+          visible_for_client: true
         })
         .eq('id', reporte.id);
 
@@ -118,15 +115,16 @@ export default function ReportList() {
           desarrollo: nuevoDesarrollo,
           proyecto: nuevoProyecto,
           status: nuevoStatus,
-          visibleForClient: nuevaVisibilidadCliente
+          visible_for_client: nuevaVisibilidadCliente
         })
         .eq('id', id);
         
       if (error) throw error;
       setIdReporteEditando(null);
+      alert('✅ Cambios guardados correctamente.');
       cargarReportes();
     } catch (err: any) {
-      alert('Error al guardar la edición integral: ' + err.message);
+      alert('Error al guardar la edición: ' + err.message);
     }
   };
 
@@ -147,7 +145,7 @@ export default function ReportList() {
     setNuevoDesarrollo(reporte.desarrollo || '');
     setNuevoProyecto(reporte.proyecto || '');
     setNuevoStatus(reporte.status || 'pendiente');
-    setNuevaVisibilidadCliente(!!reporte.visibleForClient);
+    setNuevaVisibilidadCliente(!!reporte.visible_for_client);
   };
 
   const puedeGestionarYEnviar = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
@@ -225,8 +223,8 @@ export default function ReportList() {
                         <span>Estado: <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: reporte.status === 'aprobado' ? '#28a745' : reporte.status === 'rechazado' ? '#dc3545' : '#f5a623' }}>{reporte.status}</span></span>
                         <span>|</span>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          {reporte.visibleForClient ? <Eye size={14} color="#28a745" /> : <EyeOff size={14} color="#64748b" />}
-                          {reporte.visibleForClient ? 'Enviado al Cliente' : 'Pendiente por enviar a cliente'}
+                          {reporte.visible_for_client ? <Eye size={14} color="#28a745" /> : <EyeOff size={14} color="#64748b" />}
+                          {reporte.visible_for_client ? 'Enviado al Cliente' : 'Pendiente por enviar a cliente'}
                         </span>
                       </div>
                     </div>
@@ -251,8 +249,7 @@ export default function ReportList() {
                         </>
                       )}
 
-                      {/* BOTÓN ENVIAR A CLIENTE PARA OPERACIONES, DIRECTIVA Y ADMINISTRADOR */}
-                      {puedeGestionarYEnviar && reporte.status?.toLowerCase() === 'aprobado' && !reporte.visibleForClient && (
+                      {puedeGestionarYEnviar && !reporte.visible_for_client && reporte.status?.toLowerCase() !== 'rechazado' && (
                         <button
                           onClick={() => enviarACliente(reporte)}
                           style={{ padding: '7px 12px', background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
@@ -261,7 +258,7 @@ export default function ReportList() {
                         </button>
                       )}
 
-                      {puedeGestionarYEnviar && reporte.visibleForClient && (
+                      {puedeGestionarYEnviar && reporte.visible_for_client && (
                         <span style={{ padding: '6px 10px', background: '#dcfce7', color: '#166534', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                           <CheckCircle size={13} /> Enviado al Cliente
                         </span>

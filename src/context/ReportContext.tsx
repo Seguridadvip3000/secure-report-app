@@ -119,7 +119,6 @@ export function ReportProvider({ children }: { children: ReactNode }) {
       saveLocalReports(reports);
     }
   }, [reports, storageMode]);
-
   const addReport = async (report: Omit<Report, 'id' | 'createdAt' | 'visibleForClient'>) => {
     if (storageMode === 'supabase') {
       try {
@@ -190,7 +189,6 @@ export function ReportProvider({ children }: { children: ReactNode }) {
       setReports(prev => prev.map(r => (r.id === id ? { ...r, status } : r)));
     }
   };
-
   const approveForClient = async (id: string, userId: string) => {
     if (storageMode === 'supabase') {
       try {
