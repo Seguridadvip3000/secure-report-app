@@ -1,21 +1,30 @@
-name: Compilar Apps Seguridad VIP 3000
+name: Compilar Apps Seguridad VIP 3000 (Nativo)
 on:
   push:
     branches:
       - master
 jobs:
   build_android:
-    name: Compilar para Android (APK)
+    name: Compilar APK Directo en GitHub
     runs-on: ubuntu-latest
     steps:
       - name: Descargar Código
         uses: actions/checkout@v4
+
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Instalar EAS CLI global
-        run: npm install -g eas-cli
+
+      - name: Configurar Java JDK 17 (Requerido por Android)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Crear Entorno Móvil Limpio y Descargar Logo Oficial
         run: |
           npx create-expo-app@latest app-movil-limpia --template blank
@@ -25,7 +34,8 @@ jobs:
       - name: Instalar Librerías Nativas (WebView y Archivos PDF)
         working-directory: ./app-movil-limpia
         run: npx expo install react-native-webview expo-file-system expo-sharing
-      - name: Configurar app.json y eas.json con Ícono Oficial y Permisos
+
+      - name: Configurar app.json con Ícono Oficial y Permisos
         working-directory: ./app-movil-limpia
         run: |
           echo '{
@@ -52,25 +62,18 @@ jobs:
               }
             }
           }' > app.json
+      - name: Generar Proyecto Nativo Android (Prebuild)
+        working-directory: ./app-movil-limpia
+        run: npx expo prebuild --platform android --no-install
 
-          echo '{
-            "cli": { 
-              "version": ">= 12.0.0",
-              "appVersionSource": "remote"
-            },
-            "build": {
-              "production": {
-                "android": { "buildType": "apk" }
-              }
-            }
-          }' > eas.json
-      - name: Vincular Proyecto en Expo
-        working-directory: ./app-movil-limpia
-        run: eas init --force --non-interactive
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-      - name: Compilar APK en Expo
-        working-directory: ./app-movil-limpia
-        run: eas build --platform android --profile production --non-interactive
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      - name: Compilar APK Release con Gradle
+        working-directory: ./app-movil-limpia/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+      - name: Subir APK Final Listo para Descargar
+        uses: actions/upload-artifact@v4
+        with:
+          name: SecureReport-VIP3000-APK
+          path: app-movil-limpia/android/app/build/outputs/apk/release/app-release.apk
