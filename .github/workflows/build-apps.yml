@@ -16,14 +16,16 @@ jobs:
           node-version: 20
       - name: Instalar EAS CLI global
         run: npm install -g eas-cli
-      - name: Crear Entorno Móvil Limpio y Aislado
+      - name: Crear Entorno Móvil Limpio y Descargar Logo Oficial
         run: |
           npx create-expo-app@latest app-movil-limpia --template blank
           if [ -f App.js ]; then cp App.js app-movil-limpia/App.js; fi
+          mkdir -p app-movil-limpia/assets
+          curl -sL "https://vercel.app" -o app-movil-limpia/assets/icon.png
       - name: Instalar Librerías Nativas (WebView y Archivos PDF)
         working-directory: ./app-movil-limpia
         run: npx expo install react-native-webview expo-file-system expo-sharing
-      - name: Configurar app.json y eas.json con Permisos
+      - name: Configurar app.json y eas.json con Ícono Oficial y Permisos
         working-directory: ./app-movil-limpia
         run: |
           echo '{
@@ -32,8 +34,13 @@ jobs:
               "slug": "secure-report-app",
               "version": "1.0.0",
               "orientation": "portrait",
+              "icon": "./assets/icon.png",
               "userInterfaceStyle": "dark",
               "android": {
+                "adaptiveIcon": {
+                  "foregroundImage": "./assets/icon.png",
+                  "backgroundColor": "#0f172a"
+                },
                 "package": "com.seguridadvip3000.securereport",
                 "permissions": [
                   "ACCESS_COARSE_LOCATION",
