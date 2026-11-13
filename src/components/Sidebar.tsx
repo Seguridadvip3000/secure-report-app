@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Link, useLocation } from 'react-router-dom';
-import { Shield, FileText, List, UserCheck, Map, Settings, Menu, X } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Shield, FileText, List, UserCheck, Map, Settings, Menu, X, LogOut } from 'lucide-react';
 
 export default function Sidebar() {
-  const { currentUser } = useAuth();
+  const { currentUser, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [menuAbierto, setMenuAbierto] = useState(false);
 
   const rol = currentUser?.role?.toLowerCase() || '';
@@ -25,9 +26,15 @@ export default function Sidebar() {
   const puedeVerConfiguracion = ['administrador', 'admin', 'directiva'].includes(rol);
 
   const cerrarMenu = () => setMenuAbierto(false);
+
+  const manejarCerrarSesion = async () => {
+    cerrarMenu();
+    await logout();
+    navigate('/auth', { replace: true });
+  };
   return (
     <>
-      {/* BARRA SUPERIOR EXCLUSIVA PARA MÓVILES (EVITA CHOQUE CON LA HORA/BATERÍA) */}
+      {/* BARRA SUPERIOR EXCLUSIVA PARA MÓVILES */}
       <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-slate-950 text-white px-4 pt-8 pb-3 flex items-center justify-between shadow-md border-b border-slate-800">
         <div className="flex items-center gap-2">
           <Shield className="text-blue-500" size={22} />
@@ -63,7 +70,6 @@ export default function Sidebar() {
               <Shield className="text-blue-500" size={24} />
               <span className="font-bold text-white text-lg">SecureReport</span>
             </div>
-            {/* BOTÓN EXTRA DE CIERRE DENTRO DEL MENÚ EN MÓVIL */}
             <button
               type="button"
               onClick={cerrarMenu}
@@ -140,10 +146,20 @@ export default function Sidebar() {
           </nav>
         </div>
 
-        {/* PIE DE MENÚ CON PERFIL ACTIVO */}
-        <div className="border-t border-slate-800 pt-4 text-xs space-y-1">
-          <div className="font-semibold text-white truncate">{nombreElemento}</div>
-          <div className="text-slate-500 uppercase font-bold tracking-wider">{rol}</div>
+        {/* PIE DE MENÚ CON PERFIL ACTIVO Y BOTÓN CERRAR SESIÓN */}
+        <div className="border-t border-slate-800 pt-4 space-y-3">
+          <div className="text-xs space-y-1 px-1">
+            <div className="font-semibold text-white truncate">{nombreElemento}</div>
+            <div className="text-slate-500 uppercase font-bold tracking-wider">{rol}</div>
+          </div>
+
+          <button
+            type="button"
+            onClick={manejarCerrarSesion}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-400 hover:bg-red-950/50 hover:text-red-300 transition-colors cursor-pointer"
+          >
+            <LogOut size={18} /> Cerrar Sesión
+          </button>
         </div>
       </div>
     </>
