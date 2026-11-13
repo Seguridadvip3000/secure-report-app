@@ -1,21 +1,16 @@
 {
-  "name": "Seguridad Vip 3000 - Sistema de Gestión de Novedades",
-  "short_name": "Seguridad Vip",
-  "description": "Sistema profesional de gestión de novedades de seguridad - Seguridad Vip 3000",
+  "name": "SecureReport - Seguridad VIP 3000",
+  "short_name": "SecureReport",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
-  "theme_color": "#1e293b",
-  "orientation": "portrait-primary",
+  "theme_color": "#0f172a",
   "icons": [
     {
-      "src": "/logo-seguridad-vip.svg",
-      "sizes": "192x192 256x256 512x512",
-      "type": "image/svg+xml",
+      "src": "/logo-vip3000.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
       "purpose": "any maskable"
     }
-  ],
-  "categories": ["business", "productivity", "security"],
-  "lang": "es-VE",
-  "dir": "ltr"
+  ]
 }
