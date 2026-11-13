@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, SafeAreaView, StatusBar, Platform, BackHandler, Alert } from 'react-native';
+import { StyleSheet, SafeAreaView, StatusBar, Platform, BackHandler, Alert, Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -26,7 +26,6 @@ export default function App() {
       return () => BackHandler.removeEventListener('hardwareBackPress', onBackPress);
     }
   }, []);
-
   const guardarEnDispositivo = async (filename, base64Data) => {
     try {
       if (Platform.OS === 'android') {
@@ -40,7 +39,7 @@ export default function App() {
           await FileSystem.writeAsStringAsync(uriArchivo, base64Data, {
             encoding: FileSystem.EncodingType.Base64,
           });
-          Alert.alert('¡Guardado!', 'El reporte PDF se guardó correctamente en la carpeta seleccionada de tu teléfono.');
+          Alert.alert('¡Guardado!', 'El reporte PDF se guardó correctamente en tu teléfono.');
         }
       } else {
         const ruta = FileSystem.cacheDirectory + filename;
@@ -70,6 +69,15 @@ export default function App() {
   const manejarMensajeWeb = async (event) => {
     try {
       const datos = JSON.parse(event.nativeEvent.data);
+
+      // ABRIR DIRECTAMENTE LA APLICACIÓN DE WHATSAPP INSTALADA
+      if (datos.type === 'OPEN_WHATSAPP' && datos.url) {
+        Linking.openURL(datos.url).catch(() => {
+          Alert.alert('WhatsApp no detectado', 'No se pudo abrir la aplicación WhatsApp instalada en el dispositivo.');
+        });
+        return;
+      }
+
       if (datos.type === 'DOWNLOAD_PDF' && datos.base64) {
         Alert.alert(
           'Reporte PDF Listo',
@@ -82,8 +90,16 @@ export default function App() {
         );
       }
     } catch (error) {
-      console.error('Error al procesar el PDF en móvil:', error);
+      console.error('Error en puente móvil:', error);
     }
+  };
+  const manejarNavegacion = (request) => {
+    const { url } = request;
+    if (url.startsWith('whatsapp://') || url.startsWith('https://google.com')) {
+      Linking.openURL(url).catch(() => {});
+      return false;
+    }
+    return true;
   };
 
   return (
@@ -94,12 +110,15 @@ export default function App() {
         source={{ uri: APP_URL }}
         style={styles.webview}
         onMessage={manejarMensajeWeb}
+        onShouldStartLoadWithRequest={manejarNavegacion}
+        originWhitelist={['*']}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         geolocationEnabled={true}
+        allowFileAccess={true}
+        allowUniversalAccessFromFileURLs={true}
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback={true}
-        allowFileAccess={true}
         startInLoadingState={true}
       />
     </SafeAreaView>
