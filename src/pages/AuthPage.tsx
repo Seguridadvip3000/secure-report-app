@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { UserRole, ROLE_LABELS } from '../types';
 import { PROYECTOS } from '../data/constants';
-import { Shield, Mail, User, Lock, Eye, EyeOff, ArrowRight, Building, UserCircle, Key } from 'lucide-react';
+import { Shield, Mail, User, Lock, Eye, EyeOff, ArrowRight, Building, UserCircle, Key, MapPin } from 'lucide-react';
 import { startElementoTracking } from '../services/locationService';
 
 type View = 'login' | 'register' | 'success';
@@ -30,12 +30,27 @@ export default function AuthPage() {
   const [regProyectos, setRegProyectos] = useState<string[]>([]);
   const [adminKey, setAdminKey] = useState('');
 
-  // Redirección inmediata si el usuario ya está autenticado y aprobado
   useEffect(() => {
     if (currentUser && currentUser.status === 'aprobado') {
       navigate('/', { replace: true });
     }
   }, [currentUser, navigate]);
+
+  // FUNCIÓN QUE EXIGE AUTORIZACIÓN REAL DE GPS EN EL DISPOSITIVO
+  const solicitarPermisoGPSObligatorio = (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (!('geolocation' in navigator)) {
+        resolve(false);
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        () => resolve(true),
+        () => resolve(false),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -50,20 +65,9 @@ export default function AuthPage() {
     const result = await login(loginUsernameOrEmail, loginPassword);
     
     if (result.success) {
-      // DISPARO AUTOMÁTICO DEL RASTREO GPS EN SEGUNDO PLANO PARA LOS ELEMENTOS
-      startElementoTracking()
-        .then((trackingResult) => {
-          if (!trackingResult.success) {
-            console.warn('Aviso de localización móvil:', trackingResult.message);
-          } else {
-            console.log('🚀 Monitoreo perimetral inicializado con éxito cada 30 segundos');
-          }
-        })
-        .catch((err) => {
-          console.error('Error crítico al levantar la tarea de localización:', err);
-        });
-
-      // Redirección manual al instante de recibir el éxito de la sesión
+      startElementoTracking().catch((err) => {
+        console.error('Error al levantar tarea de localización:', err);
+      });
       navigate('/', { replace: true });
     } else {
       setError(result.message);
@@ -71,7 +75,6 @@ export default function AuthPage() {
     
     setLoading(false);
   };
-
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -105,6 +108,17 @@ export default function AuthPage() {
       return;
     }
 
+    // EXIGIR AUTORIZACIÓN OBLIGATORIA DE GPS PARA DIRECTIVA, OPERACIONES Y LÍDER
+    const rolesConGpsObligatorio = ['directiva', 'operaciones', 'lider'];
+    if (rolesConGpsObligatorio.includes(regRole)) {
+      const gpsAceptado = await solicitarPermisoGPSObligatorio();
+      if (!gpsAceptado) {
+        setError('⚠️ ACCESO DENEGADO: Para registrarse como Directiva, Operaciones o Líder es obligatorio encender y autorizar el uso del GPS en su teléfono.');
+        setLoading(false);
+        return;
+      }
+    }
+
     const result = await register({
       username: regUsername,
       nombre_completo: regNombreCompleto,
@@ -130,7 +144,9 @@ export default function AuthPage() {
         : [...prev, proyecto]
     );
   };
+
   if (view === 'success') {
+    const esAdmin = regRole === 'admin';
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center space-y-4">
@@ -140,10 +156,10 @@ export default function AuthPage() {
             </svg>
           </div>
           <h2 className="text-2xl font-bold text-slate-800">¡Registro Exitoso!</h2>
-          <p className="text-slate-500">Su cuenta ha sido creada correctamente en el sistema.</p>
-          {regRole === 'directiva' && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700 text-left">
-              ⏳ **Aviso:** Su cuenta de directiva se encuentra en estado retenido. Deberá ser autorizada por el Administrador principal antes de poder iniciar sesión.
+          <p className="text-slate-500">Su solicitud ha sido enviada correctamente al sistema.</p>
+          {!esAdmin && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800 text-left">
+              ⏳ <strong>Cuenta Pendiente de Autorización:</strong> Su usuario ha quedado en espera de aprobación por el nivel superior correspondiente antes de poder iniciar sesión.
             </div>
           )}
           <button
@@ -273,6 +289,15 @@ export default function AuthPage() {
                   </select>
                 </div>
 
+                {['directiva', 'operaciones', 'lider'].includes(regRole) && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2.5 text-xs text-blue-800">
+                    <MapPin size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Ubicación GPS Obligatoria:</strong> Al presionar "Completar Registro", su teléfono le solicitará permiso de ubicación para activar el monitoreo operativo.
+                    </span>
+                  </div>
+                )}
+
                 {regRole === 'admin' && (
                   <div>
                     <label className="flex items-center gap-2 text-sm font-medium text-amber-700 mb-1.5"><Key size={16} className="text-amber-600" />Clave de Seguridad Administrador</label>
@@ -300,7 +325,7 @@ export default function AuthPage() {
                   </div>
                 )}
                 <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-6">
-                  {loading ? 'Creando cuenta...' : 'Completar Registro'}
+                  {loading ? 'Validando GPS y creando cuenta...' : 'Completar Registro'}
                   {!loading && <ArrowRight size={18} />}
                 </button>
               </form>

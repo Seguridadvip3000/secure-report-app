@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, UserRole } from '../types';
 import { supabase } from '../lib/supabase';
-import { getStorageMode } from '../config/appConfig';
 import { notificationService } from '../services/notificationService';
 
 interface AuthContextType {
@@ -30,7 +29,6 @@ interface RegisterData {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const storageMode = getStorageMode();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +56,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (profile) {
+          if (profile.status !== 'aprobado') {
+            await supabase.auth.signOut();
+            setCurrentUser(null);
+            setLoading(false);
+            return;
+          }
+
           setCurrentUser({
             id: profile.id,
             username: profile.username,
@@ -108,9 +113,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Error cargando base de usuarios:', error);
     }
   };
+
   const login = async (usernameOrEmail: string, password: string): Promise<{ success: boolean; message: string }> => {
     try {
-      console.log('🔐 Intentando login con:', usernameOrEmail);
       const isEmail = usernameOrEmail.includes('@');
       let email = usernameOrEmail;
       
@@ -133,7 +138,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) {
-        console.error('❌ Error de autenticación:', error);
         return { success: false, message: 'Credenciales incorrectas' };
       }
 
@@ -149,18 +153,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (profile.status !== 'aprobado') {
+          await supabase.auth.signOut();
           setCurrentUser(null);
-          const projectUrl = import.meta.env.VITE_SUPABASE_URL || '';
-          const match = projectUrl.match(/https:\/\/(.*?)\.supabase\.co/);
-          if (match && match[1]) {
-            localStorage.removeItem(`sb-${match[1]}-auth-token`);
-          }
           
           return { 
             success: false, 
-            message: profile.status === 'pendiente' 
-              ? 'Su cuenta está pendiente de aprobación por el Administrador.' 
-              : 'Su cuenta ha sido rechazada por la directiva.' 
+            message: (profile.status === 'pendiente' || profile.status === 'retenido')
+              ? 'Su cuenta está pendiente de autorización. Espere a ser aprobado para ingresar.' 
+              : 'Su solicitud de acceso ha sido rechazada.' 
           };
         }
 
@@ -178,21 +178,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           rejectionReason: profile.rejection_reason,
         });
 
-        console.log('✅ Login exitoso:', profile.username);
         return { success: true, message: 'Inicio de sesión exitoso' };
       }
 
       return { success: false, message: 'Error inesperado en los servicios de autenticación.' };
     } catch (error) {
-      console.error('❌ Error en login:', error);
       return { success: false, message: 'Error al iniciar sesión' };
     }
   };
-
   const register = async (data: RegisterData): Promise<{ success: boolean; message: string }> => {
     try {
-      console.log('📝 Registrando usuario:', data.username);
-
       const { data: existingUsername } = await supabase
         .from('users')
         .select('username')
@@ -219,7 +214,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (authError) {
-        console.error('❌ Error en Supabase Auth SignUp:', authError);
         return { success: false, message: authError.message };
       }
 
@@ -234,7 +228,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         proyectos = data.proyectos || [];
       }
 
-      const initialStatus = data.role === 'directiva' ? 'pendiente' : 'aprobado';
+      // ÚNICAMENTE EL ADMINISTRADOR SE APRUEBA AL INSTANTE; TODOS LOS DEMÁS QUEDAN PENDIENTES
+      const initialStatus = (data.role === 'admin' || data.role === 'administrador') ? 'aprobado' : 'pendiente';
 
       const { error: profileError } = await supabase
         .from('users')
@@ -249,8 +244,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }]);
 
       if (profileError) {
-        console.error('❌ Error vinculando perfil público:', profileError);
-        return { success: false, message: 'Error creando perfil de usuario' };
+        return { success: false, message: 'Error creando perfil de usuario: ' + profileError.message };
+      }
+
+      // Cerrar cualquier sesión temporal generada por signUp si requiere aprobación
+      if (initialStatus !== 'aprobado') {
+        await supabase.auth.signOut();
+        setCurrentUser(null);
       }
 
       await loadUsers();
@@ -264,19 +264,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { 
         success: true, 
         message: initialStatus === 'pendiente'
-          ? 'Registro exitoso. Su cuenta está pendiente de aprobación.'
+          ? 'Registro exitoso. Su cuenta debe ser autorizada antes de iniciar sesión.'
           : 'Registro exitoso. Ya puede iniciar sesión en la plataforma.'
       };
     } catch (error) {
-      console.error('❌ Error crítico en función de registro:', error);
       return { success: false, message: 'Error al registrar usuario' };
     }
   };
+
   const logout = async () => {
     try {
       await supabase.auth.signOut();
       setCurrentUser(null);
-      console.log('✅ Sesión destruida exitosamente');
     } catch (error) {
       console.error('Error cerrando sesión:', error);
     }
@@ -331,7 +330,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const pendingUsers = users.filter(u => u.status === 'pendiente');
+  const pendingUsers = users.filter(u => u.status === 'pendiente' || u.status === 'retenido');
   const approvedUsers = users.filter(u => u.status === 'aprobado');
 
   return (
