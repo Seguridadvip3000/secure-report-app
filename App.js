@@ -3,6 +3,7 @@ import { StyleSheet, SafeAreaView, StatusBar, Platform, BackHandler, Alert, Link
 import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function App() {
   const webViewRef = React.useRef(null);
@@ -26,6 +27,63 @@ export default function App() {
       return () => BackHandler.removeEventListener('hardwareBackPress', onBackPress);
     }
   }, []);
+
+  // ABRIR CÁMARA NATIVA DE ANDROID Y ENVIAR FOTO A LA WEB
+  const abrirCamaraNativa = async () => {
+    try {
+      const permiso = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permiso.granted) {
+        Alert.alert('Permiso denegado', 'Debes autorizar el permiso de cámara para tomar fotografías.');
+        return;
+      }
+
+      const resultado = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!resultado.canceled && resultado.assets && resultado.assets.length > 0) {
+        const asset = resultado.assets;
+        if (asset.base64) {
+          const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
+          webViewRef.current?.postMessage(JSON.stringify({ type: 'NATIVE_PHOTOS', photos: [dataUrl] }));
+        }
+      }
+    } catch (error) {
+      Alert.alert('Error de Cámara', 'No se pudo abrir la cámara del dispositivo.');
+    }
+  };
+
+  // ABRIR GALERÍA NATIVA DE ANDROID Y ENVIAR FOTOS A LA WEB
+  const abrirGaleriaNativa = async () => {
+    try {
+      const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permiso.granted) {
+        Alert.alert('Permiso denegado', 'Debes autorizar el acceso a la galería para seleccionar fotos.');
+        return;
+      }
+
+      const resultado = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!resultado.canceled && resultado.assets && resultado.assets.length > 0) {
+        const fotosDataUrl = resultado.assets
+          .filter((a) => a.base64)
+          .map((a) => `data:image/jpeg;base64,${a.base64}`);
+
+        if (fotosDataUrl.length > 0) {
+          webViewRef.current?.postMessage(JSON.stringify({ type: 'NATIVE_PHOTOS', photos: fotosDataUrl }));
+        }
+      }
+    } catch (error) {
+      Alert.alert('Error de Galería', 'No se pudo abrir la galería de imágenes.');
+    }
+  };
   const guardarEnDispositivo = async (filename, base64Data) => {
     try {
       if (Platform.OS === 'android') {
@@ -70,7 +128,16 @@ export default function App() {
     try {
       const datos = JSON.parse(event.nativeEvent.data);
 
-      // ABRIR DIRECTAMENTE LA APLICACIÓN DE WHATSAPP INSTALADA
+      if (datos.type === 'OPEN_CAMERA') {
+        await abrirCamaraNativa();
+        return;
+      }
+
+      if (datos.type === 'OPEN_GALLERY') {
+        await abrirGaleriaNativa();
+        return;
+      }
+
       if (datos.type === 'OPEN_WHATSAPP' && datos.url) {
         Linking.openURL(datos.url).catch(() => {
           Alert.alert('WhatsApp no detectado', 'No se pudo abrir la aplicación WhatsApp instalada en el dispositivo.');
@@ -93,6 +160,7 @@ export default function App() {
       console.error('Error en puente móvil:', error);
     }
   };
+
   const manejarNavegacion = (request) => {
     const { url } = request;
     if (url.startsWith('whatsapp://') || url.startsWith('https://google.com')) {
