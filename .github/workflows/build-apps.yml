@@ -28,10 +28,11 @@ jobs:
             echo "❌ ERROR CRÍTICO: No se encontró logo-vip3000.jpg en la raíz del repositorio."
             exit 1
           fi
+          sudo apt-get update && sudo apt-get install -y imagemagick
           npx create-expo-app@latest app-movil-limpia --template blank
           if [ -f App.js ]; then cp App.js app-movil-limpia/App.js; fi
           mkdir -p app-movil-limpia/assets
-          convert logo-vip3000.jpg -resize 1024x1024 -background "#0f172a" -gravity center -extent 1024x1024 app-movil-limpia/assets/icon.png
+          convert logo-vip3000.jpg -resize 1024x1024 -background "#0f172a" -gravity center -extent 1024x1024 PNG32:app-movil-limpia/assets/icon.png
       - name: Instalar Librerías Nativas (WebView y Archivos PDF)
         working-directory: ./app-movil-limpia
         run: npx expo install react-native-webview expo-file-system expo-sharing
@@ -63,7 +64,6 @@ jobs:
               }
             }
           }' > app.json
-
       - name: Generar Proyecto Nativo Android (Prebuild)
         working-directory: ./app-movil-limpia
         run: npx expo prebuild --platform android --no-install
