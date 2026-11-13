@@ -36,9 +36,34 @@ export default function AuthPage() {
     }
   }, [currentUser, navigate]);
 
-  // FUNCIÓN QUE EXIGE AUTORIZACIÓN REAL DE GPS EN EL DISPOSITIVO
+  // SOLICITA AUTORIZACIÓN NATIVA DE GPS EN ANDROID (APK) O NAVEGADOR WEB
   const solicitarPermisoGPSObligatorio = (): Promise<boolean> => {
     return new Promise((resolve) => {
+      if ((window as any).ReactNativeWebView) {
+        const timeout = setTimeout(() => {
+          window.removeEventListener('message', listener);
+          document.removeEventListener('message', listener as any);
+          resolve(false);
+        }, 12000);
+
+        const listener = (event: MessageEvent) => {
+          try {
+            const datos = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+            if (datos?.type === 'NATIVE_GPS_RESULT') {
+              clearTimeout(timeout);
+              window.removeEventListener('message', listener);
+              document.removeEventListener('message', listener as any);
+              resolve(!!datos.granted);
+            }
+          } catch {}
+        };
+
+        window.addEventListener('message', listener);
+        document.addEventListener('message', listener as any);
+        (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: 'REQUEST_GPS' }));
+        return;
+      }
+
       if (!('geolocation' in navigator)) {
         resolve(false);
         return;
@@ -108,12 +133,12 @@ export default function AuthPage() {
       return;
     }
 
-    // EXIGIR AUTORIZACIÓN OBLIGATORIA DE GPS ÚNICAMENTE PARA OPERACIONES Y LÍDER
+    // EXIGIR AUTORIZACIÓN DE GPS ÚNICAMENTE PARA OPERACIONES Y LÍDER
     const rolesConGpsObligatorio = ['operaciones', 'lider'];
     if (rolesConGpsObligatorio.includes(regRole)) {
       const gpsAceptado = await solicitarPermisoGPSObligatorio();
       if (!gpsAceptado) {
-        setError('⚠️ ACCESO DENEGADO: Para registrarse como Operaciones o Líder es obligatorio encender y autorizar el uso del GPS en su teléfono.');
+        setError('⚠️ ACCESO DENEGADO: Para registrarse como Operaciones o Líder debe encender el GPS de su teléfono y aceptar el permiso de ubicación.');
         setLoading(false);
         return;
       }
