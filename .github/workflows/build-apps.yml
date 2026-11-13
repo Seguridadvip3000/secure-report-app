@@ -8,13 +8,13 @@ jobs:
     name: Compilar APK Directo en GitHub
     runs-on: ubuntu-latest
     steps:
-      - name: Descargar Código
+      - name: Descargar Código y Logo Oficial
         uses: actions/checkout@v4
 
-      - name: Configurar Node.js
+      - name: Configurar Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Configurar Java JDK 17 (Requerido por Android)
         uses: actions/setup-java@v4
@@ -22,17 +22,21 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Crear Entorno Móvil Limpio y Descargar Logo Oficial
+      - name: Crear Entorno Móvil y Procesar Ícono Oficial VIP 3000
         run: |
+          if [ ! -f logo-vip3000.jpg ]; then
+            echo "❌ ERROR CRÍTICO: No se encontró logo-vip3000.jpg en la raíz del repositorio."
+            exit 1
+          fi
           npx create-expo-app@latest app-movil-limpia --template blank
           if [ -f App.js ]; then cp App.js app-movil-limpia/App.js; fi
           mkdir -p app-movil-limpia/assets
-          curl -sL "https://vercel.app" -o app-movil-limpia/assets/icon.png
+          convert logo-vip3000.jpg -resize 1024x1024 -background "#0f172a" -gravity center -extent 1024x1024 app-movil-limpia/assets/icon.png
       - name: Instalar Librerías Nativas (WebView y Archivos PDF)
         working-directory: ./app-movil-limpia
         run: npx expo install react-native-webview expo-file-system expo-sharing
 
-      - name: Configurar app.json con Ícono Oficial y Permisos
+      - name: Configurar app.json con Ícono Oficial Obligatorio
         working-directory: ./app-movil-limpia
         run: |
           echo '{
@@ -59,6 +63,7 @@ jobs:
               }
             }
           }' > app.json
+
       - name: Generar Proyecto Nativo Android (Prebuild)
         working-directory: ./app-movil-limpia
         run: npx expo prebuild --platform android --no-install
