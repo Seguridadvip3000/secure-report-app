@@ -22,9 +22,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Configurar Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Crear Entorno Móvil Limpio y Descargar Logo Oficial
         run: |
           npx create-expo-app@latest app-movil-limpia --template blank
