@@ -4,6 +4,7 @@ import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 
 export default function App() {
   const webViewRef = React.useRef(null);
@@ -28,6 +29,32 @@ export default function App() {
     }
   }, []);
 
+  // SOLICITAR PERMISO NATIVO DE GPS EN ANDROID PARA REGISTRO Y MONITOREO
+  const solicitarUbicacionNativa = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        webViewRef.current?.postMessage(JSON.stringify({ type: 'NATIVE_GPS_RESULT', granted: false }));
+        return;
+      }
+
+      const ubicacion = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      webViewRef.current?.postMessage(
+        JSON.stringify({
+          type: 'NATIVE_GPS_RESULT',
+          granted: true,
+          lat: ubicacion.coords.latitude,
+          lng: ubicacion.coords.longitude,
+        })
+      );
+    } catch (error) {
+      webViewRef.current?.postMessage(JSON.stringify({ type: 'NATIVE_GPS_RESULT', granted: false }));
+    }
+  };
+
   // ABRIR CÁMARA NATIVA DE ANDROID Y ENVIAR FOTO A LA WEB
   const abrirCamaraNativa = async () => {
     try {
@@ -44,7 +71,7 @@ export default function App() {
       });
 
       if (!resultado.canceled && resultado.assets && resultado.assets.length > 0) {
-        const asset = resultado.assets;
+        const asset = resultado.assets[0];
         if (asset.base64) {
           const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
           webViewRef.current?.postMessage(JSON.stringify({ type: 'NATIVE_PHOTOS', photos: [dataUrl] }));
@@ -127,6 +154,11 @@ export default function App() {
   const manejarMensajeWeb = async (event) => {
     try {
       const datos = JSON.parse(event.nativeEvent.data);
+
+      if (datos.type === 'REQUEST_GPS') {
+        await solicitarUbicacionNativa();
+        return;
+      }
 
       if (datos.type === 'OPEN_CAMERA') {
         await abrirCamaraNativa();
