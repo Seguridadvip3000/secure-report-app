@@ -33,11 +33,11 @@ jobs:
           if [ -f App.js ]; then cp App.js app-movil-limpia/App.js; fi
           mkdir -p app-movil-limpia/assets
           convert logo-vip3000.jpg -resize 1024x1024 -background "#0f172a" -gravity center -extent 1024x1024 PNG32:app-movil-limpia/assets/icon.png
-      - name: Instalar Librerías Nativas (WebView y Archivos PDF)
+      - name: Instalar Librerías Nativas (WebView, Cámara, Galería y Archivos PDF)
         working-directory: ./app-movil-limpia
-        run: npx expo install react-native-webview expo-file-system expo-sharing
+        run: npx expo install react-native-webview expo-file-system expo-sharing expo-image-picker
 
-      - name: Configurar app.json con Ícono Oficial Obligatorio
+      - name: Configurar app.json con Ícono Oficial y Permisos Completos
         working-directory: ./app-movil-limpia
         run: |
           echo '{
@@ -59,7 +59,8 @@ jobs:
                   "ACCESS_FINE_LOCATION",
                   "CAMERA",
                   "READ_EXTERNAL_STORAGE",
-                  "WRITE_EXTERNAL_STORAGE"
+                  "WRITE_EXTERNAL_STORAGE",
+                  "READ_MEDIA_IMAGES"
                 ]
               }
             }
