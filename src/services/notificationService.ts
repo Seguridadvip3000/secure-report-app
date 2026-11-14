@@ -11,26 +11,38 @@ export const notificationService = {
   },
 
   showPushNotification(title: string, body: string, options?: NotificationOptions): void {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    // 1. Si está abierto dentro de la APK de Android, enviar al sistema nativo de notificaciones
+    if ((window as any).ReactNativeWebView) {
+      (window as any).ReactNativeWebView.postMessage(
+        JSON.stringify({
+          type: 'SHOW_NOTIFICATION',
+          title,
+          body,
+        })
+      );
+      return;
+    }
 
-    const defaultOptions: NotificationOptions = {
-      body,
-      icon: '/logo-vip3000.jpg',
-      badge: '/logo-vip3000.jpg',
-      tag: `${title}-${Date.now()}`,
-      ...options,
-    };
+    // 2. Si está en navegador web (PC / Safari)
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const defaultOptions: NotificationOptions = {
+        body,
+        icon: '/logo-vip3000.jpg',
+        badge: '/logo-vip3000.jpg',
+        tag: `${title}-${Date.now()}`,
+        ...options,
+      };
 
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.ready.then((registration) => {
-        registration.showNotification(title, defaultOptions);
-      });
-    } else {
-      const notification = new Notification(title, defaultOptions);
-      setTimeout(() => notification.close(), 6000);
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.ready.then((registration) => {
+          registration.showNotification(title, defaultOptions);
+        });
+      } else {
+        const notification = new Notification(title, defaultOptions);
+        setTimeout(() => notification.close(), 6000);
+      }
     }
   },
-
   // ESCUCHA EN TIEMPO REAL PARA EL USUARIO CONECTADO SEGÚN SU ROL Y PROYECTOS
   subscribeToUserNotifications(userRole: string, userProjects: string[]) {
     const rol = (userRole || '').toLowerCase().trim();
@@ -50,7 +62,10 @@ export const notificationService = {
           };
 
           const rolesDestino = (notif.target_roles || []).map((r) => r.toLowerCase());
-          const coincideRol = rolesDestino.includes(rol) || (rol === 'administrador' && rolesDestino.includes('admin'));
+          const coincideRol =
+            rolesDestino.includes(rol) ||
+            (rol === 'administrador' && rolesDestino.includes('admin')) ||
+            (rol === 'admin' && rolesDestino.includes('administrador'));
 
           if (!coincideRol) return;
 
@@ -100,7 +115,7 @@ export const notificationService = {
     ]);
   },
 
-  // 3. REPORTE APROBADO: Notifica exclusivamente al Cliente asignado a ese proyecto
+  // 3. REPORTE APROBADO / ENVIADO: Notifica exclusivamente al Cliente asignado a ese proyecto
   async notifyReportApproved(tituloNovedad: string, proyecto: string): Promise<void> {
     await supabase.from('notifications').insert([
       {
