@@ -96,7 +96,7 @@ export default function LiderHome() {
       if (dbError) throw dbError;
 
       // 3. Disparar notificación push nativa a Operaciones, Directiva y Administrador
-      await notificationService.notifyNewReportCreated(proyectoPrincipal, tituloEmergencia);
+      await notificationService.notifyEmergencySOS(nombreLider, proyectoPrincipal, coords.lat, coords.lng);
 
       setNotificacion({
         tipo: 'exito',
