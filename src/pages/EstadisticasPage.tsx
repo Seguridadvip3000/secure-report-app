@@ -132,7 +132,6 @@ export default function EstadisticasPage() {
     return 'Nivel General (Histórico Completo)';
   };
 
-  // EXPORTAR A EXCEL (CSV UTF-8 CON BOM PARA ABRIR PERFECTO EN MICROSOFT EXCEL)
   const exportarExcel = () => {
     if (reportesFiltrados.length === 0) {
       alert('No hay datos filtrados para exportar.');
@@ -156,18 +155,32 @@ export default function EstadisticasPage() {
       '\n' +
       filas.map((f) => f.join(';')).join('\n');
 
+    const nombreArchivo = `Estadisticas_SeguridadVip3000CA_${new Date().toISOString().slice(0, 10)}.csv`;
+
+    if ((window as any).ReactNativeWebView) {
+      const base64CSV = btoa(unescape(encodeURIComponent(contenidoCSV)));
+      (window as any).ReactNativeWebView.postMessage(
+        JSON.stringify({
+          type: 'DOWNLOAD_PDF',
+          filename: nombreArchivo,
+          mimeType: 'text/csv',
+          base64: base64CSV,
+        })
+      );
+      return;
+    }
+
     const blob = new Blob([contenidoCSV], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Estadisticas_SeguridadVip3000CA_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = nombreArchivo;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  // EXPORTAR A PDF EJECUTIVO CON INDICADORES Y TABLAS DE INCIDENCIA
   const exportarPDFEjecutivo = async () => {
     if (reportesFiltrados.length === 0) {
       alert('No hay datos filtrados para generar el informe PDF.');
@@ -179,7 +192,6 @@ export default function EstadisticasPage() {
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const ancho = doc.internal.pageSize.getWidth();
 
-      // Encabezado corporativo
       doc.setFillColor(15, 23, 42);
       doc.rect(0, 0, ancho, 32, 'F');
       doc.setTextColor(255, 255, 255);
@@ -192,7 +204,6 @@ export default function EstadisticasPage() {
       doc.setFontSize(8);
       doc.text(`Generado el: ${new Date().toLocaleString('es-VE')}`, 14, 27);
 
-      // Bloque de filtros aplicados
       let y = 40;
       doc.setTextColor(30, 41, 59);
       doc.setFont('helvetica', 'bold');
@@ -207,7 +218,6 @@ export default function EstadisticasPage() {
       y += 5;
       doc.text(`• Tipo de Novedad: ${tituloFiltro === 'todos' ? 'Todas las Novedades' : tituloFiltro}`, 16, y);
 
-      // Tarjetas resumen en el PDF
       y += 10;
       doc.setFillColor(241, 245, 249);
       doc.roundedRect(14, y, ancho - 28, 18, 2, 2, 'F');
@@ -221,7 +231,6 @@ export default function EstadisticasPage() {
       doc.setTextColor(220, 38, 38);
       doc.text(`RECHAZADOS: ${metricas.rechazados}`, 165, y + 11);
 
-      // Sección 1: Distribución por Proyecto
       y += 28;
       doc.setTextColor(15, 23, 42);
       doc.setFont('helvetica', 'bold');
@@ -244,7 +253,6 @@ export default function EstadisticasPage() {
         y += 6;
       });
 
-      // Sección 2: Distribución por Título de Novedad
       y += 8;
       if (y > 250) {
         doc.addPage();
@@ -279,6 +287,7 @@ export default function EstadisticasPage() {
           JSON.stringify({
             type: 'DOWNLOAD_PDF',
             filename: nombreArchivo,
+            mimeType: 'application/pdf',
             base64: pdfBase64,
           })
         );
@@ -296,7 +305,6 @@ export default function EstadisticasPage() {
   const maxTitulo = metricas.porTitulo.length > 0 ? metricas.porTitulo.cantidad : 1;
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
-      {/* Cabecera y Botones de Exportación */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <button
@@ -337,7 +345,6 @@ export default function EstadisticasPage() {
         </div>
       </div>
 
-      {/* Panel de Filtros */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 shadow-sm space-y-4">
         <div className="flex items-center gap-2 text-sm font-bold text-slate-700 border-b border-slate-100 pb-2">
           <Filter size={16} className="text-blue-600" /> Filtros de Búsqueda
@@ -425,7 +432,6 @@ export default function EstadisticasPage() {
           </div>
         </div>
       </div>
-      {/* Tarjetas de Indicadores */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <p className="text-xs text-slate-500 font-medium">Total Filtrado</p>
@@ -499,6 +505,7 @@ export default function EstadisticasPage() {
               })}
             </div>
           </div>
+
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
             <h3 className="font-bold text-slate-800 text-base flex items-center gap-2 border-b border-slate-100 pb-3">
               <FileText size={18} className="text-red-600" /> Reportes por Tipo / Título de Novedad
