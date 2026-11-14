@@ -5,6 +5,15 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import * as Notifications from 'expo-notifications';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 export default function App() {
   const webViewRef = React.useRef(null);
@@ -15,6 +24,8 @@ export default function App() {
   const APP_URL = protocolo + proyecto + dominio;
 
   React.useEffect(() => {
+    Notifications.requestPermissionsAsync();
+
     const onBackPress = () => {
       if (webViewRef.current) {
         webViewRef.current.goBack();
@@ -154,6 +165,19 @@ export default function App() {
   const manejarMensajeWeb = async (event) => {
     try {
       const datos = JSON.parse(event.nativeEvent.data);
+
+      // DISPARAR NOTIFICACIÓN NATIVA EN BARRA DE ANDROID CON SONIDO Y VIBRACIÓN
+      if (datos.type === 'SHOW_NOTIFICATION') {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: datos.title || 'SecureReport VIP 3000',
+            body: datos.body || '',
+            sound: true,
+          },
+          trigger: null,
+        });
+        return;
+      }
 
       if (datos.type === 'REQUEST_GPS') {
         await solicitarUbicacionNativa();
