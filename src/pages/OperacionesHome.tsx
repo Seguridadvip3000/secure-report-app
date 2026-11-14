@@ -4,22 +4,21 @@ import { useAuth } from '../context/AuthContext';
 import { useReports } from '../context/ReportContext';
 import { supabase } from '../lib/supabase';
 import { notificationService } from '../services/notificationService';
-import { FilePlus, List, UserCheck, CheckCircle, Clock, FileText, ShieldCheck, LogOut, AlertCircle, CheckCircle2 } from 'lucide-react';
-
-// Fórmula Haversine para calcular distancia en kilómetros entre Operaciones y cada Líder
-const calcularDistanciaKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-};
+import QRScannerModal from '../components/QRScannerModal';
+import {
+  FilePlus,
+  List,
+  UserCheck,
+  CheckCircle,
+  Clock,
+  FileText,
+  ShieldCheck,
+  LogOut,
+  AlertCircle,
+  CheckCircle2,
+  QrCode,
+  BarChart3,
+} from 'lucide-react';
 
 export default function OperacionesHome() {
   const navigate = useNavigate();
@@ -27,6 +26,7 @@ export default function OperacionesHome() {
   const { reports } = useReports();
 
   const [supervisionActiva, setSupervisionActiva] = useState<{ proyecto: string; lider: string } | null>(null);
+  const [accionQRSup, setAccionQRSup] = useState<'INICIO' | 'FIN' | null>(null);
   const [procesandoSup, setProcesandoSup] = useState(false);
   const [alertaSup, setAlertaSup] = useState<{ tipo: 'exito' | 'error'; mensaje: string } | null>(null);
 
@@ -34,10 +34,9 @@ export default function OperacionesHome() {
     total: reports.length,
     pendientes: reports.filter(r => r.status === 'pendiente' || r.status === 'en_proceso').length,
     aprobados: reports.filter(r => r.status === 'aprobado').length,
-    usuariosPendientes: pendingUsers.filter(u => u.role === 'lider').length,
+    usuariosPendientes: pendingUsers.filter(u => u.role === 'lider' || u.role === 'supervisor').length,
   };
 
-  // Verificar si el usuario de Operaciones ya tiene una supervisión iniciada sin finalizar
   useEffect(() => {
     const verificarSupervisionActual = async () => {
       if (!currentUser?.id) return;
@@ -80,60 +79,34 @@ export default function OperacionesHome() {
     });
   };
 
-  const manejarSupervision = async (tipo: 'INICIO' | 'FIN') => {
+  const confirmarSupervisionTrasQR = async (tipo: 'INICIO' | 'FIN', proyectoVerificado: string) => {
     if (!currentUser) return;
-    if (tipo === 'FIN' && !supervisionActiva) return;
-
+    setAccionQRSup(null);
     setProcesandoSup(true);
     setAlertaSup(null);
 
     try {
       const coords = await obtenerGpsOperaciones();
-      let proyectoDetectado = supervisionActiva?.proyecto || 'Proyecto en Ruta (GPS)';
       let liderAsociado = supervisionActiva?.lider || '';
 
-      if (tipo === 'INICIO') {
-        // Buscar ubicaciones recientes de líderes en user_locations para asociar el proyecto por cercanía GPS
-        const { data: ubicacionesLideres } = await supabase
-          .from('user_locations')
-          .select('nombre_completo, proyecto, latitude, longitude, role')
-          .eq('role', 'lider');
+      const { data: asistenciaProyecto } = await supabase
+        .from('asistencias_lideres')
+        .select('nombre_lider')
+        .eq('proyecto', proyectoVerificado)
+        .eq('tipo', 'ENTRADA')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-        if (ubicacionesLideres && ubicacionesLideres.length > 0) {
-          let distanciaMinima = Infinity;
-          ubicacionesLideres.forEach((loc: any) => {
-            if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
-              const dist = calcularDistanciaKm(coords.lat, coords.lng, loc.latitude, loc.longitude);
-              if (dist < distanciaMinima) {
-                distanciaMinima = dist;
-                proyectoDetectado = loc.proyecto || 'Proyecto Asignado al Líder';
-                liderAsociado = loc.nombre_completo || '';
-              }
-            }
-          });
-        } else {
-          // Respaldo: buscar última asistencia de entrada de algún líder hoy
-          const { data: ultimaAsistencia } = await supabase
-            .from('asistencias_lideres')
-            .select('nombre_lider, proyecto')
-            .eq('tipo', 'ENTRADA')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (ultimaAsistencia) {
-            proyectoDetectado = ultimaAsistencia.proyecto;
-            liderAsociado = ultimaAsistencia.nombre_lider;
-          }
-        }
+      if (asistenciaProyecto?.nombre_lider) {
+        liderAsociado = asistenciaProyecto.nombre_lider;
       }
 
-      // 1. Guardar exclusivamente en supervisiones_operaciones (NO en reports)
       const { error: dbError } = await supabase.from('supervisiones_operaciones').insert([
         {
           operaciones_id: currentUser.id,
           nombre_operaciones: currentUser.nombre_completo,
-          proyecto_detectado: proyectoDetectado,
+          proyecto_detectado: proyectoVerificado,
           lider_asociado: liderAsociado,
           tipo,
           latitude: coords.lat,
@@ -143,39 +116,36 @@ export default function OperacionesHome() {
 
       if (dbError) throw dbError;
 
-      // 2. Actualizar ubicación de Operaciones en user_locations
-      await supabase.from('user_locations').upsert(
+      await supabase.from('user_locations').insert([
         {
           user_id: currentUser.id,
           nombre_completo: currentUser.nombre_completo,
           role: 'operaciones',
-          proyecto: proyectoDetectado,
+          proyecto: proyectoVerificado,
           latitude: coords.lat,
           longitude: coords.lng,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: 'user_id' }
-      );
+      ]);
 
-      // 3. Notificar a Directiva y Administrador
       await notificationService.notifyOperacionesSupervision(
         currentUser.nombre_completo,
-        proyectoDetectado,
+        proyectoVerificado,
         liderAsociado,
         tipo
       );
 
       if (tipo === 'INICIO') {
-        setSupervisionActiva({ proyecto: proyectoDetectado, lider: liderAsociado });
+        setSupervisionActiva({ proyecto: proyectoVerificado, lider: liderAsociado });
         setAlertaSup({
           tipo: 'exito',
-          mensaje: `✅ Supervisión iniciada en: ${proyectoDetectado}${liderAsociado ? ` (Líder: ${liderAsociado})` : ''}. Directiva ha sido notificada.`,
+          mensaje: `✅ QR Verificado: Supervisión iniciada en ${proyectoVerificado}${liderAsociado ? ` (Líder: ${liderAsociado})` : ''}. Directiva ha sido notificada.`,
         });
       } else {
         setSupervisionActiva(null);
         setAlertaSup({
           tipo: 'exito',
-          mensaje: `✅ Supervisión finalizada en: ${proyectoDetectado}. Directiva ha sido notificada.`,
+          mensaje: `✅ QR Verificado: Supervisión finalizada en ${proyectoVerificado}. Directiva ha sido notificada.`,
         });
       }
     } catch (err: any) {
@@ -186,27 +156,38 @@ export default function OperacionesHome() {
     } finally {
       setProcesandoSup(false);
     }
-  };
-  return (
+  };  return (
     <div className="space-y-6 p-4 md:p-6">
-      {/* Header */}
+      {accionQRSup && (
+        <QRScannerModal
+          titulo={accionQRSup === 'INICIO' ? 'Escanear QR para Iniciar Supervisión' : 'Escanear QR para Finalizar Supervisión'}
+          subtitulo={
+            accionQRSup === 'FIN' && supervisionActiva
+              ? `Debe escanear el QR de: ${supervisionActiva.proyecto}`
+              : 'Apunte al código QR físico ubicado en el puesto'
+          }
+          proyectoEsperado={accionQRSup === 'FIN' && supervisionActiva ? supervisionActiva.proyecto : undefined}
+          onScanSuccess={(proyectoLeido) => confirmarSupervisionTrasQR(accionQRSup, proyectoLeido)}
+          onClose={() => setAccionQRSup(null)}
+        />
+      )}
+
       <div className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-xl p-6 text-white">
         <h1 className="text-2xl font-bold">Panel de Operaciones</h1>
         <p className="text-purple-100 mt-1">Bienvenido, {currentUser?.nombre_completo}</p>
       </div>
 
-      {/* Control de Visitas y Supervisión de Proyectos */}
       <div className="bg-white rounded-xl border-2 border-purple-200 p-5 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
           <h3 className="text-sm font-bold text-purple-800 uppercase flex items-center gap-2">
-            <ShieldCheck size={18} className="text-purple-600" /> Control de Visitas y Supervisión GPS
+            <ShieldCheck size={18} className="text-purple-600" /> Control de Supervisión por QR en Vivo
           </h3>
           <span
-            className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+            className={`px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 ${
               supervisionActiva ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
             }`}
           >
-            {supervisionActiva ? `Supervisando: ${supervisionActiva.proyecto}` : 'Sin supervisión activa'}
+            <QrCode size={12} /> {supervisionActiva ? `Supervisando: ${supervisionActiva.proyecto}` : 'Sin supervisión activa'}
           </span>
         </div>
 
@@ -229,7 +210,7 @@ export default function OperacionesHome() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <button
-            onClick={() => manejarSupervision('INICIO')}
+            onClick={() => setAccionQRSup('INICIO')}
             disabled={procesandoSup || !!supervisionActiva}
             className={`py-3.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
               supervisionActiva || procesandoSup
@@ -241,7 +222,7 @@ export default function OperacionesHome() {
           </button>
 
           <button
-            onClick={() => manejarSupervision('FIN')}
+            onClick={() => setAccionQRSup('FIN')}
             disabled={procesandoSup || !supervisionActiva}
             className={`py-3.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
               !supervisionActiva || procesandoSup
@@ -254,7 +235,6 @@ export default function OperacionesHome() {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <div className="bg-blue-50 w-10 h-10 rounded-lg flex items-center justify-center mb-2">
@@ -282,12 +262,11 @@ export default function OperacionesHome() {
             <UserCheck size={20} className="text-amber-600" />
           </div>
           <p className="text-2xl font-bold text-slate-800">{stats.usuariosPendientes}</p>
-          <p className="text-xs text-slate-500">Líderes Pendientes</p>
+          <p className="text-xs text-slate-500">Personal Pendiente</p>
         </div>
       </div>
 
-      {/* Main Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <button
           onClick={() => navigate('/crear-reporte')}
           className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-blue-500 hover:bg-blue-50 transition-all group text-left"
@@ -323,7 +302,18 @@ export default function OperacionesHome() {
             <UserCheck size={28} className="text-amber-600" />
           </div>
           <h3 className="text-lg font-semibold text-slate-800 mb-1">3. Aprobaciones</h3>
-          <p className="text-sm text-slate-500">Aprobar registros de nuevos líderes</p>
+          <p className="text-sm text-slate-500">Aprobar registros de nuevos líderes y supervisores</p>
+        </button>
+
+        <button
+          onClick={() => navigate('/estadisticas')}
+          className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-emerald-500 hover:bg-emerald-50 transition-all group text-left"
+        >
+          <div className="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+            <BarChart3 size={28} className="text-emerald-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-800 mb-1">4. Estadísticas y Gráficos</h3>
+          <p className="text-sm text-slate-500">Visualizar reportes y exportar informes en Excel y PDF</p>
         </button>
       </div>
     </div>

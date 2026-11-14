@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { PROYECTOS } from '../data/constants';
 import { ROLE_LABELS } from '../types';
+import GeneradorQRProyectos from '../components/GeneradorQRProyectos';
 import { Lock, Eye, EyeOff, CheckCircle, Settings, Key, Users, Edit, Save, X } from 'lucide-react';
 
 export default function ConfiguracionPage() {
@@ -143,7 +144,7 @@ export default function ConfiguracionPage() {
         <h2 className="text-xl md:text-2xl font-bold text-slate-800 flex items-center gap-2">
           <Settings size={24} className="text-blue-600" /> CONFIGURACIÓN Y GESTIÓN DE PERSONAL
         </h2>
-        <p className="text-xs md:text-sm text-slate-500">Seguridad Vip 3000 C.A. — Control de Roles, Proyectos y Privilegios</p>
+        <p className="text-xs md:text-sm text-slate-500">Seguridad Vip 3000 C.A. — Control de Roles, Proyectos, QR y Privilegios</p>
       </div>
 
       {successMessage && (
@@ -151,6 +152,9 @@ export default function ConfiguracionPage() {
           <CheckCircle size={18} className="text-green-600" /> {successMessage}
         </div>
       )}
+
+      {/* Generador e Impresor de Códigos QR por Proyecto */}
+      <GeneradorQRProyectos />
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="p-4 md:p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">

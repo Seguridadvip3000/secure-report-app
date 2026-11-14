@@ -12,11 +12,11 @@ export default function Sidebar() {
   const rol = currentUser?.role?.toLowerCase() || '';
   const nombreElemento = currentUser?.nombre_completo || '';
 
-  const puedeCrearReporte = ['administrador', 'admin', 'directiva', 'operaciones', 'lider'].includes(rol);
-  const puedeVerListaReportes = ['administrador', 'admin', 'directiva', 'operaciones', 'cliente'].includes(rol);
+  const puedeCrearReporte = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom', 'supervisor', 'lider'].includes(rol);
+  const puedeVerListaReportes = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom', 'cliente'].includes(rol);
   const puedeVerAprobacionesUsuarios = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
   const puedeVerAsistenciasYSupervisiones = ['administrador', 'admin', 'directiva'].includes(rol);
-  const puedeVerEstadisticas = ['administrador', 'admin', 'directiva'].includes(rol);
+  const puedeVerEstadisticas = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
   const puedeVerSeguimientoRutas = ['administrador', 'admin'].includes(rol) && nombreElemento.includes('Matthías');
   const puedeVerConfiguracion = ['administrador', 'admin', 'directiva'].includes(rol);
 
@@ -30,7 +30,6 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* BARRA SUPERIOR EXCLUSIVA PARA MÓVILES */}
       <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-slate-950 text-white px-4 pt-8 pb-3 flex items-center justify-between shadow-md border-b border-slate-800">
         <Link to="/" onClick={cerrarMenu} className="flex items-center gap-2.5">
           <img
@@ -50,14 +49,12 @@ export default function Sidebar() {
         </button>
       </header>
 
-      {/* FONDO OSCURO AL ABRIR EL MENÚ EN MÓVIL */}
       {menuAbierto && (
         <div
           onClick={cerrarMenu}
           className="fixed inset-0 bg-black/60 z-40 md:hidden"
         />
       )}
-      {/* CONTENEDOR DEL MENÚ LATERAL RESPONSIVO */}
       <div
         className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-950 min-h-screen text-slate-300 p-4 pt-10 md:pt-4 flex flex-col justify-between transform transition-transform duration-200 ease-out ${
           menuAbierto ? 'translate-x-0' : '-translate-x-full'
@@ -181,7 +178,6 @@ export default function Sidebar() {
           </nav>
         </div>
 
-        {/* PIE DE MENÚ CON PERFIL ACTIVO Y BOTÓN CERRAR SESIÓN */}
         <div className="border-t border-slate-800 pt-4 space-y-3">
           <div className="text-xs space-y-1 px-1">
             <div className="font-semibold text-white truncate">{nombreElemento}</div>

@@ -7,6 +7,8 @@ import Sidebar from './components/Sidebar';
 
 const AuthPage = lazy(() => import('./pages/AuthPage'));
 const LiderHome = lazy(() => import('./pages/LiderHome'));
+const SupervisorHome = lazy(() => import('./pages/SupervisorHome'));
+const CecomHome = lazy(() => import('./pages/CecomHome'));
 const ClienteDashboard = lazy(() => import('./pages/ClienteDashboard'));
 const OperacionesHome = lazy(() => import('./pages/OperacionesHome'));
 const DirectivaHome = lazy(() => import('./pages/DirectivaHome'));
@@ -62,6 +64,10 @@ function RootRedirect() {
       return <Navigate to="/home-directiva" replace />;
     case 'operaciones':
       return <Navigate to="/home-operaciones" replace />;
+    case 'cecom':
+      return <Navigate to="/home-cecom" replace />;
+    case 'supervisor':
+      return <Navigate to="/home-supervisor" replace />;
     case 'cliente':
       return <Navigate to="/dashboard-cliente" replace />;
     case 'lider':
@@ -82,19 +88,19 @@ export default function App() {
                 <Route index element={<RootRedirect />} />
                 
                 <Route path="crear-reporte" element={
-                  <RoleRoute roles={['lider', 'operaciones', 'directiva', 'administrador', 'admin']}>
+                  <RoleRoute roles={['lider', 'supervisor', 'cecom', 'operaciones', 'directiva', 'administrador', 'admin']}>
                     <NewReport />
                   </RoleRoute>
                 } />
                 
                 <Route path="lista-reportes" element={
-                  <RoleRoute roles={['operaciones', 'directiva', 'administrador', 'admin', 'cliente']}>
+                  <RoleRoute roles={['operaciones', 'cecom', 'directiva', 'administrador', 'admin', 'cliente']}>
                     <ReportList />
                   </RoleRoute>
                 } />
                 
                 <Route path="lista-reportes/:id" element={
-                  <RoleRoute roles={['lider', 'operaciones', 'directiva', 'administrador', 'admin', 'cliente']}>
+                  <RoleRoute roles={['lider', 'supervisor', 'cecom', 'operaciones', 'directiva', 'administrador', 'admin', 'cliente']}>
                     <ReportDetail />
                   </RoleRoute>
                 } />
@@ -112,7 +118,7 @@ export default function App() {
                 } />
 
                 <Route path="estadisticas" element={
-                  <RoleRoute roles={['directiva', 'administrador', 'admin']}>
+                  <RoleRoute roles={['operaciones', 'directiva', 'administrador', 'admin']}>
                     <EstadisticasPage />
                   </RoleRoute>
                 } />
@@ -138,6 +144,16 @@ export default function App() {
                 <Route path="dashboard-cliente" element={
                   <RoleRoute roles={['cliente']}>
                     <ClienteDashboard />
+                  </RoleRoute>
+                } />
+                <Route path="home-supervisor" element={
+                  <RoleRoute roles={['supervisor']}>
+                    <SupervisorHome />
+                  </RoleRoute>
+                } />
+                <Route path="home-cecom" element={
+                  <RoleRoute roles={['cecom']}>
+                    <CecomHome />
                   </RoleRoute>
                 } />
                 <Route path="home-operaciones" element={

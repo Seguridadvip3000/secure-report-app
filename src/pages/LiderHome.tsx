@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { notificationService } from '../services/notificationService';
-import { AlertCircle, CheckCircle2, FilePlus, LogIn, LogOut, Clock } from 'lucide-react';
+import QRScannerModal from '../components/QRScannerModal';
+import { AlertCircle, CheckCircle2, FilePlus, LogIn, LogOut, Clock, QrCode } from 'lucide-react';
 
 export default function LiderHome() {
   const { currentUser } = useAuth();
@@ -12,6 +13,7 @@ export default function LiderHome() {
   const [procesandoAsistencia, setProcesandoAsistencia] = useState(false);
   const [enTurnoActivo, setEnTurnoActivo] = useState(false);
   const [ultimaMarcacion, setUltimaMarcacion] = useState<string | null>(null);
+  const [accionQRActiva, setAccionQRActiva] = useState<'ENTRADA' | 'SALIDA' | null>(null);
   const [canalAlerta, setCanalAlerta] = useState<any>(null);
   const [notificacion, setNotificacion] = useState<{ tipo: 'exito' | 'error'; mensaje: string } | null>(null);
 
@@ -26,7 +28,6 @@ export default function LiderHome() {
       ? currentUser.proyectos[0]
       : currentUser?.proyecto_id || 'Asignación General';
 
-  // Verificar si el líder ya marcó ENTRADA y aún no marca SALIDA
   const verificarEstadoAsistencia = async () => {
     if (!currentUser?.id) return;
     try {
@@ -77,22 +78,20 @@ export default function LiderHome() {
       );
     });
   };
-  const registrarAsistencia = async (tipo: 'ENTRADA' | 'SALIDA') => {
+  const confirmarAsistenciaTrasQR = async (tipo: 'ENTRADA' | 'SALIDA', proyectoVerificado: string) => {
     if (!currentUser) return;
-    if (tipo === 'SALIDA' && !enTurnoActivo) return;
-
+    setAccionQRActiva(null);
     setProcesandoAsistencia(true);
     setNotificacion(null);
 
     try {
       const coords = await obtenerGpsActual();
 
-      // 1. Guardar exclusivamente en la tabla asistencias_lideres (NO en reports)
       const { error: dbError } = await supabase.from('asistencias_lideres').insert([
         {
           lider_id: currentUser.id,
           nombre_lider: nombreLider,
-          proyecto: proyectoPrincipal,
+          proyecto: proyectoVerificado,
           tipo,
           latitude: coords.lat,
           longitude: coords.lng,
@@ -101,31 +100,28 @@ export default function LiderHome() {
 
       if (dbError) throw dbError;
 
-      // 2. Actualizar ubicación en user_locations para Seguimiento de Rutas en vivo
-      await supabase.from('user_locations').upsert(
+      await supabase.from('user_locations').insert([
         {
           user_id: currentUser.id,
           nombre_completo: nombreLider,
           role: 'lider',
-          proyecto: proyectoPrincipal,
+          proyecto: proyectoVerificado,
           latitude: coords.lat,
           longitude: coords.lng,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: 'user_id' }
-      );
+      ]);
 
-      // 3. Notificar al Cliente de ese proyecto, Operaciones y Directiva
-      await notificationService.notifyLiderAttendance(nombreLider, proyectoPrincipal, tipo);
+      await notificationService.notifyLiderAttendance(nombreLider, proyectoVerificado, tipo);
 
       setEnTurnoActivo(tipo === 'ENTRADA');
-      setUltimaMarcacion(`${tipo} registrada hoy a las ${new Date().toLocaleTimeString('es-VE')}`);
+      setUltimaMarcacion(`${tipo} verificada por QR hoy a las ${new Date().toLocaleTimeString('es-VE')}`);
       setNotificacion({
         tipo: 'exito',
         mensaje:
           tipo === 'ENTRADA'
-            ? `✅ Entrada reportada en ${proyectoPrincipal}. Se ha habilitado el botón de Salida.`
-            : `✅ Salida reportada en ${proyectoPrincipal}. Turno finalizado correctamente.`,
+            ? `✅ QR Verificado: Entrada reportada en ${proyectoVerificado}. Se habilitó el botón de Salida.`
+            : `✅ QR Verificado: Salida reportada en ${proyectoVerificado}. Turno finalizado correctamente.`,
       });
     } catch (err: any) {
       setNotificacion({
@@ -200,6 +196,17 @@ export default function LiderHome() {
   };
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
+      {/* Modal de Escaneo QR en Vivo (Obligatorio para Entrada y Salida) */}
+      {accionQRActiva && (
+        <QRScannerModal
+          titulo={`Escanear QR para ${accionQRActiva}`}
+          subtitulo={`Proyecto asignado: ${proyectoPrincipal}`}
+          proyectoEsperado={proyectoPrincipal}
+          onScanSuccess={(proyectoLeido) => confirmarAsistenciaTrasQR(accionQRActiva, proyectoLeido)}
+          onClose={() => setAccionQRActiva(null)}
+        />
+      )}
+
       {/* Tarjeta de Identificación Operativa */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-blue-600 flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
@@ -238,17 +245,18 @@ export default function LiderHome() {
         </div>
       )}
 
-      {/* Control de Asistencia (Entrada y Salida) */}
+      {/* Control de Asistencia por QR en Vivo (Entrada y Salida) */}
       <div className="max-w-xl mx-auto bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
           <h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">
-            <Clock size={16} className="text-blue-600" /> Control de Asistencia en Proyecto
+            <Clock size={16} className="text-blue-600" /> Control de Asistencia por QR en Vivo
           </h3>
+          <QrCode size={16} className="text-slate-400" />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <button
-            onClick={() => registrarAsistencia('ENTRADA')}
+            onClick={() => setAccionQRActiva('ENTRADA')}
             disabled={procesandoAsistencia || enTurnoActivo}
             className={`py-3.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
               enTurnoActivo || procesandoAsistencia
@@ -260,7 +268,7 @@ export default function LiderHome() {
           </button>
 
           <button
-            onClick={() => registrarAsistencia('SALIDA')}
+            onClick={() => setAccionQRActiva('SALIDA')}
             disabled={procesandoAsistencia || !enTurnoActivo}
             className={`py-3.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
               !enTurnoActivo || procesandoAsistencia
