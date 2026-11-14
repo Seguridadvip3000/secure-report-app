@@ -6,6 +6,12 @@ import * as Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
+import { createClient } from '@supabase/supabase-js';
+
+const SUPABASE_URL = 'https://sjwygpvnkrmfvfxuhkqp.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqd3lncHZua3JtZnZmeHVoa3FwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5NDIwODIsImV4cCI6MjEwODUxODA4Mn0.YJzNC5HQKhIxvJVKQeetbBi7t6kwTHFK-h-i1NF-ny4';
+
+const supabaseNative = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -17,6 +23,7 @@ Notifications.setNotificationHandler({
 
 export default function App() {
   const webViewRef = React.useRef(null);
+  const [usuarioActivo, setUsuarioActivo] = React.useState(null);
 
   const protocolo = 'https://';
   const proyecto = 'secure-report-app';
@@ -50,6 +57,53 @@ export default function App() {
       return () => BackHandler.removeEventListener('hardwareBackPress', onBackPress);
     }
   }, []);
+
+  // ESCUCHA NATIVA EN SEGUNDO PLANO (PANTALLA BLOQUEADA O EN OTRA APP)
+  React.useEffect(() => {
+    if (!usuarioActivo || !usuarioActivo.role) return;
+
+    const rol = (usuarioActivo.role || '').toLowerCase().trim();
+    const proyectos = Array.isArray(usuarioActivo.proyectos) ? usuarioActivo.proyectos : [];
+
+    const canal = supabaseNative
+      .channel(`native-bg-${rol}-${Date.now()}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        async (payload) => {
+          const notif = payload.new;
+          if (!notif) return;
+
+          const rolesDestino = (notif.target_roles || []).map((r) => r.toLowerCase());
+          const coincideRol =
+            rolesDestino.includes(rol) ||
+            (rol === 'administrador' && rolesDestino.includes('admin')) ||
+            (rol === 'admin' && rolesDestino.includes('administrador'));
+
+          if (!coincideRol) return;
+
+          if (rol === 'cliente' && notif.target_project) {
+            const tieneAcceso = proyectos.includes('*') || proyectos.includes(notif.target_project);
+            if (!tieneAcceso) return;
+          }
+
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: notif.title || 'SecureReport VIP 3000',
+              body: notif.body || '',
+              sound: 'default',
+              channelId: 'alertas-vip3000',
+            },
+            trigger: null,
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabaseNative.removeChannel(canal);
+    };
+  }, [usuarioActivo]);
 
   const solicitarUbicacionNativa = async () => {
     try {
@@ -174,16 +228,8 @@ export default function App() {
     try {
       const datos = JSON.parse(event.nativeEvent.data);
 
-      if (datos.type === 'SHOW_NOTIFICATION') {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: datos.title || 'SecureReport VIP 3000',
-            body: datos.body || '',
-            sound: 'default',
-            channelId: 'alertas-vip3000',
-          },
-          trigger: null,
-        });
+      if (datos.type === 'SET_USER_SESSION') {
+        setUsuarioActivo(datos.user || null);
         return;
       }
 
