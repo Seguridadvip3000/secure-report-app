@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { PROYECTOS, TITULOS_NOVEDAD } from '../data/constants';
 import { jsPDF } from 'jspdf';
+import * as XLSX from 'xlsx';
 import {
   ArrowLeft,
   BarChart3,
@@ -29,6 +30,21 @@ interface ReporteStats {
 
 type FiltroPeriodo = 'general' | 'semana' | 'mes' | 'rango';
 
+// Limpia registros antiguos guardados como '["ESTACIONAMIENTO CCCT"]'
+const limpiarTextoProyecto = (valor: string): string => {
+  if (!valor) return 'Sin Proyecto';
+  let limpio = valor.trim();
+  if (limpio.startsWith('[') && limpio.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(limpio);
+      if (Array.isArray(parsed) && parsed.length > 0) return String(parsed[0]).trim();
+    } catch {
+      limpio = limpio.replace(/^\[["']?|["']?\]$/g, '');
+    }
+  }
+  return limpio.replace(/^["']+|["']+$/g, '').trim() || 'Sin Proyecto';
+};
+
 export default function EstadisticasPage() {
   const navigate = useNavigate();
   const [reportes, setReportes] = useState<ReporteStats[]>([]);
@@ -50,7 +66,11 @@ export default function EstadisticasPage() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setReportes(data || []);
+      const normalizados = (data || []).map((r: any) => ({
+        ...r,
+        proyecto: limpiarTextoProyecto(r.proyecto),
+      }));
+      setReportes(normalizados);
     } catch (err) {
       console.error('Error cargando estadísticas:', err);
     } finally {
@@ -132,55 +152,90 @@ export default function EstadisticasPage() {
     return 'Nivel General (Histórico Completo)';
   };
 
+  // EXPORTAR A EXCEL REAL (.XLSX) CON 3 PESTAÑAS DE ESTADÍSTICAS Y DETALLE
   const exportarExcel = () => {
     if (reportesFiltrados.length === 0) {
       alert('No hay datos filtrados para exportar.');
       return;
     }
 
-    const encabezados = ['Fecha y Hora', 'Proyecto', 'Tipo / Título de Novedad', 'Reportado Por', 'Estado'];
-    const filas = reportesFiltrados.map((r) => [
-      `"${new Date(r.created_at).toLocaleString('es-VE')}"`,
-      `"${(r.proyecto || '').replace(/"/g, '""')}"`,
-      `"${(r.titulo_novedad || '').replace(/"/g, '""')}"`,
-      `"${(r.quien_reporta || 'Personal Operativo').replace(/"/g, '""')}"`,
-      `"${(r.status || '').toUpperCase()}"`,
-    ]);
+    const wb = XLSX.utils.book_new();
 
-    const contenidoCSV =
-      '\uFEFF' +
-      `INFORME EJECUTIVO DE ESTADÍSTICAS - SEGURIDAD VIP 3000 C.A.\n` +
-      `Período: ${obtenerEtiquetaPeriodo()} | Proyecto: ${proyectoFiltro} | Total: ${metricas.total}\n\n` +
-      encabezados.join(';') +
-      '\n' +
-      filas.map((f) => f.join(';')).join('\n');
+    // PESTAÑA 1: RESUMEN EJECUTIVO Y ESTADÍSTICA POR PROYECTO
+    const datosHoja1: any[][] = [
+      ['SEGURIDAD VIP 3000 C.A. — INFORME ESTADÍSTICO OPERATIVO'],
+      [`Período: ${obtenerEtiquetaPeriodo()}`, `Fecha de emisión: ${new Date().toLocaleString('es-VE')}`],
+      [],
+      ['RESUMEN GENERAL DE INDICADORES', 'CANTIDAD', 'PORCENTAJE'],
+      ['Total de Reportes Analizados', metricas.total, '100%'],
+      ['Reportes Aprobados', metricas.aprobados, `${metricas.total > 0 ? Math.round((metricas.aprobados / metricas.total) * 100) : 0}%`],
+      ['Reportes Pendientes', metricas.pendientes, `${metricas.total > 0 ? Math.round((metricas.pendientes / metricas.total) * 100) : 0}%`],
+      ['Reportes Rechazados', metricas.rechazados, `${metricas.total > 0 ? Math.round((metricas.rechazados / metricas.total) * 100) : 0}%`],
+      [],
+      ['ESTADÍSTICA DE INCIDENCIAS POR PROYECTO', 'CANTIDAD DE REPORTES', 'PARTICIPACIÓN (%)'],
+      ...metricas.porProyecto.map((p) => [
+        p.nombre,
+        p.cantidad,
+        `${Math.round((p.cantidad / metricas.total) * 100)}%`,
+      ]),
+    ];
 
-    const nombreArchivo = `Estadisticas_SeguridadVip3000CA_${new Date().toISOString().slice(0, 10)}.csv`;
+    const ws1 = XLSX.utils.aoa_to_sheet(datosHoja1);
+    ws1['!cols'] = [{ wch: 44 }, { wch: 24 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, ws1, 'Resumen y Proyectos');
+
+    // PESTAÑA 2: ESTADÍSTICA POR TIPO / TÍTULO DE NOVEDAD
+    const datosHoja2: any[][] = [
+      ['ESTADÍSTICA POR TIPO / TÍTULO DE NOVEDAD'],
+      [`Período: ${obtenerEtiquetaPeriodo()}`, `Proyecto: ${proyectoFiltro === 'todos' ? 'Todos' : proyectoFiltro}`],
+      [],
+      ['TIPO / TÍTULO DE NOVEDAD', 'CANTIDAD', 'PORCENTAJE (%)'],
+      ...metricas.porTitulo.map((t) => [
+        t.nombre,
+        t.cantidad,
+        `${Math.round((t.cantidad / metricas.total) * 100)}%`,
+      ]),
+    ];
+
+    const ws2 = XLSX.utils.aoa_to_sheet(datosHoja2);
+    ws2['!cols'] = [{ wch: 48 }, { wch: 16 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Por Tipo de Novedad');
+
+    // PESTAÑA 3: DETALLE DE REGISTROS FILTRADOS
+    const datosHoja3: any[][] = [
+      ['FECHA Y HORA', 'PROYECTO', 'TIPO DE NOVEDAD', 'REPORTADO POR', 'ESTADO'],
+      ...reportesFiltrados.map((r) => [
+        new Date(r.created_at).toLocaleString('es-VE'),
+        r.proyecto,
+        r.titulo_novedad,
+        r.quien_reporta || 'Personal Operativo',
+        (r.status || '').toUpperCase(),
+      ]),
+    ];
+
+    const ws3 = XLSX.utils.aoa_to_sheet(datosHoja3);
+    ws3['!cols'] = [{ wch: 24 }, { wch: 28 }, { wch: 38 }, { wch: 26 }, { wch: 16 }];
+    XLSX.utils.book_append_sheet(wb, ws3, 'Detalle Registros');
+
+    const nombreArchivo = `Estadisticas_SeguridadVip3000CA_${new Date().toISOString().slice(0, 10)}.xlsx`;
 
     if ((window as any).ReactNativeWebView) {
-      const base64CSV = btoa(unescape(encodeURIComponent(contenidoCSV)));
+      const base64Xlsx = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
       (window as any).ReactNativeWebView.postMessage(
         JSON.stringify({
           type: 'DOWNLOAD_PDF',
           filename: nombreArchivo,
-          mimeType: 'text/csv',
-          base64: base64CSV,
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          base64: base64Xlsx,
         })
       );
       return;
     }
 
-    const blob = new Blob([contenidoCSV], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = nombreArchivo;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    XLSX.writeFile(wb, nombreArchivo);
   };
 
+  // EXPORTAR A PDF EJECUTIVO (CON EXTRACCIÓN BASE64 CORREGIDA EN .split(',')[1])
   const exportarPDFEjecutivo = async () => {
     if (reportesFiltrados.length === 0) {
       alert('No hay datos filtrados para generar el informe PDF.');
@@ -282,7 +337,7 @@ export default function EstadisticasPage() {
       const nombreArchivo = `EstadisticasEjecutivas_SeguridadVip3000CA_${new Date().toISOString().slice(0, 10)}.pdf`;
 
       if ((window as any).ReactNativeWebView) {
-        const pdfBase64 = doc.output('datauristring').split(',');
+        const pdfBase64 = doc.output('datauristring').split(',')[1];
         (window as any).ReactNativeWebView.postMessage(
           JSON.stringify({
             type: 'DOWNLOAD_PDF',
@@ -301,8 +356,8 @@ export default function EstadisticasPage() {
     }
   };
 
-  const maxProyecto = metricas.porProyecto.length > 0 ? metricas.porProyecto.cantidad : 1;
-  const maxTitulo = metricas.porTitulo.length > 0 ? metricas.porTitulo.cantidad : 1;
+  const maxProyecto = metricas.porProyecto.length > 0 ? metricas.porProyecto[0].cantidad : 1;
+  const maxTitulo = metricas.porTitulo.length > 0 ? metricas.porTitulo[0].cantidad : 1;
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
