@@ -52,7 +52,6 @@ export default function App() {
     }
   }, []);
 
-  // SOLICITAR PERMISO NATIVO DE GPS EN ANDROID PARA REGISTRO Y MONITOREO
   const solicitarUbicacionNativa = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -78,7 +77,6 @@ export default function App() {
     }
   };
 
-  // ABRIR CÁMARA NATIVA DE ANDROID Y ENVIAR FOTO A LA WEB
   const abrirCamaraNativa = async () => {
     try {
       const permiso = await ImagePicker.requestCameraPermissionsAsync();
@@ -94,7 +92,7 @@ export default function App() {
       });
 
       if (!resultado.canceled && resultado.assets && resultado.assets.length > 0) {
-        const asset = resultado.assets;
+        const asset = resultado.assets[0];
         if (asset.base64) {
           const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
           webViewRef.current?.postMessage(JSON.stringify({ type: 'NATIVE_PHOTOS', photos: [dataUrl] }));
@@ -105,7 +103,6 @@ export default function App() {
     }
   };
 
-  // ABRIR GALERÍA NATIVA DE ANDROID Y ENVIAR FOTOS A LA WEB
   const abrirGaleriaNativa = async () => {
     try {
       const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -178,7 +175,6 @@ export default function App() {
     try {
       const datos = JSON.parse(event.nativeEvent.data);
 
-      // DISPARAR NOTIFICACIÓN NATIVA EN BARRA DE ANDROID CON SONIDO Y VIBRACIÓN
       if (datos.type === 'SHOW_NOTIFICATION') {
         await Notifications.scheduleNotificationAsync({
           content: {
