@@ -24,7 +24,19 @@ export default function App() {
   const APP_URL = protocolo + proyecto + dominio;
 
   React.useEffect(() => {
-    Notifications.requestPermissionsAsync();
+    const configurarNotificaciones = async () => {
+      await Notifications.requestPermissionsAsync();
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('alertas-vip3000', {
+          name: 'Alertas Seguridad VIP 3000',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern:,
+          lightColor: '#FF0000',
+          sound: 'default',
+        });
+      }
+    };
+    configurarNotificaciones();
 
     const onBackPress = () => {
       if (webViewRef.current) {
@@ -82,7 +94,7 @@ export default function App() {
       });
 
       if (!resultado.canceled && resultado.assets && resultado.assets.length > 0) {
-        const asset = resultado.assets[0];
+        const asset = resultado.assets;
         if (asset.base64) {
           const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
           webViewRef.current?.postMessage(JSON.stringify({ type: 'NATIVE_PHOTOS', photos: [dataUrl] }));
@@ -172,7 +184,8 @@ export default function App() {
           content: {
             title: datos.title || 'SecureReport VIP 3000',
             body: datos.body || '',
-            sound: true,
+            sound: 'default',
+            channelId: 'alertas-vip3000',
           },
           trigger: null,
         });
