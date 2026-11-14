@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useReports } from '../context/ReportContext';
-import { FilePlus, List, UserCheck, Settings, CheckCircle, Clock, FileText } from 'lucide-react';
+import { FilePlus, List, UserCheck, Settings, CheckCircle, Clock, FileText, BarChart3 } from 'lucide-react';
 
 export default function DirectivaHome() {
   const navigate = useNavigate();
@@ -77,6 +77,7 @@ export default function DirectivaHome() {
           <h3 className="text-lg font-semibold text-slate-800 mb-1">2. Lista de Reportes</h3>
           <p className="text-sm text-slate-500">Ver, editar y aprobar reportes</p>
         </button>
+
         <button
           onClick={() => navigate('/aprobaciones')}
           className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-amber-500 hover:bg-amber-50 transition-all group text-left relative"
@@ -102,6 +103,17 @@ export default function DirectivaHome() {
           </div>
           <h3 className="text-lg font-semibold text-slate-800 mb-1">4. Configuración</h3>
           <p className="text-sm text-slate-500">Panel de control avanzado (requiere clave)</p>
+        </button>
+
+        <button
+          onClick={() => navigate('/estadisticas')}
+          className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-emerald-500 hover:bg-emerald-50 transition-all group text-left md:col-span-2"
+        >
+          <div className="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+            <BarChart3 size={28} className="text-emerald-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-800 mb-1">5. Estadísticas y Gráficos</h3>
+          <p className="text-sm text-slate-500">Visualizar reportes por fecha, proyecto, título y nivel general</p>
         </button>
       </div>
     </div>

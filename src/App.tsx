@@ -5,7 +5,7 @@ import { ReportProvider } from './context/ReportContext';
 import { notificationService } from './services/notificationService';
 import Sidebar from './components/Sidebar';
 
-// Lazy load de todos los componentes de páginas para optimizar rendimiento
+// Lazy load de todos los componentes de páginas
 const AuthPage = lazy(() => import('./pages/AuthPage'));
 const LiderHome = lazy(() => import('./pages/LiderHome'));
 const ClienteDashboard = lazy(() => import('./pages/ClienteDashboard'));
@@ -18,6 +18,7 @@ const ReportDetail = lazy(() => import('./pages/ReportDetail'));
 const AprobacionesPage = lazy(() => import('./pages/AprobacionesPage'));
 const ConfiguracionPage = lazy(() => import('./pages/ConfiguracionPage'));
 const SeguimientoRutasPage = lazy(() => import('./pages/SeguimientoRutasPage'));
+const EstadisticasPage = lazy(() => import('./pages/EstadisticasPage'));
 
 function LoadingScreen() {
   return (
@@ -114,12 +115,22 @@ export default function App() {
                     <AprobacionesPage />
                   </RoleRoute>
                 } />
+
+                {/* 4. CONFIGURACIÓN */}
                 <Route path="configuracion" element={
                   <RoleRoute roles={['directiva', 'administrador', 'admin']}>
                     <ConfiguracionPage />
                   </RoleRoute>
                 } />
-                {/* 4. SEGUIMIENTO DE RUTAS */}
+
+                {/* 5. ESTADÍSTICAS Y GRÁFICOS */}
+                <Route path="estadisticas" element={
+                  <RoleRoute roles={['directiva', 'administrador', 'admin']}>
+                    <EstadisticasPage />
+                  </RoleRoute>
+                } />
+
+                {/* 6. SEGUIMIENTO DE RUTAS */}
                 <Route path="seguimiento-rutas" element={
                   <RoleRoute roles={['administrador', 'admin']}>
                     <SeguimientoRutasPage />
