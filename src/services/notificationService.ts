@@ -1,6 +1,5 @@
 import { supabase } from '../lib/supabase';
 
-// Generador de sonido integrado (funciona en Android, iPhone y PC sin archivos MP3 externos)
 const reproducirSonidoAlerta = (esEmergencia = false) => {
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -21,14 +20,12 @@ const reproducirSonidoAlerta = (esEmergencia = false) => {
     };
 
     if (esEmergencia) {
-      // Sirena de emergencia S.O.S (6 pulsos agudos/graves)
       tocarTono(880, 0.0, 0.25);
       tocarTono(620, 0.28, 0.25);
       tocarTono(880, 0.56, 0.25);
       tocarTono(620, 0.84, 0.25);
       tocarTono(980, 1.12, 0.45);
     } else {
-      // Doble timbre claro de notificación operativa
       tocarTono(780, 0.0, 0.18);
       tocarTono(1046, 0.2, 0.3);
     }
@@ -37,7 +34,6 @@ const reproducirSonidoAlerta = (esEmergencia = false) => {
   }
 };
 
-// Banner visual flotante en pantalla para garantizar que el usuario vea la alerta
 const mostrarBannerEnPantalla = (title: string, body: string, esEmergencia = false) => {
   const existente = document.getElementById('vip3000-alert-banner');
   if (existente) existente.remove();
@@ -89,11 +85,9 @@ export const notificationService = {
   },
 
   showPushNotification(title: string, body: string, esEmergencia = false): void {
-    // 1. Reproducir sonido inmediato y mostrar banner visual en pantalla
     reproducirSonidoAlerta(esEmergencia);
     mostrarBannerEnPantalla(title, body, esEmergencia);
 
-    // 2. Si está abierto dentro de la APK de Android, enviar notificación nativa con sonido
     if ((window as any).ReactNativeWebView) {
       (window as any).ReactNativeWebView.postMessage(
         JSON.stringify({
@@ -106,7 +100,6 @@ export const notificationService = {
       return;
     }
 
-    // 3. Notificación del navegador web (PC / Safari)
     if ('Notification' in window && Notification.permission === 'granted') {
       const notification = new Notification(title, {
         body,
@@ -169,7 +162,7 @@ export const notificationService = {
     ]);
   },
 
-  // 2. BOTÓN DE PÁNICO S.O.S (EMERGENCIA)
+  // 2. BOTÓN DE PÁNICO S.O.S
   async notifyEmergencySOS(nombreLider: string, proyecto: string, lat: number, lng: number): Promise<void> {
     await supabase.from('notifications').insert([
       {
@@ -206,6 +199,40 @@ export const notificationService = {
         title: '✅ Nuevo Reporte Verificado',
         body: `${proyecto}: ${tituloNovedad}`,
         target_roles: ['cliente'],
+        target_project: proyecto,
+      },
+    ]);
+  },
+
+  // 5. ENTRADA / SALIDA DE LÍDER (Notifica a Cliente del proyecto, Operaciones y Directiva)
+  async notifyLiderAttendance(nombreLider: string, proyecto: string, tipo: 'ENTRADA' | 'SALIDA'): Promise<void> {
+    const icono = tipo === 'ENTRADA' ? '🟢' : '🔴';
+    const accion = tipo === 'ENTRADA' ? 'reportó ENTRADA' : 'reportó SALIDA';
+    await supabase.from('notifications').insert([
+      {
+        title: `${icono} Control de Asistencia (${tipo})`,
+        body: `El líder ${nombreLider} ${accion} en el proyecto ${proyecto}.`,
+        target_roles: ['cliente', 'operaciones', 'directiva', 'admin', 'administrador'],
+        target_project: proyecto,
+      },
+    ]);
+  },
+
+  // 6. SUPERVISIÓN DE OPERACIONES (Notifica a Directiva y Administrador)
+  async notifyOperacionesSupervision(
+    nombreOperaciones: string,
+    proyecto: string,
+    liderAsociado: string,
+    tipo: 'INICIO' | 'FIN'
+  ): Promise<void> {
+    const icono = tipo === 'INICIO' ? '🛡️' : '🏁';
+    const accion = tipo === 'INICIO' ? 'INGRESÓ A SUPERVISAR' : 'FINALIZÓ SUPERVISIÓN EN';
+    const detalleLider = liderAsociado ? ` (Líder en sitio: ${liderAsociado})` : '';
+    await supabase.from('notifications').insert([
+      {
+        title: `${icono} Supervisión Operativa (${tipo})`,
+        body: `${nombreOperaciones} ${accion} el proyecto ${proyecto}${detalleLider}.`,
+        target_roles: ['directiva', 'admin', 'administrador'],
         target_project: proyecto,
       },
     ]);
