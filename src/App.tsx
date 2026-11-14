@@ -173,6 +173,20 @@ function Layout() {
 
   React.useEffect(() => {
     if (!currentUser) return;
+
+    // Enviar sesión a la APK nativa para mantener notificaciones en segundo plano
+    if ((window as any).ReactNativeWebView) {
+      (window as any).ReactNativeWebView.postMessage(
+        JSON.stringify({
+          type: 'SET_USER_SESSION',
+          user: {
+            role: currentUser.role,
+            proyectos: currentUser.proyectos || [],
+          },
+        })
+      );
+    }
+
     notificationService.requestPermission();
     const unsubscribe = notificationService.subscribeToUserNotifications(
       currentUser.role,
