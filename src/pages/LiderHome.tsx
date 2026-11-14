@@ -3,12 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { notificationService } from '../services/notificationService';
-import { AlertCircle, CheckCircle2, FilePlus } from 'lucide-react';
+import { AlertCircle, CheckCircle2, FilePlus, LogIn, LogOut, Clock } from 'lucide-react';
 
 export default function LiderHome() {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [isSending, setIsSending] = useState(false);
+  const [procesandoAsistencia, setProcesandoAsistencia] = useState(false);
+  const [enTurnoActivo, setEnTurnoActivo] = useState(false);
+  const [ultimaMarcacion, setUltimaMarcacion] = useState<string | null>(null);
   const [canalAlerta, setCanalAlerta] = useState<any>(null);
   const [notificacion, setNotificacion] = useState<{ tipo: 'exito' | 'error'; mensaje: string } | null>(null);
 
@@ -20,10 +23,38 @@ export default function LiderHome() {
 
   const proyectoPrincipal =
     Array.isArray(currentUser?.proyectos) && currentUser.proyectos.length > 0
-      ? currentUser.proyectos
+      ? currentUser.proyectos[0]
       : currentUser?.proyecto_id || 'Asignación General';
 
+  // Verificar si el líder ya marcó ENTRADA y aún no marca SALIDA
+  const verificarEstadoAsistencia = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const { data } = await supabase
+        .from('asistencias_lideres')
+        .select('tipo, created_at')
+        .eq('lider_id', currentUser.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data) {
+        setEnTurnoActivo(data.tipo === 'ENTRADA');
+        setUltimaMarcacion(
+          `${data.tipo} registrada el ${new Date(data.created_at).toLocaleString('es-VE')}`
+        );
+      } else {
+        setEnTurnoActivo(false);
+        setUltimaMarcacion(null);
+      }
+    } catch (err) {
+      console.error('Error verificando asistencia:', err);
+    }
+  };
+
   useEffect(() => {
+    verificarEstadoAsistencia();
+
     const channel = supabase.channel('alertas-panico-global');
     channel.subscribe();
     setCanalAlerta(channel);
@@ -31,9 +62,9 @@ export default function LiderHome() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [currentUser]);
 
-  const obtenerGpsEmergencia = (): Promise<{ lat: number; lng: number }> => {
+  const obtenerGpsActual = (): Promise<{ lat: number; lng: number }> => {
     return new Promise((resolve) => {
       if (!('geolocation' in navigator)) {
         resolve({ lat: 10.4806, lng: -66.9036 });
@@ -42,9 +73,68 @@ export default function LiderHome() {
       navigator.geolocation.getCurrentPosition(
         (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         () => resolve({ lat: 10.4806, lng: -66.9036 }),
-        { enableHighAccuracy: true, timeout: 4000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
       );
     });
+  };
+  const registrarAsistencia = async (tipo: 'ENTRADA' | 'SALIDA') => {
+    if (!currentUser) return;
+    if (tipo === 'SALIDA' && !enTurnoActivo) return;
+
+    setProcesandoAsistencia(true);
+    setNotificacion(null);
+
+    try {
+      const coords = await obtenerGpsActual();
+
+      // 1. Guardar exclusivamente en la tabla asistencias_lideres (NO en reports)
+      const { error: dbError } = await supabase.from('asistencias_lideres').insert([
+        {
+          lider_id: currentUser.id,
+          nombre_lider: nombreLider,
+          proyecto: proyectoPrincipal,
+          tipo,
+          latitude: coords.lat,
+          longitude: coords.lng,
+        },
+      ]);
+
+      if (dbError) throw dbError;
+
+      // 2. Actualizar ubicación en user_locations para Seguimiento de Rutas en vivo
+      await supabase.from('user_locations').upsert(
+        {
+          user_id: currentUser.id,
+          nombre_completo: nombreLider,
+          role: 'lider',
+          proyecto: proyectoPrincipal,
+          latitude: coords.lat,
+          longitude: coords.lng,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      );
+
+      // 3. Notificar al Cliente de ese proyecto, Operaciones y Directiva
+      await notificationService.notifyLiderAttendance(nombreLider, proyectoPrincipal, tipo);
+
+      setEnTurnoActivo(tipo === 'ENTRADA');
+      setUltimaMarcacion(`${tipo} registrada hoy a las ${new Date().toLocaleTimeString('es-VE')}`);
+      setNotificacion({
+        tipo: 'exito',
+        mensaje:
+          tipo === 'ENTRADA'
+            ? `✅ Entrada reportada en ${proyectoPrincipal}. Se ha habilitado el botón de Salida.`
+            : `✅ Salida reportada en ${proyectoPrincipal}. Turno finalizado correctamente.`,
+      });
+    } catch (err: any) {
+      setNotificacion({
+        tipo: 'error',
+        mensaje: 'Error al registrar asistencia: ' + (err?.message || 'Verifique su conexión.'),
+      });
+    } finally {
+      setProcesandoAsistencia(false);
+    }
   };
 
   const dispararBotonPanicoWeb = async () => {
@@ -53,10 +143,9 @@ export default function LiderHome() {
     setNotificacion(null);
 
     try {
-      const coords = await obtenerGpsEmergencia();
+      const coords = await obtenerGpsActual();
       const ahora = new Date().toISOString();
 
-      // 1. Transmisión instantánea por canal Broadcast
       if (canalAlerta) {
         await canalAlerta.send({
           type: 'broadcast',
@@ -72,13 +161,12 @@ export default function LiderHome() {
         });
       }
 
-      // 2. Registro oficial en la tabla reports con las columnas exactas de Supabase
       const tituloEmergencia = `🚨 ALERTA S.O.S ACTIVADA POR ${nombreLider.toUpperCase()}`;
       const { error: dbError } = await supabase.from('reports').insert([
         {
           fecha_hora: ahora,
           titulo_novedad: tituloEmergencia,
-          desarrollo: `¡EMERGENCIA EN RUTA! El líder ${nombreLider} ha activado el botón de pánico S.O.S en el proyecto ${proyectoPrincipal}. Coordenadas GPS: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}. Se requiere verificación inmediata.`,
+          desarrollo: `¡EMERGENCIA EN RUTA! El líder ${nombreLider} ha activado el botón de pánico S.O.S en el proyecto ${proyectoPrincipal}. Coordenadas GPS: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}.`,
           proyecto: proyectoPrincipal,
           quien_reporta: nombreLider,
           created_by: currentUser.id,
@@ -95,7 +183,6 @@ export default function LiderHome() {
 
       if (dbError) throw dbError;
 
-      // 3. Disparar notificación push nativa a Operaciones, Directiva y Administrador
       await notificationService.notifyEmergencySOS(nombreLider, proyectoPrincipal, coords.lat, coords.lng);
 
       setNotificacion({
@@ -103,7 +190,6 @@ export default function LiderHome() {
         mensaje: '¡S.O.S Emitido! Alerta enviada en tiempo real con su ubicación GPS a Operaciones, Directiva y Administrador.',
       });
     } catch (err: any) {
-      console.error('Fallo al emitir pánico:', err);
       setNotificacion({
         tipo: 'error',
         mensaje: 'Error al transmitir la alerta: ' + (err?.message || 'Verifique su conexión a internet.'),
@@ -124,10 +210,73 @@ export default function LiderHome() {
           </p>
         </div>
         <div>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium uppercase tracking-wider">
-            ● Estatus: Activo en Ruta
+          <span
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+              enTurnoActivo ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
+            }`}
+          >
+            ● {enTurnoActivo ? 'En Turno Activo' : 'Fuera de Turno'}
           </span>
         </div>
+      </div>
+
+      {/* Notificaciones de estado */}
+      {notificacion && (
+        <div
+          className={`max-w-xl mx-auto p-4 rounded-xl text-sm border flex items-start gap-2 text-left ${
+            notificacion.tipo === 'exito'
+              ? 'bg-green-50 border-green-200 text-green-800'
+              : 'bg-red-50 border-red-200 text-red-800'
+          }`}
+        >
+          {notificacion.tipo === 'exito' ? (
+            <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
+          ) : (
+            <AlertCircle size={18} className="shrink-0 mt-0.5" />
+          )}
+          <span>{notificacion.mensaje}</span>
+        </div>
+      )}
+
+      {/* Control de Asistencia (Entrada y Salida) */}
+      <div className="max-w-xl mx-auto bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+          <h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">
+            <Clock size={16} className="text-blue-600" /> Control de Asistencia en Proyecto
+          </h3>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            onClick={() => registrarAsistencia('ENTRADA')}
+            disabled={procesandoAsistencia || enTurnoActivo}
+            className={`py-3.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+              enTurnoActivo || procesandoAsistencia
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm active:scale-95 cursor-pointer'
+            }`}
+          >
+            <LogIn size={18} /> REPORTAR ENTRADA
+          </button>
+
+          <button
+            onClick={() => registrarAsistencia('SALIDA')}
+            disabled={procesandoAsistencia || !enTurnoActivo}
+            className={`py-3.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+              !enTurnoActivo || procesandoAsistencia
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                : 'bg-amber-600 hover:bg-amber-700 text-white shadow-sm active:scale-95 cursor-pointer'
+            }`}
+          >
+            <LogOut size={18} /> REPORTAR SALIDA
+          </button>
+        </div>
+
+        {ultimaMarcacion && (
+          <p className="text-xs text-center text-slate-500 bg-slate-50 py-2 rounded-lg">
+            Último registro: <strong>{ultimaMarcacion}</strong>
+          </p>
+        )}
       </div>
 
       {/* Acceso Rápido a Crear Reporte */}
@@ -141,7 +290,7 @@ export default function LiderHome() {
       </div>
 
       {/* Panel del Botón de Emergencia Táctico */}
-      <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 md:p-8 text-center space-y-6 max-w-xl mx-auto">
+      <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 md:p-8 text-center space-y-5 max-w-xl mx-auto">
         <div>
           <h3 className="text-lg font-bold text-red-600 tracking-wide uppercase flex items-center justify-center gap-2">
             <AlertCircle size={20} /> Botón de Emergencia Satelital
@@ -151,24 +300,7 @@ export default function LiderHome() {
           </p>
         </div>
 
-        {notificacion && (
-          <div
-            className={`p-4 rounded-xl text-sm border flex items-start gap-2 text-left ${
-              notificacion.tipo === 'exito'
-                ? 'bg-green-50 border-green-200 text-green-800'
-                : 'bg-red-50 border-red-200 text-red-800'
-            }`}
-          >
-            {notificacion.tipo === 'exito' ? (
-              <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
-            ) : (
-              <AlertCircle size={18} className="shrink-0 mt-0.5" />
-            )}
-            <span>{notificacion.mensaje}</span>
-          </div>
-        )}
-
-        <div className="py-4 flex justify-center">
+        <div className="py-2 flex justify-center">
           <button
             onClick={dispararBotonPanicoWeb}
             disabled={isSending}

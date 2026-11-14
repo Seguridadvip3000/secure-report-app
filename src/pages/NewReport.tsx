@@ -33,22 +33,33 @@ export default function NewReport() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
+  const esLider = currentUser?.role?.toLowerCase() === 'lider';
+  const proyectoDelLider =
+    Array.isArray(currentUser?.proyectos) && currentUser.proyectos.length > 0
+      ? currentUser.proyectos
+      : currentUser?.proyecto_id || '';
+
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
 
   const [form, setForm] = useState({
-    proyecto: '',
+    proyecto: esLider ? proyectoDelLider : '',
     tituloNovedad: '',
     desarrollo: '',
   });
+
+  useEffect(() => {
+    if (esLider && proyectoDelLider) {
+      setForm((prev) => ({ ...prev, proyecto: proyectoDelLider }));
+    }
+  }, [esLider, proyectoDelLider]);
 
   const [evidencias, setEvidencias] = useState<string[]>([]);
   const [gpsLocation, setGpsLocation] = useState<{ lat: number; lng: number; address?: string } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Escucha las fotografías enviadas desde la cámara o galería nativa de la APK
   useEffect(() => {
     const recibirFotosNativas = (event: MessageEvent) => {
       try {
@@ -201,7 +212,11 @@ export default function NewReport() {
             <button
               onClick={() => {
                 setSubmitted(false);
-                setForm({ proyecto: '', tituloNovedad: '', desarrollo: '' });
+                setForm({
+                  proyecto: esLider ? proyectoDelLider : '',
+                  tituloNovedad: '',
+                  desarrollo: '',
+                });
                 setEvidencias([]);
                 setGpsLocation(null);
                 setGpsUsedDefault(false);
@@ -267,18 +282,24 @@ export default function NewReport() {
             <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
               <MapPin size={16} /> Proyecto *
             </label>
-            <select
-              value={form.proyecto}
-              onChange={e => handleChange('proyecto', e.target.value)}
-              className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white ${
-                errors.proyecto ? 'border-red-300 bg-red-50' : 'border-slate-200'
-              }`}
-            >
-              <option value="">Seleccione un proyecto</option>
-              {PROYECTOS.map(p => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
+            {esLider ? (
+              <div className="w-full px-4 py-2.5 border border-blue-200 bg-blue-50 text-blue-900 rounded-lg font-semibold text-sm">
+                {proyectoDelLider || 'Sin proyecto asignado (Contacte a Operaciones)'}
+              </div>
+            ) : (
+              <select
+                value={form.proyecto}
+                onChange={e => handleChange('proyecto', e.target.value)}
+                className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white ${
+                  errors.proyecto ? 'border-red-300 bg-red-50' : 'border-slate-200'
+                }`}
+              >
+                <option value="">Seleccione un proyecto</option>
+                {PROYECTOS.map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            )}
             {errors.proyecto && <p className="text-xs text-red-500 mt-1">{errors.proyecto}</p>}
           </div>
 
