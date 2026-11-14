@@ -1,30 +1,95 @@
-/**
- * Dispara el monitoreo en segundo plano integrando las notificaciones persistentes
- */
+import { supabase } from '../lib/supabase';
+
+let watchId: number | null = null;
+let intervalId: any = null;
+
+const enviarPosicionASupabase = async (lat: number, lng: number) => {
+  try {
+    const rawUser = localStorage.getItem('securereport_user') || localStorage.getItem('currentUser');
+    if (!rawUser) return;
+    const user = JSON.parse(rawUser);
+    if (!user?.id) return;
+
+    let nivelBateria = 100;
+    try {
+      if ('getBattery' in navigator) {
+        const battery: any = await (navigator as any).getBattery();
+        nivelBateria = Math.round(battery.level * 100);
+      }
+    } catch {}
+
+    const proyectoUsuario =
+      Array.isArray(user.proyectos) && user.proyectos.length > 0
+        ? user.proyectos.join(', ')
+        : 'Zona Operativa Asignada';
+
+    await supabase.from('user_locations').insert([
+      {
+        user_id: user.id,
+        nombre_completo: user.nombre_completo || user.username,
+        role: user.role || 'lider',
+        proyecto: proyectoUsuario,
+        latitude: lat,
+        longitude: lng,
+        bateria: nivelBateria,
+        updated_at: new Date().toISOString(),
+      },
+    ]);
+  } catch (error) {
+    console.error('Error enviando posición GPS:', error);
+  }
+};
+
 export const startElementoTracking = async () => {
   try {
-    const permisosConcedidos = await requestGpsPermissions();
-    if (!permisosConcedidos) {
-      return { success: false, message: 'Permisos de GPS nativos insuficientes' };
+    if (!('geolocation' in navigator)) {
+      return { success: false, message: 'Geolocalización no disponible en este dispositivo' };
     }
 
-    // Activamos las actualizaciones con intervalos eficientes cada 30 segundos
-    await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-      accuracy: Location.Accuracy.Balanced,
-      timeInterval: 30000,    // Envío periódico estable cada 30 segundos exactos
-      distanceInterval: 15,   // O al desplazarse más de 15 metros en su ruta
-      deferredUpdatesInterval: 30000,
-      foregroundService: {
-        notificationTitle: "Monitoreo de Ruta Activo",
-        notificationBody: "Seguridad Vip 3000 C.A. — Coordinando posición en vivo.",
-        notificationColor: "#0070f3"
-      }
-    });
+    // 1. Envío inmediato al iniciar sesión
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        enviarPosicionASupabase(pos.coords.latitude, pos.coords.longitude);
+      },
+      (err) => console.warn('Aviso GPS inicial:', err.message),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
 
-    return { success: true, message: 'Rastreo perimetral iniciado correctamente' };
+    // 2. Envío periódico estable cada 30 segundos
+    if (intervalId) clearInterval(intervalId);
+    intervalId = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          enviarPosicionASupabase(pos.coords.latitude, pos.coords.longitude);
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 15000 }
+      );
+    }, 30000);
+
+    // 3. Seguimiento continuo de desplazamiento
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        enviarPosicionASupabase(pos.coords.latitude, pos.coords.longitude);
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 20000, timeout: 10000 }
+    );
+
+    return { success: true, message: 'Rastreo GPS activo correctamente' };
   } catch (err) {
-    const mensajeError = err instanceof Error ? err.message : 'Error desconocido de Expo Location';
-    console.error('No se pudo activar el servicio de localización:', mensajeError);
-    return { success: false, error: mensajeError };
+    return { success: false, error: 'Error activando GPS' };
+  }
+};
+
+export const stopElementoTracking = () => {
+  if (watchId !== null && 'geolocation' in navigator) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+  if (intervalId) {
+    clearInterval(intervalId);
+    intervalId = null;
   }
 };

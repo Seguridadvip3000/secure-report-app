@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { UserRole, ROLE_LABELS } from '../types';
 import { PROYECTOS } from '../data/constants';
-import { Shield, Mail, User, Lock, Eye, EyeOff, ArrowRight, Building, UserCircle, Key, MapPin } from 'lucide-react';
+import { Mail, User, Lock, Eye, EyeOff, ArrowRight, Building, UserCircle, Key, MapPin } from 'lucide-react';
 import { startElementoTracking } from '../services/locationService';
 
 type View = 'login' | 'register' | 'success';
@@ -15,12 +15,10 @@ export default function AuthPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Formulario de Inicio de Sesión
   const [loginUsernameOrEmail, setLoginUsernameOrEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
-  // Formulario de Registro
   const [regUsername, setRegUsername] = useState('');
   const [regNombreCompleto, setRegNombreCompleto] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -36,7 +34,6 @@ export default function AuthPage() {
     }
   }, [currentUser, navigate]);
 
-  // SOLICITA AUTORIZACIÓN NATIVA DE GPS EN ANDROID (APK) O NAVEGADOR WEB
   const solicitarPermisoGPSObligatorio = (): Promise<boolean> => {
     return new Promise((resolve) => {
       if ((window as any).ReactNativeWebView) {
@@ -133,7 +130,6 @@ export default function AuthPage() {
       return;
     }
 
-    // EXIGIR AUTORIZACIÓN DE GPS ÚNICAMENTE PARA OPERACIONES Y LÍDER
     const rolesConGpsObligatorio = ['operaciones', 'lider'];
     if (rolesConGpsObligatorio.includes(regRole)) {
       const gpsAceptado = await solicitarPermisoGPSObligatorio();
@@ -205,13 +201,15 @@ export default function AuthPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-3 mb-4">
-            <div className="bg-blue-600 p-3 rounded-xl">
-              <Shield size={32} className="text-white" />
-            </div>
+          <div className="inline-flex items-center justify-center mb-4">
+            <img
+              src="/logo-vip3000.jpg"
+              alt="Seguridad VIP 3000 C.A."
+              className="w-24 h-24 rounded-2xl object-cover shadow-2xl border-2 border-amber-400/60 bg-slate-900"
+            />
           </div>
           <h1 className="text-3xl font-bold text-white">SecureReport</h1>
-          <p className="text-blue-200 mt-1">Sistema de Gestión de Novedades</p>
+          <p className="text-blue-200 mt-1">Seguridad VIP 3000 C.A. — Gestión de Novedades</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">

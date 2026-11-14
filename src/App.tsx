@@ -5,7 +5,6 @@ import { ReportProvider } from './context/ReportContext';
 import { notificationService } from './services/notificationService';
 import Sidebar from './components/Sidebar';
 
-// Lazy load de todos los componentes de páginas
 const AuthPage = lazy(() => import('./pages/AuthPage'));
 const LiderHome = lazy(() => import('./pages/LiderHome'));
 const ClienteDashboard = lazy(() => import('./pages/ClienteDashboard'));
@@ -19,6 +18,8 @@ const AprobacionesPage = lazy(() => import('./pages/AprobacionesPage'));
 const ConfiguracionPage = lazy(() => import('./pages/ConfiguracionPage'));
 const SeguimientoRutasPage = lazy(() => import('./pages/SeguimientoRutasPage'));
 const EstadisticasPage = lazy(() => import('./pages/EstadisticasPage'));
+const AsistenciasPage = lazy(() => import('./pages/AsistenciasPage'));
+const SupervisionesPage = lazy(() => import('./pages/SupervisionesPage'));
 
 function LoadingScreen() {
   return (
@@ -33,35 +34,26 @@ function LoadingScreen() {
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
-  
   if (!currentUser) return <Navigate to="/auth" replace />;
   if (currentUser.status !== 'aprobado') return <Navigate to="/auth" replace />;
-  
   return <>{children}</>;
 }
 
 function RoleRoute({ roles, children }: { roles: string[]; children: ReactNode }) {
   const { currentUser } = useAuth();
-  
   if (!currentUser) return <Navigate to="/auth" replace />;
-  
   const rolNormalizado = currentUser.role ? currentUser.role.toLowerCase() : '';
   const rolesPermitidosNormalizados = roles.map(r => r.toLowerCase());
-  
   if (!rolesPermitidosNormalizados.includes(rolNormalizado)) {
     return <Navigate to="/" replace />;
   }
-  
   return <>{children}</>;
 }
 
 function RootRedirect() {
   const { currentUser } = useAuth();
-  
   if (!currentUser) return <Navigate to="/auth" replace />;
-  
   const rolNormalizado = currentUser.role ? currentUser.role.toLowerCase() : '';
-  
   switch (rolNormalizado) {
     case 'admin':
     case 'administrador':
@@ -89,14 +81,12 @@ export default function App() {
               <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route index element={<RootRedirect />} />
                 
-                {/* 1. CREAR REPORTE */}
                 <Route path="crear-reporte" element={
                   <RoleRoute roles={['lider', 'operaciones', 'directiva', 'administrador', 'admin']}>
                     <NewReport />
                   </RoleRoute>
                 } />
                 
-                {/* 2. LISTA DE REPORTES */}
                 <Route path="lista-reportes" element={
                   <RoleRoute roles={['operaciones', 'directiva', 'administrador', 'admin', 'cliente']}>
                     <ReportList />
@@ -109,28 +99,36 @@ export default function App() {
                   </RoleRoute>
                 } />
                 
-                {/* 3. APROBACIONES DE USUARIOS */}
                 <Route path="aprobaciones" element={
                   <RoleRoute roles={['operaciones', 'directiva', 'administrador', 'admin']}>
                     <AprobacionesPage />
                   </RoleRoute>
                 } />
 
-                {/* 4. CONFIGURACIÓN */}
                 <Route path="configuracion" element={
                   <RoleRoute roles={['directiva', 'administrador', 'admin']}>
                     <ConfiguracionPage />
                   </RoleRoute>
                 } />
 
-                {/* 5. ESTADÍSTICAS Y GRÁFICOS */}
                 <Route path="estadisticas" element={
                   <RoleRoute roles={['directiva', 'administrador', 'admin']}>
                     <EstadisticasPage />
                   </RoleRoute>
                 } />
 
-                {/* 6. SEGUIMIENTO DE RUTAS */}
+                <Route path="asistencias" element={
+                  <RoleRoute roles={['directiva', 'administrador', 'admin']}>
+                    <AsistenciasPage />
+                  </RoleRoute>
+                } />
+
+                <Route path="supervisiones" element={
+                  <RoleRoute roles={['directiva', 'administrador', 'admin']}>
+                    <SupervisionesPage />
+                  </RoleRoute>
+                } />
+
                 <Route path="seguimiento-rutas" element={
                   <RoleRoute roles={['administrador', 'admin']}>
                     <SeguimientoRutasPage />
@@ -174,7 +172,6 @@ function Layout() {
   React.useEffect(() => {
     if (!currentUser) return;
 
-    // Enviar sesión a la APK nativa para mantener notificaciones en segundo plano
     if ((window as any).ReactNativeWebView) {
       (window as any).ReactNativeWebView.postMessage(
         JSON.stringify({

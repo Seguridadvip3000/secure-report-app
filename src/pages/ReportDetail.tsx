@@ -112,7 +112,7 @@ export default function ReportDetail() {
       });
 
       const nombreLimpio = (reporte.proyecto || 'Reporte').replace(/[^a-zA-Z0-9]/g, '_');
-      const nombreArchivo = `SecureReport_${nombreLimpio}_${reporte.id.slice(0, 6)}.pdf`;
+      const nombreArchivo = `NovedadDigitalSeguridadVip3000CA_${nombreLimpio}_${reporte.id.slice(0, 6)}.pdf`;
 
       if (window.ReactNativeWebView) {
         const reader = new FileReader();

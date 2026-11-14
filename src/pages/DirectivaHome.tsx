@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useReports } from '../context/ReportContext';
-import { FilePlus, List, UserCheck, Settings, CheckCircle, Clock, FileText, BarChart3 } from 'lucide-react';
+import { FilePlus, List, UserCheck, Settings, CheckCircle, Clock, FileText, BarChart3, ShieldCheck } from 'lucide-react';
 
 export default function DirectivaHome() {
   const navigate = useNavigate();
@@ -54,7 +54,7 @@ export default function DirectivaHome() {
           <p className="text-xs text-slate-500">Usuarios Pendientes</p>
         </div>
       </div>
-      {/* Main Actions (Sin Seguimiento de Rutas) */}
+      {/* Main Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <button
           onClick={() => navigate('/crear-reporte')}
@@ -107,13 +107,35 @@ export default function DirectivaHome() {
 
         <button
           onClick={() => navigate('/estadisticas')}
-          className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-emerald-500 hover:bg-emerald-50 transition-all group text-left md:col-span-2"
+          className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-emerald-500 hover:bg-emerald-50 transition-all group text-left"
         >
           <div className="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
             <BarChart3 size={28} className="text-emerald-600" />
           </div>
           <h3 className="text-lg font-semibold text-slate-800 mb-1">5. Estadísticas y Gráficos</h3>
-          <p className="text-sm text-slate-500">Visualizar reportes por fecha, proyecto, título y nivel general</p>
+          <p className="text-sm text-slate-500">Visualizar reportes por fecha, proyecto y título</p>
+        </button>
+
+        <button
+          onClick={() => navigate('/asistencias')}
+          className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-teal-500 hover:bg-teal-50 transition-all group text-left"
+        >
+          <div className="w-14 h-14 bg-teal-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+            <Clock size={28} className="text-teal-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-800 mb-1">6. Asistencia de Líderes</h3>
+          <p className="text-sm text-slate-500">Verificar entradas y salidas en cada proyecto</p>
+        </button>
+
+        <button
+          onClick={() => navigate('/supervisiones')}
+          className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-indigo-500 hover:bg-indigo-50 transition-all group text-left md:col-span-2"
+        >
+          <div className="w-14 h-14 bg-indigo-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+            <ShieldCheck size={28} className="text-indigo-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-800 mb-1">7. Supervisiones de Operaciones</h3>
+          <p className="text-sm text-slate-500">Auditar visitas e inspecciones realizadas por Operaciones</p>
         </button>
       </div>
     </div>
