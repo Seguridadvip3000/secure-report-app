@@ -36,7 +36,7 @@ const limpiarTextoProyecto = (valor: string): string => {
   if (limpio.startsWith('[') && limpio.endsWith(']')) {
     try {
       const parsed = JSON.parse(limpio);
-      if (Array.isArray(parsed) && parsed.length > 0) return String(parsed).trim();
+      if (Array.isArray(parsed) && parsed.length > 0) return String(parsed.at(0)).trim();
     } catch {
       limpio = limpio.replace(/^\[["']?|["']?\]$/g, '');
     }
@@ -73,7 +73,7 @@ const generarImagenGraficoBarras = (
   ctx.font = 'bold 17px Arial';
   ctx.fillText(tituloGrafico, 20, 29);
 
-  const maxVal = datos.length > 0 ? datos.cantidad : 1;
+  const maxVal = datos.at(0)?.cantidad || 1;
   const inicioBarraX = 340;
   const anchoMaxBarra = 420;
 
@@ -316,7 +316,7 @@ export default function EstadisticasPage() {
 
       if (imgGraficoTitulos) {
         const imageId1 = workbook.addImage({
-          base64: imgGraficoTitulos.split(','),
+          base64: imgGraficoTitulos.split(',').pop() || '',
           extension: 'png',
         });
         sheet.addImage(imageId1, {
@@ -355,7 +355,7 @@ export default function EstadisticasPage() {
         const bytes = new Uint8Array(buffer);
         let binary = '';
         for (let i = 0; i < bytes.byteLength; i++) {
-          binary += String.fromCharCode(bytes[i]);
+          binary += String.fromCharCode(bytes.at(i) || 0);
         }
         const base64Xlsx = btoa(binary);
         (window as any).ReactNativeWebView.postMessage(
@@ -470,7 +470,7 @@ export default function EstadisticasPage() {
       const nombreArchivo = `Estadisticas_${obtenerSufijoArchivo()}_SeguridadVip3000CA.pdf`;
 
       if ((window as any).ReactNativeWebView) {
-        const pdfBase64 = doc.output('datauristring').split(',');
+        const pdfBase64 = doc.output('datauristring').split(',').pop();
         (window as any).ReactNativeWebView.postMessage(
           JSON.stringify({
             type: 'DOWNLOAD_PDF',
@@ -489,8 +489,8 @@ export default function EstadisticasPage() {
     }
   };
 
-  const maxProyecto = metricas.porProyecto.length > 0 ? metricas.porProyecto.cantidad : 1;
-  const maxTitulo = metricas.porTitulo.length > 0 ? metricas.porTitulo.cantidad : 1;
+  const maxProyecto = metricas.porProyecto.at(0)?.cantidad || 1;
+  const maxTitulo = metricas.porTitulo.at(0)?.cantidad || 1;
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -694,6 +694,7 @@ export default function EstadisticasPage() {
               })}
             </div>
           </div>
+
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
             <h3 className="font-bold text-slate-800 text-base flex items-center gap-2 border-b border-slate-100 pb-3">
               <FileText size={18} className="text-red-600" /> Reportes por Tipo / Título de Novedad
