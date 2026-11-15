@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { PROYECTOS, TITULOS_NOVEDAD } from '../data/constants';
 import { jsPDF } from 'jspdf';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import {
   ArrowLeft,
   BarChart3,
@@ -30,14 +30,13 @@ interface ReporteStats {
 
 type FiltroPeriodo = 'general' | 'semana' | 'mes' | 'rango';
 
-// Limpia registros antiguos guardados como '["ESTACIONAMIENTO CCCT"]'
 const limpiarTextoProyecto = (valor: string): string => {
   if (!valor) return 'Sin Proyecto';
   let limpio = valor.trim();
   if (limpio.startsWith('[') && limpio.endsWith(']')) {
     try {
       const parsed = JSON.parse(limpio);
-      if (Array.isArray(parsed) && parsed.length > 0) return String(parsed[0]).trim();
+      if (Array.isArray(parsed) && parsed.length > 0) return String(parsed).trim();
     } catch {
       limpio = limpio.replace(/^\[["']?|["']?\]$/g, '');
     }
@@ -45,11 +44,68 @@ const limpiarTextoProyecto = (valor: string): string => {
   return limpio.replace(/^["']+|["']+$/g, '').trim() || 'Sin Proyecto';
 };
 
+const generarImagenGraficoBarras = (
+  tituloGrafico: string,
+  datos: { nombre: string; cantidad: number }[],
+  total: number,
+  colorBarra: string
+): string => {
+  const canvas = document.createElement('canvas');
+  const ancho = 900;
+  const altoFila = 46;
+  const altoCabecera = 65;
+  const alto = Math.max(220, altoCabecera + datos.length * altoFila + 30);
+  canvas.width = ancho;
+  canvas.height = alto;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, ancho, alto);
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, ancho - 2, alto - 2);
+
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(0, 0, ancho, 46);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 17px Arial';
+  ctx.fillText(tituloGrafico, 20, 29);
+
+  const maxVal = datos.length > 0 ? datos.cantidad : 1;
+  const inicioBarraX = 340;
+  const anchoMaxBarra = 420;
+
+  datos.forEach((item, i) => {
+    const y = altoCabecera + i * altoFila;
+    const pct = total > 0 ? Math.round((item.cantidad / total) * 100) : 0;
+    const anchoBarra = Math.max(10, Math.round((item.cantidad / maxVal) * anchoMaxBarra));
+
+    ctx.fillStyle = '#1e293b';
+    ctx.font = 'bold 13px Arial';
+    const textoCorto = item.nombre.length > 38 ? item.nombre.slice(0, 35) + '...' : item.nombre;
+    ctx.fillText(textoCorto, 20, y + 20);
+
+    ctx.fillStyle = '#f1f5f9';
+    ctx.fillRect(inicioBarraX, y + 6, anchoMaxBarra, 20);
+
+    ctx.fillStyle = colorBarra;
+    ctx.fillRect(inicioBarraX, y + 6, anchoBarra, 20);
+
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 13px Arial';
+    ctx.fillText(`${item.cantidad} (${pct}%)`, inicioBarraX + anchoMaxBarra + 14, y + 21);
+  });
+
+  return canvas.toDataURL('image/png');
+};
 export default function EstadisticasPage() {
   const navigate = useNavigate();
   const [reportes, setReportes] = useState<ReporteStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [exportandoPdf, setExportandoPdf] = useState(false);
+  const [exportandoExcel, setExportandoExcel] = useState(false);
 
   const [periodo, setPeriodo] = useState<FiltroPeriodo>('general');
   const [fechaInicio, setFechaInicio] = useState('');
@@ -152,90 +208,181 @@ export default function EstadisticasPage() {
     return 'Nivel General (Histórico Completo)';
   };
 
-  // EXPORTAR A EXCEL REAL (.XLSX) CON 3 PESTAÑAS DE ESTADÍSTICAS Y DETALLE
-  const exportarExcel = () => {
+  const obtenerSufijoArchivo = () => {
+    const proy = proyectoFiltro === 'todos' ? 'General' : proyectoFiltro.replace(/[^a-zA-Z0-9]/g, '_');
+    return `${proy}_${new Date().toISOString().slice(0, 10)}`;
+  };
+
+  const exportarExcel = async () => {
     if (reportesFiltrados.length === 0) {
       alert('No hay datos filtrados para exportar.');
       return;
     }
 
-    const wb = XLSX.utils.book_new();
+    setExportandoExcel(true);
+    try {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Seguridad VIP 3000 C.A.';
 
-    // PESTAÑA 1: RESUMEN EJECUTIVO Y ESTADÍSTICA POR PROYECTO
-    const datosHoja1: any[][] = [
-      ['SEGURIDAD VIP 3000 C.A. — INFORME ESTADÍSTICO OPERATIVO'],
-      [`Período: ${obtenerEtiquetaPeriodo()}`, `Fecha de emisión: ${new Date().toLocaleString('es-VE')}`],
-      [],
-      ['RESUMEN GENERAL DE INDICADORES', 'CANTIDAD', 'PORCENTAJE'],
-      ['Total de Reportes Analizados', metricas.total, '100%'],
-      ['Reportes Aprobados', metricas.aprobados, `${metricas.total > 0 ? Math.round((metricas.aprobados / metricas.total) * 100) : 0}%`],
-      ['Reportes Pendientes', metricas.pendientes, `${metricas.total > 0 ? Math.round((metricas.pendientes / metricas.total) * 100) : 0}%`],
-      ['Reportes Rechazados', metricas.rechazados, `${metricas.total > 0 ? Math.round((metricas.rechazados / metricas.total) * 100) : 0}%`],
-      [],
-      ['ESTADÍSTICA DE INCIDENCIAS POR PROYECTO', 'CANTIDAD DE REPORTES', 'PARTICIPACIÓN (%)'],
-      ...metricas.porProyecto.map((p) => [
-        p.nombre,
-        p.cantidad,
-        `${Math.round((p.cantidad / metricas.total) * 100)}%`,
-      ]),
-    ];
+      const sheet = workbook.addWorksheet('Estadísticas Ejecutivas', {
+        views: [{ showGridLines: true }],
+      });
 
-    const ws1 = XLSX.utils.aoa_to_sheet(datosHoja1);
-    ws1['!cols'] = [{ wch: 44 }, { wch: 24 }, { wch: 20 }];
-    XLSX.utils.book_append_sheet(wb, ws1, 'Resumen y Proyectos');
+      sheet.columns = [
+        { width: 44 },
+        { width: 22 },
+        { width: 22 },
+      ];
 
-    // PESTAÑA 2: ESTADÍSTICA POR TIPO / TÍTULO DE NOVEDAD
-    const datosHoja2: any[][] = [
-      ['ESTADÍSTICA POR TIPO / TÍTULO DE NOVEDAD'],
-      [`Período: ${obtenerEtiquetaPeriodo()}`, `Proyecto: ${proyectoFiltro === 'todos' ? 'Todos' : proyectoFiltro}`],
-      [],
-      ['TIPO / TÍTULO DE NOVEDAD', 'CANTIDAD', 'PORCENTAJE (%)'],
-      ...metricas.porTitulo.map((t) => [
-        t.nombre,
-        t.cantidad,
-        `${Math.round((t.cantidad / metricas.total) * 100)}%`,
-      ]),
-    ];
+      sheet.mergeCells('A1:C1');
+      const titleCell = sheet.getCell('A1');
+      titleCell.value = 'SEGURIDAD VIP 3000 C.A. — INFORME ESTADÍSTICO CORPORATIVO';
+      titleCell.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+      titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+      sheet.getRow(1).height = 32;
 
-    const ws2 = XLSX.utils.aoa_to_sheet(datosHoja2);
-    ws2['!cols'] = [{ wch: 48 }, { wch: 16 }, { wch: 18 }];
-    XLSX.utils.book_append_sheet(wb, ws2, 'Por Tipo de Novedad');
+      sheet.mergeCells('A2:C2');
+      const subCell = sheet.getCell('A2');
+      subCell.value = `Proyecto: ${proyectoFiltro === 'todos' ? 'TODOS LOS PROYECTOS' : proyectoFiltro.toUpperCase()}  |  Período: ${obtenerEtiquetaPeriodo()}`;
+      subCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E293B' } };
+      subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+      subCell.alignment = { vertical: 'middle', horizontal: 'center' };
+      sheet.getRow(2).height = 22;
 
-    // PESTAÑA 3: DETALLE DE REGISTROS FILTRADOS
-    const datosHoja3: any[][] = [
-      ['FECHA Y HORA', 'PROYECTO', 'TIPO DE NOVEDAD', 'REPORTADO POR', 'ESTADO'],
-      ...reportesFiltrados.map((r) => [
-        new Date(r.created_at).toLocaleString('es-VE'),
-        r.proyecto,
-        r.titulo_novedad,
-        r.quien_reporta || 'Personal Operativo',
-        (r.status || '').toUpperCase(),
-      ]),
-    ];
+      sheet.addRow([]);
+      const headerKPI = sheet.addRow(['INDICADOR OPERATIVO', 'CANTIDAD', 'PORCENTAJE']);
+      headerKPI.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1D4ED8' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+      headerKPI.height = 24;
 
-    const ws3 = XLSX.utils.aoa_to_sheet(datosHoja3);
-    ws3['!cols'] = [{ wch: 24 }, { wch: 28 }, { wch: 38 }, { wch: 26 }, { wch: 16 }];
-    XLSX.utils.book_append_sheet(wb, ws3, 'Detalle Registros');
+      const kpis = [
+        ['Total de Novedades Registradas', metricas.total, '100%'],
+        ['Novedades Aprobadas', metricas.aprobados, `${Math.round((metricas.aprobados / metricas.total) * 100)}%`],
+        ['Novedades Pendientes / En Revisión', metricas.pendientes, `${Math.round((metricas.pendientes / metricas.total) * 100)}%`],
+        ['Novedades Rechazadas', metricas.rechazados, `${Math.round((metricas.rechazados / metricas.total) * 100)}%`],
+      ];
 
-    const nombreArchivo = `Estadisticas_SeguridadVip3000CA_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      kpis.forEach((fila) => {
+        const r = sheet.addRow(fila);
+        r.height = 20;
+        r.getCell(1).font = { bold: true, size: 10 };
+        r.getCell(2).alignment = { horizontal: 'center' };
+        r.getCell(3).alignment = { horizontal: 'center' };
+        r.eachCell((c) => {
+          c.border = {
+            top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          };
+        });
+      });
 
-    if ((window as any).ReactNativeWebView) {
-      const base64Xlsx = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
-      (window as any).ReactNativeWebView.postMessage(
-        JSON.stringify({
-          type: 'DOWNLOAD_PDF',
-          filename: nombreArchivo,
-          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          base64: base64Xlsx,
-        })
+      sheet.addRow([]);
+      const headerTipos = sheet.addRow(['TIPO / TÍTULO DE NOVEDAD', 'INCIDENCIAS', 'PARTICIPACIÓN']);
+      headerTipos.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+      headerTipos.height = 24;
+
+      metricas.porTitulo.forEach((t) => {
+        const r = sheet.addRow([t.nombre, t.cantidad, `${Math.round((t.cantidad / metricas.total) * 100)}%`]);
+        r.height = 20;
+        r.getCell(2).alignment = { horizontal: 'center' };
+        r.getCell(3).alignment = { horizontal: 'center' };
+        r.eachCell((c) => {
+          c.border = {
+            top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+            right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          };
+        });
+      });
+
+      const filaInicioGrafico = sheet.rowCount + 2;
+      const imgGraficoTitulos = generarImagenGraficoBarras(
+        `GRÁFICO DE INCIDENCIAS POR NOVEDAD — ${proyectoFiltro === 'todos' ? 'GENERAL' : proyectoFiltro}`,
+        metricas.porTitulo,
+        metricas.total,
+        '#dc2626'
       );
-      return;
+
+      if (imgGraficoTitulos) {
+        const imageId1 = workbook.addImage({
+          base64: imgGraficoTitulos.split(','),
+          extension: 'png',
+        });
+        sheet.addImage(imageId1, {
+          tl: { col: 0, row: filaInicioGrafico },
+          ext: { width: 620, height: Math.max(180, metricas.porTitulo.length * 34 + 60) },
+        });
+      }
+
+      const sheetDetalle = workbook.addWorksheet('Detalle Filtrado');
+      sheetDetalle.columns = [
+        { width: 24 },
+        { width: 28 },
+        { width: 38 },
+        { width: 26 },
+        { width: 16 },
+      ];
+      const hDet = sheetDetalle.addRow(['FECHA Y HORA', 'PROYECTO', 'TIPO DE NOVEDAD', 'REPORTADO POR', 'ESTADO']);
+      hDet.eachCell((c) => {
+        c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+      });
+      reportesFiltrados.forEach((r) => {
+        sheetDetalle.addRow([
+          new Date(r.created_at).toLocaleString('es-VE'),
+          r.proyecto,
+          r.titulo_novedad,
+          r.quien_reporta || 'Personal Operativo',
+          (r.status || '').toUpperCase(),
+        ]);
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const nombreArchivo = `Estadisticas_${obtenerSufijoArchivo()}_SeguridadVip3000CA.xlsx`;
+
+      if ((window as any).ReactNativeWebView) {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        const base64Xlsx = btoa(binary);
+        (window as any).ReactNativeWebView.postMessage(
+          JSON.stringify({
+            type: 'DOWNLOAD_PDF',
+            filename: nombreArchivo,
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            base64: base64Xlsx,
+          })
+        );
+      } else {
+        const blob = new Blob([buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nombreArchivo;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      alert('Error generando el Excel corporativo.');
+    } finally {
+      setExportandoExcel(false);
     }
-
-    XLSX.writeFile(wb, nombreArchivo);
   };
-
-  // EXPORTAR A PDF EJECUTIVO (CON EXTRACCIÓN BASE64 CORREGIDA EN .split(',')[1])
   const exportarPDFEjecutivo = async () => {
     if (reportesFiltrados.length === 0) {
       alert('No hay datos filtrados para generar el informe PDF.');
@@ -267,77 +414,63 @@ export default function EstadisticasPage() {
       y += 6;
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
-      doc.text(`• Período Analizado: ${obtenerEtiquetaPeriodo()}`, 16, y);
+      doc.text(`• Proyecto Analizado: ${proyectoFiltro === 'todos' ? 'Todos los Proyectos' : proyectoFiltro}`, 16, y);
       y += 5;
-      doc.text(`• Proyecto Filtrado: ${proyectoFiltro === 'todos' ? 'Todos los Proyectos' : proyectoFiltro}`, 16, y);
+      doc.text(`• Período Analizado: ${obtenerEtiquetaPeriodo()}`, 16, y);
       y += 5;
       doc.text(`• Tipo de Novedad: ${tituloFiltro === 'todos' ? 'Todas las Novedades' : tituloFiltro}`, 16, y);
 
-      y += 10;
+      y += 9;
       doc.setFillColor(241, 245, 249);
-      doc.roundedRect(14, y, ancho - 28, 18, 2, 2, 'F');
+      doc.roundedRect(14, y, ancho - 28, 16, 2, 2, 'F');
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
-      doc.text(`TOTAL: ${metricas.total}`, 20, y + 11);
+      doc.text(`TOTAL: ${metricas.total}`, 20, y + 10);
       doc.setTextColor(22, 163, 74);
-      doc.text(`APROBADOS: ${metricas.aprobados}`, 65, y + 11);
+      doc.text(`APROBADOS: ${metricas.aprobados}`, 65, y + 10);
       doc.setTextColor(217, 119, 6);
-      doc.text(`PENDIENTES: ${metricas.pendientes}`, 118, y + 11);
+      doc.text(`PENDIENTES: ${metricas.pendientes}`, 118, y + 10);
       doc.setTextColor(220, 38, 38);
-      doc.text(`RECHAZADOS: ${metricas.rechazados}`, 165, y + 11);
+      doc.text(`RECHAZADOS: ${metricas.rechazados}`, 165, y + 10);
 
-      y += 28;
-      doc.setTextColor(15, 23, 42);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
-      doc.text('1. INCIDENCIA DE NOVEDADES POR PROYECTO', 14, y);
-      y += 6;
+      y += 24;
 
-      metricas.porProyecto.forEach((item) => {
-        if (y > 270) {
-          doc.addPage();
-          y = 20;
+      if (proyectoFiltro === 'todos' && metricas.porProyecto.length > 0) {
+        const imgProy = generarImagenGraficoBarras(
+          'DISTRIBUCIÓN DE NOVEDADES POR PROYECTO',
+          metricas.porProyecto,
+          metricas.total,
+          '#2563eb'
+        );
+        if (imgProy) {
+          const altoImg1 = Math.min(85, Math.max(42, metricas.porProyecto.length * 10 + 18));
+          doc.addImage(imgProy, 'PNG', 14, y, ancho - 28, altoImg1);
+          y += altoImg1 + 8;
         }
-        const pct = Math.round((item.cantidad / metricas.total) * 100);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        doc.setTextColor(51, 65, 85);
-        doc.text(`${item.nombre}`, 16, y);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${item.cantidad} reportes (${pct}%)`, ancho - 45, y);
-        y += 6;
-      });
-
-      y += 8;
-      if (y > 250) {
-        doc.addPage();
-        y = 20;
       }
-      doc.setTextColor(15, 23, 42);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
-      doc.text('2. DESGLOSE POR TIPO / TÍTULO DE NOVEDAD', 14, y);
-      y += 6;
 
-      metricas.porTitulo.forEach((item) => {
-        if (y > 270) {
+      if (metricas.porTitulo.length > 0) {
+        if (y > 195) {
           doc.addPage();
           y = 20;
         }
-        const pct = Math.round((item.cantidad / metricas.total) * 100);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        doc.setTextColor(51, 65, 85);
-        doc.text(`${item.nombre}`, 16, y);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${item.cantidad} (${pct}%)`, ancho - 35, y);
-        y += 6;
-      });
+        const imgTit = generarImagenGraficoBarras(
+          `DESGLOSE POR TIPO DE NOVEDAD (${proyectoFiltro === 'todos' ? 'GENERAL' : proyectoFiltro})`,
+          metricas.porTitulo,
+          metricas.total,
+          '#dc2626'
+        );
+        if (imgTit) {
+          const altoImg2 = Math.min(110, Math.max(45, metricas.porTitulo.length * 10 + 18));
+          doc.addImage(imgTit, 'PNG', 14, y, ancho - 28, altoImg2);
+          y += altoImg2 + 8;
+        }
+      }
 
-      const nombreArchivo = `EstadisticasEjecutivas_SeguridadVip3000CA_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const nombreArchivo = `Estadisticas_${obtenerSufijoArchivo()}_SeguridadVip3000CA.pdf`;
 
       if ((window as any).ReactNativeWebView) {
-        const pdfBase64 = doc.output('datauristring').split(',')[1];
+        const pdfBase64 = doc.output('datauristring').split(',');
         (window as any).ReactNativeWebView.postMessage(
           JSON.stringify({
             type: 'DOWNLOAD_PDF',
@@ -356,8 +489,8 @@ export default function EstadisticasPage() {
     }
   };
 
-  const maxProyecto = metricas.porProyecto.length > 0 ? metricas.porProyecto[0].cantidad : 1;
-  const maxTitulo = metricas.porTitulo.length > 0 ? metricas.porTitulo[0].cantidad : 1;
+  const maxProyecto = metricas.porProyecto.length > 0 ? metricas.porProyecto.cantidad : 1;
+  const maxTitulo = metricas.porTitulo.length > 0 ? metricas.porTitulo.cantidad : 1;
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -379,9 +512,10 @@ export default function EstadisticasPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={exportarExcel}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer"
+            disabled={exportandoExcel}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer disabled:opacity-50"
           >
-            <FileSpreadsheet size={16} /> Exportar Excel
+            <FileSpreadsheet size={16} /> {exportandoExcel ? 'Generando...' : 'Exportar Excel'}
           </button>
           <button
             onClick={exportarPDFEjecutivo}
@@ -402,7 +536,7 @@ export default function EstadisticasPage() {
 
       <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-5 shadow-sm space-y-4">
         <div className="flex items-center gap-2 text-sm font-bold text-slate-700 border-b border-slate-100 pb-2">
-          <Filter size={16} className="text-blue-600" /> Filtros de Búsqueda
+          <Filter size={16} className="text-blue-600" /> Filtros de Búsqueda (Aplica a Excel y PDF)
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -560,7 +694,6 @@ export default function EstadisticasPage() {
               })}
             </div>
           </div>
-
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
             <h3 className="font-bold text-slate-800 text-base flex items-center gap-2 border-b border-slate-100 pb-3">
               <FileText size={18} className="text-red-600" /> Reportes por Tipo / Título de Novedad
