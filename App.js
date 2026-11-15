@@ -9,7 +9,7 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = 'https://sjwygpvnkrmfvfxuhkqp.supabase.co';
+const SUPABASE_URL = 'https://supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqd3lncHZua3JtZnZmeHVoa3FwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5NDIwODIsImV4cCI6MjEwODUxODA4Mn0.YJzNC5HQKhIxvJVKQeetbBi7t6kwTHFK-h-i1NF-ny4';
 
 const supabaseNative = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -45,7 +45,7 @@ export default function App() {
         await Notifications.setNotificationChannelAsync('alertas-vip3000', {
           name: 'Alertas Seguridad VIP 3000',
           importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern:,
+          enableVibrate: true,
           lightColor: '#FF0000',
           sound: 'default',
         });
@@ -84,7 +84,6 @@ export default function App() {
     }
   }, []);
 
-  // Guardar push_token en Supabase cuando haya usuario activo y token listo
   React.useEffect(() => {
     if (usuarioActivo?.id && expoPushToken) {
       supabaseNative
@@ -95,7 +94,6 @@ export default function App() {
     }
   }, [usuarioActivo, expoPushToken]);
 
-  // Escucha nativa en segundo plano
   React.useEffect(() => {
     if (!usuarioActivo || !usuarioActivo.role) return;
 
@@ -181,8 +179,8 @@ export default function App() {
       });
 
       if (!resultado.canceled && resultado.assets && resultado.assets.length > 0) {
-        const asset = resultado.assets[0];
-        if (asset.base64) {
+        const asset = resultado.assets.at(0);
+        if (asset?.base64) {
           const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
           webViewRef.current?.postMessage(JSON.stringify({ type: 'NATIVE_PHOTOS', photos: [dataUrl] }));
         }
