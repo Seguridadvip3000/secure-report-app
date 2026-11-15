@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase';
 
+const idsNotificados = new Set<string>();
+
 const reproducirSonidoAlerta = (esEmergencia = false) => {
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -11,7 +13,7 @@ const reproducirSonidoAlerta = (esEmergencia = false) => {
       const gain = ctx.createGain();
       osc.type = esEmergencia ? 'sawtooth' : 'sine';
       osc.frequency.setValueAtTime(frecuencia, ctx.currentTime + inicio);
-      gain.gain.setValueAtTime(0.4, ctx.currentTime + inicio);
+      gain.gain.setValueAtTime(0.45, ctx.currentTime + inicio);
       gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + inicio + duracion);
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -88,6 +90,10 @@ export const notificationService = {
     reproducirSonidoAlerta(esEmergencia);
     mostrarBannerEnPantalla(title, body, esEmergencia);
 
+    if ('vibrate' in navigator) {
+      navigator.vibrate(esEmergencia ? [400, 200, 400, 200, 600] : [200, 100, 200]);
+    }
+
     if ((window as any).ReactNativeWebView) {
       (window as any).ReactNativeWebView.postMessage(
         JSON.stringify({
@@ -109,54 +115,85 @@ export const notificationService = {
       setTimeout(() => notification.close(), 7000);
     }
   },
+
   subscribeToUserNotifications(userRole: string, userProjects: string[]) {
     const rol = (userRole || '').toLowerCase().trim();
     const proyectos = Array.isArray(userProjects) ? userProjects : [];
+    let ultimaFechaRevisada = new Date().toISOString();
 
+    const procesarNotificacion = (notif: {
+      id?: string;
+      title: string;
+      body: string;
+      target_roles: string[];
+      target_project?: string | null;
+      created_at?: string;
+    }) => {
+      if (notif.id && idsNotificados.has(notif.id)) return;
+      if (notif.id) idsNotificados.add(notif.id);
+
+      const rolesDestino = (notif.target_roles || []).map((r) => r.toLowerCase().trim());
+      const coincideRol =
+        rolesDestino.includes(rol) ||
+        (rol === 'administrador' && rolesDestino.includes('admin')) ||
+        (rol === 'admin' && rolesDestino.includes('administrador'));
+
+      if (!coincideRol) return;
+
+      if (rol === 'cliente' && notif.target_project) {
+        const tieneAcceso = proyectos.includes('*') || proyectos.includes(notif.target_project);
+        if (!tieneAcceso) return;
+      }
+
+      const textoMayus = (notif.title || '').toUpperCase();
+      const esEmergencia =
+        textoMayus.includes('S.O.S') ||
+        textoMayus.includes('EMERGENCIA') ||
+        textoMayus.includes('HOMBRE VIVO');
+
+      this.showPushNotification(notif.title, notif.body, esEmergencia);
+    };
+
+    // 1. Canal Realtime instantáneo
     const channel = supabase
       .channel(`notificaciones-rol-${rol}-${Date.now()}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications' },
         (payload) => {
-          const notif = payload.new as {
-            title: string;
-            body: string;
-            target_roles: string[];
-            target_project?: string | null;
-          };
-
-          const rolesDestino = (notif.target_roles || []).map((r) => r.toLowerCase());
-          const coincideRol =
-            rolesDestino.includes(rol) ||
-            (rol === 'administrador' && rolesDestino.includes('admin')) ||
-            (rol === 'admin' && rolesDestino.includes('administrador'));
-
-          if (!coincideRol) return;
-
-          if (rol === 'cliente' && notif.target_project) {
-            const tieneAcceso = proyectos.includes('*') || proyectos.includes(notif.target_project);
-            if (!tieneAcceso) return;
-          }
-
-          const esEmergencia = (notif.title || '').includes('S.O.S') || (notif.title || '').includes('EMERGENCIA');
-          this.showPushNotification(notif.title, notif.body, esEmergencia);
+          procesarNotificacion(payload.new as any);
         }
       )
       .subscribe();
 
+    // 2. Respaldo de sondeo cada 8 segundos (evita pérdida por ahorro de batería en Android)
+    const intervaloRespaldo = setInterval(async () => {
+      try {
+        const { data } = await supabase
+          .from('notifications')
+          .select('*')
+          .gt('created_at', ultimaFechaRevisada)
+          .order('created_at', { ascending: true });
+
+        if (data && data.length > 0) {
+          ultimaFechaRevisada = data[data.length - 1].created_at;
+          data.forEach((n: any) => procesarNotificacion(n));
+        }
+      } catch {}
+    }, 8000);
+
     return () => {
+      clearInterval(intervaloRespaldo);
       supabase.removeChannel(channel);
     };
   },
-
   // 1. NUEVO REPORTE
   async notifyNewReportCreated(proyecto: string, tituloNovedad: string): Promise<void> {
     await supabase.from('notifications').insert([
       {
         title: '📄 Nuevo Reporte Registrado',
         body: `Proyecto ${proyecto}: ${tituloNovedad}`,
-        target_roles: ['operaciones', 'directiva', 'admin', 'administrador'],
+        target_roles: ['operaciones', 'cecom', 'directiva', 'admin', 'administrador'],
         target_project: proyecto,
       },
     ]);
@@ -167,8 +204,8 @@ export const notificationService = {
     await supabase.from('notifications').insert([
       {
         title: '🚨 ¡ALERTA S.O.S DE EMERGENCIA!',
-        body: `El líder ${nombreLider} activó el botón de pánico en ${proyecto}. GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`,
-        target_roles: ['operaciones', 'directiva', 'admin', 'administrador'],
+        body: `El oficial ${nombreLider} activó el botón de pánico en ${proyecto}. GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+        target_roles: ['operaciones', 'cecom', 'directiva', 'admin', 'administrador'],
         target_project: proyecto,
       },
     ]);
@@ -178,7 +215,7 @@ export const notificationService = {
   async notifyNewUserRegistration(username: string, nombre_completo: string, role: string): Promise<void> {
     const rolNuevo = (role || '').toLowerCase().trim();
     const rolesDestino =
-      rolNuevo === 'lider'
+      rolNuevo === 'lider' || rolNuevo === 'supervisor'
         ? ['operaciones', 'directiva', 'admin', 'administrador']
         : ['directiva', 'admin', 'administrador'];
 
@@ -204,7 +241,7 @@ export const notificationService = {
     ]);
   },
 
-  // 5. ENTRADA / SALIDA DE LÍDER (Notifica a Cliente del proyecto, Operaciones y Directiva)
+  // 5. ENTRADA / SALIDA DE LÍDER
   async notifyLiderAttendance(nombreLider: string, proyecto: string, tipo: 'ENTRADA' | 'SALIDA'): Promise<void> {
     const icono = tipo === 'ENTRADA' ? '🟢' : '🔴';
     const accion = tipo === 'ENTRADA' ? 'reportó ENTRADA' : 'reportó SALIDA';
@@ -218,7 +255,7 @@ export const notificationService = {
     ]);
   },
 
-  // 6. SUPERVISIÓN DE OPERACIONES (Notifica a Directiva y Administrador)
+  // 6. SUPERVISIÓN DE OPERACIONES
   async notifyOperacionesSupervision(
     nombreOperaciones: string,
     proyecto: string,
