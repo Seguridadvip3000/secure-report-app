@@ -181,7 +181,6 @@ export default function App() {
     </AuthProvider>
   );
 }
-
 function Layout() {
   const { currentUser } = useAuth();
 
@@ -193,6 +192,7 @@ function Layout() {
         JSON.stringify({
           type: 'SET_USER_SESSION',
           user: {
+            id: currentUser.id,
             role: currentUser.role,
             proyectos: currentUser.proyectos || [],
           },
