@@ -258,13 +258,18 @@ export default function EstadisticasPage() {
         { width: 22 },
       ];
 
-      sheet.mergeCells('A1:C1');
-      const titleCell = sheet.getCell('A1');
-      titleCell.value = 'SEGURIDAD VIP 3000 C.A. — INFORME ESTADÍSTICO CORPORATIVO';
-      titleCell.font = { name: 'Arial', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+      // Pintar fondo oscuro en A1 para el logo y colocar el título limpio en B1:C1
+      const logoCell = sheet.getCell('A1');
+      logoCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+      sheet.mergeCells('A1:A2');
+
+      sheet.mergeCells('B1:C1');
+      const titleCell = sheet.getCell('B1');
+      titleCell.value = 'SEGURIDAD VIP 3000 C.A. — INFORME ESTADÍSTICO';
+      titleCell.font = { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
       titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
-      titleCell.alignment = { vertical: 'middle', horizontal: 'center', indent: 5 };
-      sheet.getRow(1).height = 54;
+      titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+      sheet.getRow(1).height = 34;
 
       if (logoBase64) {
         const logoId = workbook.addImage({
@@ -272,15 +277,15 @@ export default function EstadisticasPage() {
           extension: 'png',
         });
         sheet.addImage(logoId, {
-          tl: { col: 0.06, row: 0.06 },
+          tl: { col: 0.35, row: 0.1 },
           ext: { width: 58, height: 58 },
         });
       }
 
-      sheet.mergeCells('A2:C2');
-      const subCell = sheet.getCell('A2');
+      sheet.mergeCells('B2:C2');
+      const subCell = sheet.getCell('B2');
       subCell.value = `Proyecto: ${proyectoFiltro === 'todos' ? 'TODOS LOS PROYECTOS' : proyectoFiltro.toUpperCase()}  |  Período: ${obtenerEtiquetaPeriodo()}`;
-      subCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E293B' } };
+      subCell.font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FF1E293B' } };
       subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
       subCell.alignment = { vertical: 'middle', horizontal: 'center' };
       sheet.getRow(2).height = 24;
