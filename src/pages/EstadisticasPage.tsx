@@ -253,18 +253,18 @@ export default function EstadisticasPage() {
       });
 
       sheet.columns = [
-        { width: 44 },
+        { width: 54 },
         { width: 22 },
         { width: 22 },
       ];
 
       sheet.mergeCells('A1:C1');
       const titleCell = sheet.getCell('A1');
-      titleCell.value = '      SEGURIDAD VIP 3000 C.A. — INFORME ESTADÍSTICO CORPORATIVO';
+      titleCell.value = 'SEGURIDAD VIP 3000 C.A. — INFORME ESTADÍSTICO CORPORATIVO';
       titleCell.font = { name: 'Arial', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
       titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
-      titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
-      sheet.getRow(1).height = 46;
+      titleCell.alignment = { vertical: 'middle', horizontal: 'center', indent: 5 };
+      sheet.getRow(1).height = 54;
 
       if (logoBase64) {
         const logoId = workbook.addImage({
@@ -272,8 +272,8 @@ export default function EstadisticasPage() {
           extension: 'png',
         });
         sheet.addImage(logoId, {
-          tl: { col: 0.08, row: 0.08 },
-          ext: { width: 52, height: 52 },
+          tl: { col: 0.06, row: 0.06 },
+          ext: { width: 58, height: 58 },
         });
       }
 
@@ -356,7 +356,7 @@ export default function EstadisticasPage() {
         });
         sheet.addImage(imageId1, {
           tl: { col: 0, row: filaInicioGrafico },
-          ext: { width: 620, height: Math.max(180, metricas.porTitulo.length * 34 + 60) },
+          ext: { width: 650, height: Math.max(180, metricas.porTitulo.length * 34 + 60) },
         });
       }
 
@@ -364,7 +364,7 @@ export default function EstadisticasPage() {
       sheetDetalle.columns = [
         { width: 24 },
         { width: 28 },
-        { width: 38 },
+        { width: 42 },
         { width: 26 },
         { width: 16 },
       ];
