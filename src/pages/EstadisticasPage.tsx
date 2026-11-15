@@ -44,6 +44,29 @@ const limpiarTextoProyecto = (valor: string): string => {
   return limpio.replace(/^["']+|["']+$/g, '').trim() || 'Sin Proyecto';
 };
 
+const cargarLogoBase64 = (): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+          return;
+        }
+      } catch {}
+      resolve('');
+    };
+    img.onerror = () => resolve('');
+    img.src = '/logo-vip3000.jpg';
+  });
+};
+
 const generarImagenGraficoBarras = (
   tituloGrafico: string,
   datos: { nombre: string; cantidad: number }[],
@@ -223,6 +246,7 @@ export default function EstadisticasPage() {
     try {
       const workbook = new ExcelJS.Workbook();
       workbook.creator = 'Seguridad VIP 3000 C.A.';
+      const logoBase64 = await cargarLogoBase64();
 
       const sheet = workbook.addWorksheet('Estadísticas Ejecutivas', {
         views: [{ showGridLines: true }],
@@ -236,11 +260,22 @@ export default function EstadisticasPage() {
 
       sheet.mergeCells('A1:C1');
       const titleCell = sheet.getCell('A1');
-      titleCell.value = 'SEGURIDAD VIP 3000 C.A. — INFORME ESTADÍSTICO CORPORATIVO';
-      titleCell.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
+      titleCell.value = '      SEGURIDAD VIP 3000 C.A. — INFORME ESTADÍSTICO CORPORATIVO';
+      titleCell.font = { name: 'Arial', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
       titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
       titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
-      sheet.getRow(1).height = 32;
+      sheet.getRow(1).height = 46;
+
+      if (logoBase64) {
+        const logoId = workbook.addImage({
+          base64: logoBase64.split(',').pop() || '',
+          extension: 'png',
+        });
+        sheet.addImage(logoId, {
+          tl: { col: 0.08, row: 0.08 },
+          ext: { width: 52, height: 52 },
+        });
+      }
 
       sheet.mergeCells('A2:C2');
       const subCell = sheet.getCell('A2');
@@ -248,7 +283,7 @@ export default function EstadisticasPage() {
       subCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E293B' } };
       subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
       subCell.alignment = { vertical: 'middle', horizontal: 'center' };
-      sheet.getRow(2).height = 22;
+      sheet.getRow(2).height = 24;
 
       sheet.addRow([]);
       const headerKPI = sheet.addRow(['INDICADOR OPERATIVO', 'CANTIDAD', 'PORCENTAJE']);
@@ -393,20 +428,28 @@ export default function EstadisticasPage() {
     try {
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const ancho = doc.internal.pageSize.getWidth();
+      const logoBase64 = await cargarLogoBase64();
 
       doc.setFillColor(15, 23, 42);
-      doc.rect(0, 0, ancho, 32, 'F');
+      doc.rect(0, 0, ancho, 36, 'F');
+
+      let margenTextoX = 14;
+      if (logoBase64) {
+        doc.addImage(logoBase64, 'PNG', 14, 5, 26, 26);
+        margenTextoX = 45;
+      }
+
       doc.setTextColor(255, 255, 255);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(16);
-      doc.text('SEGURIDAD VIP 3000 C.A.', 14, 14);
+      doc.text('SEGURIDAD VIP 3000 C.A.', margenTextoX, 15);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text('INFORME EJECUTIVO DE ESTADÍSTICAS E INDICADORES OPERATIVOS', 14, 21);
+      doc.text('INFORME EJECUTIVO DE ESTADÍSTICAS E INDICADORES OPERATIVOS', margenTextoX, 22);
       doc.setFontSize(8);
-      doc.text(`Generado el: ${new Date().toLocaleString('es-VE')}`, 14, 27);
+      doc.text(`Generado el: ${new Date().toLocaleString('es-VE')}`, margenTextoX, 29);
 
-      let y = 40;
+      let y = 44;
       doc.setTextColor(30, 41, 59);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
@@ -694,7 +737,6 @@ export default function EstadisticasPage() {
               })}
             </div>
           </div>
-
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
             <h3 className="font-bold text-slate-800 text-base flex items-center gap-2 border-b border-slate-100 pb-3">
               <FileText size={18} className="text-red-600" /> Reportes por Tipo / Título de Novedad
