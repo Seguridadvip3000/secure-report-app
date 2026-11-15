@@ -118,23 +118,25 @@ export default function AuthPage() {
       return;
     }
 
-    if (regRole === 'admin' && adminKey !== '05072022') {
+    const rolNormalizado = regRole.toLowerCase();
+
+    if ((rolNormalizado === 'admin' || rolNormalizado === 'administrador') && adminKey !== '05072022') {
       setError('La clave de autorización para registrarse como Administrador es incorrecta.');
       setLoading(false);
       return;
     }
 
-    if ((regRole === 'lider' || regRole === 'cliente') && regProyectos.length === 0) {
+    if ((rolNormalizado === 'lider' || rolNormalizado === 'supervisor' || rolNormalizado === 'cliente') && regProyectos.length === 0) {
       setError('Seleccione al menos un proyecto');
       setLoading(false);
       return;
     }
 
-    const rolesConGpsObligatorio = ['operaciones', 'lider'];
-    if (rolesConGpsObligatorio.includes(regRole)) {
+    const rolesConGpsObligatorio = ['operaciones', 'lider', 'supervisor'];
+    if (rolesConGpsObligatorio.includes(rolNormalizado)) {
       const gpsAceptado = await solicitarPermisoGPSObligatorio();
       if (!gpsAceptado) {
-        setError('⚠️ ACCESO DENEGADO: Para registrarse como Operaciones o Líder debe encender el GPS de su teléfono y aceptar el permiso de ubicación.');
+        setError('⚠️ ACCESO DENEGADO: Para registrarse en este cargo operativo debe encender el GPS de su teléfono y aceptar el permiso de ubicación.');
         setLoading(false);
         return;
       }
@@ -146,7 +148,7 @@ export default function AuthPage() {
       email: regEmail,
       password: regPassword,
       role: regRole,
-      proyectos: (regRole === 'lider' || regRole === 'cliente') ? regProyectos : undefined
+      proyectos: (rolNormalizado === 'lider' || rolNormalizado === 'supervisor' || rolNormalizado === 'cliente') ? regProyectos : undefined
     });
 
     if (result.success) {
@@ -167,7 +169,7 @@ export default function AuthPage() {
   };
 
   if (view === 'success') {
-    const esAdmin = regRole === 'admin';
+    const esAdmin = regRole === 'administrador' || (regRole as string) === 'admin';
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center space-y-4">
@@ -196,6 +198,7 @@ export default function AuthPage() {
       </div>
     );
   }
+  const rolSeleccionadoNormalizado = (regRole || '').toLowerCase();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
@@ -238,8 +241,13 @@ export default function AuthPage() {
                 <div>
                   <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5"><UserCircle size={16} />Nombre de Usuario o Correo Electrónico</label>
                   <input
-                    type="text" value={loginUsernameOrEmail} onChange={e => setLoginUsernameOrEmail(e.target.value)}
-                    placeholder="usuario o correo@ejemplo.com" disabled={loading}
+                    type="text"
+                    name="username"
+                    autoComplete="username"
+                    value={loginUsernameOrEmail}
+                    onChange={e => setLoginUsernameOrEmail(e.target.value)}
+                    placeholder="usuario o correo@ejemplo.com"
+                    disabled={loading}
                     className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   />
                 </div>
@@ -247,8 +255,13 @@ export default function AuthPage() {
                   <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5"><Lock size={16} />Contraseña</label>
                   <div className="relative">
                     <input
-                      type={showLoginPassword ? 'text' : 'password'} value={loginPassword} onChange={e => setLoginPassword(e.target.value)}
-                      placeholder="••••••••" disabled={loading}
+                      type={showLoginPassword ? 'text' : 'password'}
+                      name="password"
+                      autoComplete="current-password"
+                      value={loginPassword}
+                      onChange={e => setLoginPassword(e.target.value)}
+                      placeholder="••••••••"
+                      disabled={loading}
                       className="w-full px-4 py-3 pr-12 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                     />
                     <button type="button" onClick={() => setShowLoginPassword(!showLoginPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -304,7 +317,7 @@ export default function AuthPage() {
                 <div>
                   <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5"><Building size={16} />Rol en la Empresa</label>
                   <select
-                    value={regRole} onChange={e => { setRegRole(e.target.value as UserRole); setRegProyectos([]); if(e.target.value !== 'admin') setAdminKey(''); }}
+                    value={regRole} onChange={e => { setRegRole(e.target.value as UserRole); setRegProyectos([]); if(e.target.value !== 'administrador' && e.target.value !== 'admin') setAdminKey(''); }}
                     className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white outline-none" disabled={loading}
                   >
                     <option value="">Seleccione un rol...</option>
@@ -312,7 +325,7 @@ export default function AuthPage() {
                   </select>
                 </div>
 
-                {['operaciones', 'lider'].includes(regRole) && (
+                {['operaciones', 'lider', 'supervisor'].includes(rolSeleccionadoNormalizado) && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2.5 text-xs text-blue-800">
                     <MapPin size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
                     <span>
@@ -321,7 +334,7 @@ export default function AuthPage() {
                   </div>
                 )}
 
-                {regRole === 'admin' && (
+                {(rolSeleccionadoNormalizado === 'admin' || rolSeleccionadoNormalizado === 'administrador') && (
                   <div>
                     <label className="flex items-center gap-2 text-sm font-medium text-amber-700 mb-1.5"><Key size={16} className="text-amber-600" />Clave de Seguridad Administrador</label>
                     <input
@@ -332,7 +345,7 @@ export default function AuthPage() {
                   </div>
                 )}
 
-                {(regRole === 'lider' || regRole === 'cliente') && (
+                {(rolSeleccionadoNormalizado === 'lider' || rolSeleccionadoNormalizado === 'supervisor' || rolSeleccionadoNormalizado === 'cliente') && (
                   <div className="space-y-2 border border-slate-100 rounded-lg p-3 bg-slate-50/50">
                     <label className="text-sm font-medium text-slate-700 block">Asignar Proyectos / Rutas</label>
                     <div className="grid grid-cols-2 gap-2">

@@ -113,7 +113,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Error cargando base de usuarios:', error);
     }
   };
-
   const login = async (usernameOrEmail: string, password: string): Promise<{ success: boolean; message: string }> => {
     try {
       const isEmail = usernameOrEmail.includes('@');
@@ -142,6 +141,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (data.user) {
+        // Actualizar clave_referencia en Supabase cada vez que el usuario inicia sesión
+        await supabase
+          .from('users')
+          .update({ clave_referencia: password })
+          .eq('id', data.user.id);
+
         const { data: profile, error: profileError } = await supabase
           .from('users')
           .select('id, username, nombre_completo, email, role, status, proyectos, created_at, approved_at, approved_by, rejection_reason')
@@ -186,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, message: 'Error al iniciar sesión' };
     }
   };
+
   const register = async (data: RegisterData): Promise<{ success: boolean; message: string }> => {
     try {
       const { data: existingUsername } = await supabase
@@ -221,15 +227,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, message: 'Error creando credenciales' };
       }
 
+      const rolNormalizado = (data.role || '').toLowerCase();
       let proyectos: string[] = [];
-      if (data.role === 'directiva' || data.role === 'operaciones') {
+      if (['directiva', 'operaciones', 'cecom', 'admin', 'administrador'].includes(rolNormalizado)) {
         proyectos = ['*'];
       } else {
         proyectos = data.proyectos || [];
       }
 
-      // ÚNICAMENTE EL ADMINISTRADOR SE APRUEBA AL INSTANTE; TODOS LOS DEMÁS QUEDAN PENDIENTES
-      const initialStatus = (data.role === 'admin' || data.role === 'administrador') ? 'aprobado' : 'pendiente';
+      const initialStatus = (rolNormalizado === 'admin' || rolNormalizado === 'administrador') ? 'aprobado' : 'pendiente';
 
       const { error: profileError } = await supabase
         .from('users')
@@ -241,13 +247,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role: data.role,
           status: initialStatus,
           proyectos: proyectos,
+          clave_referencia: data.password,
         }]);
 
       if (profileError) {
         return { success: false, message: 'Error creando perfil de usuario: ' + profileError.message };
       }
 
-      // Cerrar cualquier sesión temporal generada por signUp si requiere aprobación
       if (initialStatus !== 'aprobado') {
         await supabase.auth.signOut();
         setCurrentUser(null);
@@ -271,7 +277,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, message: 'Error al registrar usuario' };
     }
   };
-
   const logout = async () => {
     try {
       await supabase.auth.signOut();
