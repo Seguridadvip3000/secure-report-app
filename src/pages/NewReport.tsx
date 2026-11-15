@@ -33,11 +33,13 @@ export default function NewReport() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  const esLider = currentUser?.role?.toLowerCase() === 'lider';
-  const proyectoDelLider =
-    Array.isArray(currentUser?.proyectos) && currentUser.proyectos.length > 0
-      ? currentUser.proyectos
-      : currentUser?.proyecto_id || '';
+  const rolUsuario = currentUser?.role?.toLowerCase() || '';
+  const proyectosUsuario = Array.isArray(currentUser?.proyectos)
+    ? currentUser.proyectos.filter((p) => p && p !== '*')
+    : [];
+  const esAsignadoFijo =
+    (rolUsuario === 'lider' || rolUsuario === 'supervisor') && proyectosUsuario.length === 1;
+  const proyectoFijo = esAsignadoFijo ? proyectosUsuario : (currentUser as any)?.proyecto_id || '';
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -45,16 +47,16 @@ export default function NewReport() {
   }, []);
 
   const [form, setForm] = useState({
-    proyecto: esLider ? proyectoDelLider : '',
+    proyecto: esAsignadoFijo ? proyectoFijo : '',
     tituloNovedad: '',
     desarrollo: '',
   });
 
   useEffect(() => {
-    if (esLider && proyectoDelLider) {
-      setForm((prev) => ({ ...prev, proyecto: proyectoDelLider }));
+    if (esAsignadoFijo && proyectoFijo) {
+      setForm((prev) => ({ ...prev, proyecto: proyectoFijo }));
     }
-  }, [esLider, proyectoDelLider]);
+  }, [esAsignadoFijo, proyectoFijo]);
 
   const [evidencias, setEvidencias] = useState<string[]>([]);
   const [gpsLocation, setGpsLocation] = useState<{ lat: number; lng: number; address?: string } | null>(null);
@@ -213,7 +215,7 @@ export default function NewReport() {
               onClick={() => {
                 setSubmitted(false);
                 setForm({
-                  proyecto: esLider ? proyectoDelLider : '',
+                  proyecto: esAsignadoFijo ? proyectoFijo : '',
                   tituloNovedad: '',
                   desarrollo: '',
                 });
@@ -282,9 +284,9 @@ export default function NewReport() {
             <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
               <MapPin size={16} /> Proyecto *
             </label>
-            {esLider ? (
+            {esAsignadoFijo ? (
               <div className="w-full px-4 py-2.5 border border-blue-200 bg-blue-50 text-blue-900 rounded-lg font-semibold text-sm">
-                {proyectoDelLider || 'Sin proyecto asignado (Contacte a Operaciones)'}
+                {proyectoFijo || 'Sin proyecto asignado (Contacte a Operaciones)'}
               </div>
             ) : (
               <select
@@ -295,7 +297,7 @@ export default function NewReport() {
                 }`}
               >
                 <option value="">Seleccione un proyecto</option>
-                {PROYECTOS.map(p => (
+                {(proyectosUsuario.length > 0 ? proyectosUsuario : PROYECTOS).map(p => (
                   <option key={p} value={p}>{p}</option>
                 ))}
               </select>

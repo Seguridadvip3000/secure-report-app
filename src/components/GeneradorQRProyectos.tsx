@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
+import { jsPDF } from 'jspdf';
 import { PROYECTOS } from '../data/constants';
 import { QrCode, Printer, Download } from 'lucide-react';
 
 export default function GeneradorQRProyectos() {
-  const [proyectoSeleccionado, setProyectoSeleccionado] = useState(PROYECTOS[0] || '');
+  const [proyectoSeleccionado, setProyectoSeleccionado] = useState(PROYECTOS || '');
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [generando, setGenerando] = useState(false);
 
   useEffect(() => {
     if (!proyectoSeleccionado) return;
     const contenidoQR = `VIP3000_PROYECTO:${proyectoSeleccionado}`;
 
     QRCode.toDataURL(contenidoQR, {
-      width: 400,
+      width: 500,
       margin: 2,
       color: {
         dark: '#0f172a',
@@ -23,79 +25,82 @@ export default function GeneradorQRProyectos() {
       .catch((err) => console.error('Error generando QR:', err));
   }, [proyectoSeleccionado]);
 
-  const imprimirCartelQR = () => {
-    if (!qrDataUrl) return;
-    const ventana = window.open('', '_blank', 'width=600,height=800');
-    if (!ventana) return;
+  // Genera un Cartel Oficial en PDF compatible con Android APK (Guardar/Compartir/Imprimir) y PC
+  const descargarOImprimirCartelPDF = () => {
+    if (!qrDataUrl || !proyectoSeleccionado) return;
+    setGenerando(true);
 
-    ventana.document.write(`
-      <html>
-        <head>
-          <title>QR Control de Acceso - ${proyectoSeleccionado}</title>
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              text-align: center;
-              padding: 40px 20px;
-              color: #0f172a;
-            }
-            .marco {
-              border: 4px solid #0f172a;
-              border-radius: 20px;
-              padding: 30px;
-              max-width: 420px;
-              margin: 0 auto;
-            }
-            .empresa {
-              font-size: 18px;
-              font-weight: 900;
-              letter-spacing: 1px;
-              margin-bottom: 6px;
-            }
-            .subtitulo {
-              font-size: 13px;
-              color: #475569;
-              margin-bottom: 20px;
-            }
-            .proyecto {
-              background: #0f172a;
-              color: #ffffff;
-              padding: 10px 16px;
-              border-radius: 10px;
-              font-size: 18px;
-              font-weight: bold;
-              margin-bottom: 20px;
-            }
-            img.qr {
-              width: 280px;
-              height: 280px;
-            }
-            .instruccion {
-              margin-top: 20px;
-              font-size: 12px;
-              color: #334155;
-              line-height: 1.5;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="marco">
-            <div class="empresa">SEGURIDAD VIP 3000 C.A.</div>
-            <div class="subtitulo">PUNTO DE CONTROL DE ASISTENCIA Y SUPERVISIÓN</div>
-            <div class="proyecto">${proyectoSeleccionado}</div>
-            <img class="qr" src="${qrDataUrl}" />
-            <div class="instruccion">
-              <strong>USO OBLIGATORIO EN VIVO:</strong><br/>
-              Escanee este código desde la aplicación <b>SecureReport</b> al ingresar o salir de su turno o supervisión.
-            </div>
-          </div>
-          <script>
-            window.onload = function() { window.print(); };
-          </script>
-        </body>
-      </html>
-    `);
-    ventana.document.close();
+    try {
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const ancho = doc.internal.pageSize.getWidth();
+
+      // Marco exterior corporativo
+      doc.setDrawColor(15, 23, 42);
+      doc.setLineWidth(1.5);
+      doc.roundedRect(20, 20, ancho - 40, 245, 6, 6, 'S');
+
+      // Banda superior oscura
+      doc.setFillColor(15, 23, 42);
+      doc.roundedRect(20, 20, ancho - 40, 34, 6, 6, 'F');
+      doc.rect(20, 42, ancho - 40, 12, 'F');
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(20);
+      doc.text('SEGURIDAD VIP 3000 C.A.', ancho / 2, 36, { align: 'center' });
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text('CONTROL DE ASISTENCIA Y SUPERVISIÓN EN VIVO', ancho / 2, 46, { align: 'center' });
+
+      // Etiqueta del Proyecto
+      doc.setFillColor(29, 78, 216);
+      doc.roundedRect(32, 65, ancho - 64, 18, 3, 3, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(15);
+      doc.text(proyectoSeleccionado.toUpperCase(), ancho / 2, 77, { align: 'center' });
+
+      // Código QR centrado en alta resolución
+      const tamanoQR = 105;
+      const posX = (ancho - tamanoQR) / 2;
+      doc.addImage(qrDataUrl, 'PNG', posX, 94, tamanoQR, tamanoQR);
+
+      // Instrucciones de uso obligatorio
+      doc.setTextColor(30, 41, 59);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.text('USO OBLIGATORIO CON CÁMARA EN VIVO', ancho / 2, 214, { align: 'center' });
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(71, 85, 105);
+      const lineas = doc.splitTextToSize(
+        'Escanee este código directamente desde la aplicación móvil SecureReport al marcar Entrada/Salida de guardia o al Iniciar/Finalizar una supervisión operativa.',
+        ancho - 64
+      );
+      doc.text(lineas, ancho / 2, 223, { align: 'center' });
+
+      const nombreArchivo = `Cartel_QR_${proyectoSeleccionado.replace(/[^a-zA-Z0-9]/g, '_')}_SeguridadVip3000CA.pdf`;
+
+      if ((window as any).ReactNativeWebView) {
+        const pdfBase64 = doc.output('datauristring').split(',');
+        (window as any).ReactNativeWebView.postMessage(
+          JSON.stringify({
+            type: 'DOWNLOAD_PDF',
+            filename: nombreArchivo,
+            mimeType: 'application/pdf',
+            base64: pdfBase64,
+          })
+        );
+      } else {
+        doc.save(nombreArchivo);
+      }
+    } catch (err) {
+      alert('Error al generar el cartel QR en PDF.');
+    } finally {
+      setGenerando(false);
+    }
   };
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
@@ -103,7 +108,7 @@ export default function GeneradorQRProyectos() {
         <QrCode className="text-blue-600" size={22} />
         <div>
           <h3 className="font-bold text-slate-800 text-base">Códigos QR Oficiales por Proyecto</h3>
-          <p className="text-xs text-slate-500">Genere e imprima el código QR para colocar en cada puesto de servicio</p>
+          <p className="text-xs text-slate-500">Genere, descargue o comparta el cartel QR oficial para colocar en cada puesto</p>
         </div>
       </div>
 
@@ -133,18 +138,20 @@ export default function GeneradorQRProyectos() {
           <div className="flex flex-wrap justify-center gap-2 pt-2">
             <button
               type="button"
-              onClick={imprimirCartelQR}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer"
+              onClick={descargarOImprimirCartelPDF}
+              disabled={generando}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer disabled:opacity-50"
             >
-              <Printer size={15} /> Imprimir Cartel QR
+              <Printer size={16} /> {generando ? 'Generando Cartel...' : 'Descargar / Imprimir Cartel QR (PDF)'}
             </button>
-            <a
-              href={qrDataUrl}
-              download={`QR_${proyectoSeleccionado.replace(/\s+/g, '_')}.png`}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold shadow-sm"
+            <button
+              type="button"
+              onClick={descargarOImprimirCartelPDF}
+              disabled={generando}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer disabled:opacity-50"
             >
-              <Download size={15} /> Descargar Imagen PNG
-            </a>
+              <Download size={16} /> Guardar o Compartir QR
+            </button>
           </div>
         </div>
       )}
