@@ -6,6 +6,7 @@ import * as Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = 'https://sjwygpvnkrmfvfxuhkqp.supabase.co';
@@ -24,6 +25,7 @@ Notifications.setNotificationHandler({
 export default function App() {
   const webViewRef = React.useRef(null);
   const [usuarioActivo, setUsuarioActivo] = React.useState(null);
+  const [expoPushToken, setExpoPushToken] = React.useState(null);
 
   const protocolo = 'https://';
   const proyecto = 'secure-report-app';
@@ -32,16 +34,40 @@ export default function App() {
 
   React.useEffect(() => {
     const configurarNotificaciones = async () => {
-      await Notifications.requestPermissionsAsync();
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('alertas-vip3000', {
           name: 'Alertas Seguridad VIP 3000',
           importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern:,
           lightColor: '#FF0000',
           sound: 'default',
         });
       }
+
+      if (finalStatus === 'granted') {
+        try {
+          const projectId =
+            Constants?.expoConfig?.extra?.eas?.projectId ||
+            Constants?.easConfig?.projectId;
+          const tokenData = projectId
+            ? await Notifications.getExpoPushTokenAsync({ projectId })
+            : await Notifications.getExpoPushTokenAsync();
+          if (tokenData?.data) {
+            setExpoPushToken(tokenData.data);
+          }
+        } catch (err) {
+          console.warn('No se pudo obtener ExpoPushToken:', err);
+        }
+      }
     };
+
     configurarNotificaciones();
 
     const onBackPress = () => {
@@ -58,7 +84,18 @@ export default function App() {
     }
   }, []);
 
-  // ESCUCHA NATIVA EN SEGUNDO PLANO (PANTALLA BLOQUEADA O EN OTRA APP)
+  // Guardar push_token en Supabase cuando haya usuario activo y token listo
+  React.useEffect(() => {
+    if (usuarioActivo?.id && expoPushToken) {
+      supabaseNative
+        .from('users')
+        .update({ push_token: expoPushToken })
+        .eq('id', usuarioActivo.id)
+        .then(() => {});
+    }
+  }, [usuarioActivo, expoPushToken]);
+
+  // Escucha nativa en segundo plano
   React.useEffect(() => {
     if (!usuarioActivo || !usuarioActivo.role) return;
 
@@ -104,7 +141,6 @@ export default function App() {
       supabaseNative.removeChannel(canal);
     };
   }, [usuarioActivo]);
-
   const solicitarUbicacionNativa = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -145,7 +181,7 @@ export default function App() {
       });
 
       if (!resultado.canceled && resultado.assets && resultado.assets.length > 0) {
-        const asset = resultado.assets;
+        const asset = resultado.assets[0];
         if (asset.base64) {
           const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
           webViewRef.current?.postMessage(JSON.stringify({ type: 'NATIVE_PHOTOS', photos: [dataUrl] }));
@@ -184,7 +220,8 @@ export default function App() {
       Alert.alert('Error de Galería', 'No se pudo abrir la galería de imágenes.');
     }
   };
-  const guardarEnDispositivo = async (filename, base64Data) => {
+
+  const guardarEnDispositivo = async (filename, base64Data, mimeType = 'application/pdf') => {
     try {
       if (Platform.OS === 'android') {
         const permisos = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
@@ -192,12 +229,12 @@ export default function App() {
           const uriArchivo = await FileSystem.StorageAccessFramework.createFileAsync(
             permisos.directoryUri,
             filename,
-            'application/pdf'
+            mimeType
           );
           await FileSystem.writeAsStringAsync(uriArchivo, base64Data, {
             encoding: FileSystem.EncodingType.Base64,
           });
-          Alert.alert('¡Guardado!', 'El reporte PDF se guardó correctamente en tu teléfono.');
+          Alert.alert('¡Guardado!', 'El documento se guardó correctamente en tu teléfono.');
         }
       } else {
         const ruta = FileSystem.cacheDirectory + filename;
@@ -209,15 +246,15 @@ export default function App() {
     }
   };
 
-  const compartirArchivo = async (filename, base64Data) => {
+  const compartirArchivo = async (filename, base64Data, mimeType = 'application/pdf') => {
     try {
       const rutaArchivo = FileSystem.cacheDirectory + filename;
       await FileSystem.writeAsStringAsync(rutaArchivo, base64Data, {
         encoding: FileSystem.EncodingType.Base64,
       });
       await Sharing.shareAsync(rutaArchivo, {
-        mimeType: 'application/pdf',
-        dialogTitle: 'Compartir Reporte PDF',
+        mimeType,
+        dialogTitle: 'Compartir Documento Oficial',
       });
     } catch (error) {
       Alert.alert('Error', 'No se pudo abrir el menú de compartir.');
@@ -256,12 +293,13 @@ export default function App() {
       }
 
       if (datos.type === 'DOWNLOAD_PDF' && datos.base64) {
+        const tipoMime = datos.mimeType || 'application/pdf';
         Alert.alert(
-          'Reporte PDF Listo',
-          '¿Qué deseas hacer con el documento oficial?',
+          'Documento Listo',
+          '¿Qué deseas hacer con el archivo oficial?',
           [
-            { text: 'Guardar en el Teléfono', onPress: () => guardarEnDispositivo(datos.filename, datos.base64) },
-            { text: 'Compartir (WhatsApp/Correo)', onPress: () => compartirArchivo(datos.filename, datos.base64) },
+            { text: 'Guardar en el Teléfono', onPress: () => guardarEnDispositivo(datos.filename, datos.base64, tipoMime) },
+            { text: 'Compartir (WhatsApp/Correo)', onPress: () => compartirArchivo(datos.filename, datos.base64, tipoMime) },
             { text: 'Cancelar', style: 'cancel' }
           ]
         );
