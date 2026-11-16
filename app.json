@@ -3,6 +3,15 @@
     "name": "SecureReport",
     "slug": "secure-report-app",
     "version": "1.0.0",
+    "android": {
+      "package": "com.seguridadvip3000.securereport",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "WAKE_LOCK"
+      ]
+    },
     "extra": {
       "eas": {
         "projectId": "cd454b67-4bb9-4bd9-9430-10904d9c73ef"
