@@ -42,7 +42,7 @@ jobs:
         working-directory: ./app-movil-limpia
         run: npx expo install react-native-webview expo-file-system expo-sharing expo-image-picker expo-location expo-notifications expo-constants @supabase/supabase-js
 
-      - name: Configurar app.json con Ícono Oficial, Firebase y Permisos Completos
+      - name: Configurar app.json con Plugin Nativo de Notificaciones y Firebase
         working-directory: ./app-movil-limpia
         run: |
           echo '{
@@ -53,6 +53,16 @@ jobs:
               "orientation": "portrait",
               "icon": "./assets/icon.png",
               "userInterfaceStyle": "dark",
+              "plugins": [
+                [
+                  "expo-notifications",
+                  {
+                    "icon": "./assets/icon.png",
+                    "color": "#0f172a",
+                    "defaultChannel": "alertas-vip3000"
+                  }
+                ]
+              ],
               "android": {
                 "adaptiveIcon": {
                   "foregroundImage": "./assets/icon.png",
