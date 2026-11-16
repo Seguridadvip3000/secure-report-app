@@ -56,7 +56,7 @@ export default function App() {
           const projectId =
             Constants?.expoConfig?.extra?.eas?.projectId ||
             Constants?.easConfig?.projectId ||
-            'cd454b67-4bb9-4bd9-9430-10904d9c73ef';
+            'fbcc2e61-3ffd-4736-84bb-7ed46021bbe3';
           const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
           if (tokenData?.data) {
             setExpoPushToken(tokenData.data);
@@ -97,7 +97,6 @@ export default function App() {
         });
     }
   }, [usuarioActivo, expoPushToken]);
-
   React.useEffect(() => {
     if (!usuarioActivo || !usuarioActivo.role) return;
 
@@ -143,6 +142,7 @@ export default function App() {
       supabaseNative.removeChannel(canal);
     };
   }, [usuarioActivo]);
+
   const solicitarUbicacionNativa = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -222,7 +222,6 @@ export default function App() {
       Alert.alert('Error de Galería', 'No se pudo abrir la galería de imágenes.');
     }
   };
-
   const guardarEnDispositivo = async (filename, base64Data, mimeType = 'application/pdf') => {
     try {
       if (Platform.OS === 'android') {
