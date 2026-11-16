@@ -28,17 +28,21 @@ jobs:
             echo "❌ ERROR CRÍTICO: No se encontró logo-vip3000.jpg en la raíz del repositorio."
             exit 1
           fi
+          if [ ! -f google-services.json ]; then
+            echo "❌ ERROR CRÍTICO: No se encontró google-services.json en la raíz del repositorio."
+            exit 1
+          fi
           sudo apt-get update && sudo apt-get install -y imagemagick
           npx create-expo-app@latest app-movil-limpia --template blank
           if [ -f App.js ]; then cp App.js app-movil-limpia/App.js; fi
+          cp google-services.json app-movil-limpia/google-services.json
           mkdir -p app-movil-limpia/assets
           convert logo-vip3000.jpg -resize 1024x1024 -background "#0f172a" -gravity center -extent 1024x1024 PNG32:app-movil-limpia/assets/icon.png
-
       - name: Instalar Librerías Nativas (WebView, Cámara, Galería, GPS, Notificaciones, Supabase y PDF)
         working-directory: ./app-movil-limpia
-        run: npx expo install react-native-webview expo-file-system expo-sharing expo-image-picker expo-location expo-notifications @supabase/supabase-js
+        run: npx expo install react-native-webview expo-file-system expo-sharing expo-image-picker expo-location expo-notifications expo-constants @supabase/supabase-js
 
-      - name: Configurar app.json con Ícono Oficial y Permisos Completos
+      - name: Configurar app.json con Ícono Oficial, Firebase y Permisos Completos
         working-directory: ./app-movil-limpia
         run: |
           echo '{
@@ -55,6 +59,7 @@ jobs:
                   "backgroundColor": "#0f172a"
                 },
                 "package": "com.seguridadvip3000.securereport",
+                "googleServicesFile": "./google-services.json",
                 "permissions": [
                   "ACCESS_COARSE_LOCATION",
                   "ACCESS_FINE_LOCATION",
@@ -63,13 +68,18 @@ jobs:
                   "WRITE_EXTERNAL_STORAGE",
                   "READ_MEDIA_IMAGES",
                   "POST_NOTIFICATIONS",
+                  "RECEIVE_BOOT_COMPLETED",
                   "VIBRATE",
                   "WAKE_LOCK"
                 ]
+              },
+              "extra": {
+                "eas": {
+                  "projectId": "cd454b67-4bb9-4bd9-9430-10904d9c73ef"
+                }
               }
             }
           }' > app.json
-
       - name: Generar Proyecto Nativo Android (Prebuild)
         working-directory: ./app-movil-limpia
         run: npx expo prebuild --platform android --no-install
