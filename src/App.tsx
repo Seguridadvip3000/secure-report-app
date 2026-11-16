@@ -187,25 +187,34 @@ function Layout() {
   React.useEffect(() => {
     if (!currentUser) return;
 
-    if ((window as any).ReactNativeWebView) {
-      (window as any).ReactNativeWebView.postMessage(
-        JSON.stringify({
-          type: 'SET_USER_SESSION',
-          user: {
-            id: currentUser.id,
-            role: currentUser.role,
-            proyectos: currentUser.proyectos || [],
-          },
-        })
-      );
-    }
+    const enviarSesionNativa = () => {
+      if ((window as any).ReactNativeWebView) {
+        (window as any).ReactNativeWebView.postMessage(
+          JSON.stringify({
+            type: 'SET_USER_SESSION',
+            user: {
+              id: currentUser.id,
+              email: currentUser.email,
+              role: currentUser.role,
+              proyectos: currentUser.proyectos || [],
+            },
+          })
+        );
+      }
+    };
+
+    enviarSesionNativa();
+    const timer = setTimeout(enviarSesionNativa, 2000);
 
     notificationService.requestPermission();
     const unsubscribe = notificationService.subscribeToUserNotifications(
       currentUser.role,
       currentUser.proyectos || []
     );
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
   }, [currentUser]);
 
   return (
