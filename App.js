@@ -55,15 +55,14 @@ export default function App() {
         try {
           const projectId =
             Constants?.expoConfig?.extra?.eas?.projectId ||
-            Constants?.easConfig?.projectId;
-          const tokenData = projectId
-            ? await Notifications.getExpoPushTokenAsync({ projectId })
-            : await Notifications.getExpoPushTokenAsync();
+            Constants?.easConfig?.projectId ||
+            'cd454b67-4bb9-4bd9-9430-10904d9c73ef';
+          const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
           if (tokenData?.data) {
             setExpoPushToken(tokenData.data);
           }
         } catch (err) {
-          console.warn('No se pudo obtener ExpoPushToken:', err);
+          Alert.alert('Aviso Token Push', String(err?.message || err));
         }
       }
     };
@@ -87,10 +86,15 @@ export default function App() {
   React.useEffect(() => {
     if (usuarioActivo?.id && expoPushToken) {
       supabaseNative
-        .from('users')
-        .update({ push_token: expoPushToken })
-        .eq('id', usuarioActivo.id)
-        .then(() => {});
+        .rpc('registrar_push_token', {
+          p_user_id: usuarioActivo.id,
+          p_token: expoPushToken,
+        })
+        .then(({ error }) => {
+          if (error) {
+            Alert.alert('Error guardando token', error.message);
+          }
+        });
     }
   }, [usuarioActivo, expoPushToken]);
 
