@@ -203,6 +203,24 @@ function Layout() {
       }
     };
 
+    const manejarTokenDesdeApp = async (event: MessageEvent) => {
+      try {
+        const datos = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (datos?.type === 'NATIVE_PUSH_TOKEN' && datos.token && currentUser?.id) {
+          const { supabase } = await import('./lib/supabase');
+          await supabase.rpc('registrar_push_token', {
+            p_user_id: currentUser.id,
+            p_token: datos.token,
+          });
+        }
+      } catch (err) {
+        console.error('Error guardando push token desde WebView:', err);
+      }
+    };
+
+    window.addEventListener('message', manejarTokenDesdeApp);
+    document.addEventListener('message', manejarTokenDesdeApp as any);
+
     enviarSesionNativa();
     const timer = setTimeout(enviarSesionNativa, 2000);
 
@@ -211,8 +229,11 @@ function Layout() {
       currentUser.role,
       currentUser.proyectos || []
     );
+
     return () => {
       clearTimeout(timer);
+      window.removeEventListener('message', manejarTokenDesdeApp);
+      document.removeEventListener('message', manejarTokenDesdeApp as any);
       unsubscribe();
     };
   }, [currentUser]);

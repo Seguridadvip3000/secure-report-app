@@ -62,7 +62,7 @@ export default function App() {
             setExpoPushToken(tokenData.data);
           }
         } catch (err) {
-          Alert.alert('Aviso Token Push', String(err?.message || err));
+          console.error('Error obteniendo token push:', err);
         }
       }
     };
@@ -84,17 +84,13 @@ export default function App() {
   }, []);
 
   React.useEffect(() => {
-    if (usuarioActivo?.id && expoPushToken) {
-      supabaseNative
-        .rpc('registrar_push_token', {
-          p_user_id: usuarioActivo.id,
-          p_token: expoPushToken,
+    if (usuarioActivo?.id && expoPushToken && webViewRef.current) {
+      webViewRef.current.postMessage(
+        JSON.stringify({
+          type: 'NATIVE_PUSH_TOKEN',
+          token: expoPushToken,
         })
-        .then(({ error }) => {
-          if (error) {
-            Alert.alert('Error guardando token', error.message);
-          }
-        });
+      );
     }
   }, [usuarioActivo, expoPushToken]);
   React.useEffect(() => {
