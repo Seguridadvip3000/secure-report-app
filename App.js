@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, SafeAreaView, StatusBar, Platform, BackHandler, Alert, Linking } from 'react-native';
+import { StyleSheet, SafeAreaView, StatusBar, Platform, BackHandler, Alert, Linking, View, Text, TouchableOpacity } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -7,12 +7,6 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = 'https://supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqd3lncHZua3JtZnZmeHVoa3FwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5NDIwODIsImV4cCI6MjEwODUxODA4Mn0.YJzNC5HQKhIxvJVKQeetbBi7t6kwTHFK-h-i1NF-ny4';
-
-const supabaseNative = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -26,33 +20,33 @@ export default function App() {
   const webViewRef = React.useRef(null);
   const [usuarioActivo, setUsuarioActivo] = React.useState(null);
   const [expoPushToken, setExpoPushToken] = React.useState(null);
+  const [errorRed, setErrorRed] = React.useState(false);
 
-  const protocolo = 'https://';
-  const proyecto = 'secure-report-app';
-  const dominio = '.vercel.app';
-  const APP_URL = protocolo + proyecto + dominio;
+  const APP_URL = 'https://vercel.app';
 
   React.useEffect(() => {
+    let intervaloToken = null;
+
     const configurarNotificaciones = async () => {
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
+      try {
+        const { status: existingStatus } = await Notifications.getPermissionsAsync();
+        let finalStatus = existingStatus;
+        if (existingStatus !== 'granted') {
+          const { status } = await Notifications.requestPermissionsAsync();
+          finalStatus = status;
+        }
 
-      if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('alertas-vip3000', {
-          name: 'Alertas Seguridad VIP 3000',
-          importance: Notifications.AndroidImportance.MAX,
-          enableVibrate: true,
-          lightColor: '#FF0000',
-          sound: 'default',
-        });
-      }
+        if (Platform.OS === 'android') {
+          await Notifications.setNotificationChannelAsync('alertas-vip3000', {
+            name: 'Alertas Seguridad VIP 3000',
+            importance: Notifications.AndroidImportance.MAX,
+            enableVibrate: true,
+            lightColor: '#FF0000',
+            sound: 'default',
+          });
+        }
 
-      if (finalStatus === 'granted') {
-        try {
+        if (finalStatus === 'granted') {
           const projectId =
             Constants?.expoConfig?.extra?.eas?.projectId ||
             Constants?.easConfig?.projectId ||
@@ -60,14 +54,16 @@ export default function App() {
           const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
           if (tokenData?.data) {
             setExpoPushToken(tokenData.data);
+            if (intervaloToken) clearInterval(intervaloToken);
           }
-        } catch (err) {
-          console.error('Error obteniendo token push:', err);
         }
+      } catch (err) {
+        console.log('Reintentando token push:', err?.message);
       }
     };
 
     configurarNotificaciones();
+    intervaloToken = setInterval(configurarNotificaciones, 15000);
 
     const onBackPress = () => {
       if (webViewRef.current) {
@@ -79,8 +75,14 @@ export default function App() {
 
     if (Platform.OS === 'android') {
       BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => BackHandler.removeEventListener('hardwareBackPress', onBackPress);
     }
+
+    return () => {
+      if (intervaloToken) clearInterval(intervaloToken);
+      if (Platform.OS === 'android') {
+        BackHandler.removeEventListener('hardwareBackPress', onBackPress);
+      }
+    };
   }, []);
 
   React.useEffect(() => {
@@ -93,52 +95,6 @@ export default function App() {
       );
     }
   }, [usuarioActivo, expoPushToken]);
-  React.useEffect(() => {
-    if (!usuarioActivo || !usuarioActivo.role) return;
-
-    const rol = (usuarioActivo.role || '').toLowerCase().trim();
-    const proyectos = Array.isArray(usuarioActivo.proyectos) ? usuarioActivo.proyectos : [];
-
-    const canal = supabaseNative
-      .channel(`native-bg-${rol}-${Date.now()}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications' },
-        async (payload) => {
-          const notif = payload.new;
-          if (!notif) return;
-
-          const rolesDestino = (notif.target_roles || []).map((r) => r.toLowerCase());
-          const coincideRol =
-            rolesDestino.includes(rol) ||
-            (rol === 'administrador' && rolesDestino.includes('admin')) ||
-            (rol === 'admin' && rolesDestino.includes('administrador'));
-
-          if (!coincideRol) return;
-
-          if (rol === 'cliente' && notif.target_project) {
-            const tieneAcceso = proyectos.includes('*') || proyectos.includes(notif.target_project);
-            if (!tieneAcceso) return;
-          }
-
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: notif.title || 'SecureReport VIP 3000',
-              body: notif.body || '',
-              sound: 'default',
-              channelId: 'alertas-vip3000',
-            },
-            trigger: null,
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabaseNative.removeChannel(canal);
-    };
-  }, [usuarioActivo]);
-
   const solicitarUbicacionNativa = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -218,6 +174,7 @@ export default function App() {
       Alert.alert('Error de Galería', 'No se pudo abrir la galería de imágenes.');
     }
   };
+
   const guardarEnDispositivo = async (filename, base64Data, mimeType = 'application/pdf') => {
     try {
       if (Platform.OS === 'android') {
@@ -257,13 +214,20 @@ export default function App() {
       Alert.alert('Error', 'No se pudo abrir el menú de compartir.');
     }
   };
-
   const manejarMensajeWeb = async (event) => {
     try {
       const datos = JSON.parse(event.nativeEvent.data);
 
       if (datos.type === 'SET_USER_SESSION') {
         setUsuarioActivo(datos.user || null);
+        if (datos.user?.id && expoPushToken && webViewRef.current) {
+          webViewRef.current.postMessage(
+            JSON.stringify({
+              type: 'NATIVE_PUSH_TOKEN',
+              token: expoPushToken,
+            })
+          );
+        }
         return;
       }
 
@@ -318,22 +282,42 @@ export default function App() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
-      <WebView
-        ref={webViewRef}
-        source={{ uri: APP_URL }}
-        style={styles.webview}
-        onMessage={manejarMensajeWeb}
-        onShouldStartLoadWithRequest={manejarNavegacion}
-        originWhitelist={['*']}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        geolocationEnabled={true}
-        allowFileAccess={true}
-        allowUniversalAccessFromFileURLs={true}
-        mediaPlaybackRequiresUserAction={false}
-        allowsInlineMediaPlayback={true}
-        startInLoadingState={true}
-      />
+      {errorRed ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Sin conexión con el servidor</Text>
+          <Text style={styles.errorText}>
+            Tu operadora móvil o red actual bloqueó el acceso a vercel.app. Verifica tu conexión o cambia de red e intenta de nuevo.
+          </Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => {
+              setErrorRed(false);
+              webViewRef.current?.reload();
+            }}
+          >
+            <Text style={styles.retryText}>Reintentar Conexión</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <WebView
+          ref={webViewRef}
+          source={{ uri: APP_URL }}
+          style={styles.webview}
+          onMessage={manejarMensajeWeb}
+          onShouldStartLoadWithRequest={manejarNavegacion}
+          onError={() => setErrorRed(true)}
+          originWhitelist={['*']}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          cacheEnabled={true}
+          geolocationEnabled={true}
+          allowFileAccess={true}
+          allowUniversalAccessFromFileURLs={true}
+          mediaPlaybackRequiresUserAction={false}
+          allowsInlineMediaPlayback={true}
+          startInLoadingState={true}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -345,5 +329,37 @@ const styles = StyleSheet.create({
   },
   webview: {
     flex: 1,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#0f172a',
+  },
+  errorTitle: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  errorText: {
+    color: '#cbd5e1',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  retryButton: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  retryText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 15,
   },
 });

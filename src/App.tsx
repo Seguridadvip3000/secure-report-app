@@ -222,7 +222,7 @@ function Layout() {
     document.addEventListener('message', manejarTokenDesdeApp as any);
 
     enviarSesionNativa();
-    const timer = setTimeout(enviarSesionNativa, 2000);
+    const intervalo = setInterval(enviarSesionNativa, 5000);
 
     notificationService.requestPermission();
     const unsubscribe = notificationService.subscribeToUserNotifications(
@@ -231,7 +231,7 @@ function Layout() {
     );
 
     return () => {
-      clearTimeout(timer);
+      clearInterval(intervalo);
       window.removeEventListener('message', manejarTokenDesdeApp);
       document.removeEventListener('message', manejarTokenDesdeApp as any);
       unsubscribe();
