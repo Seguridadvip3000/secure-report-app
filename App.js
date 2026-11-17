@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, SafeAreaView, StatusBar, Platform, BackHandler, Alert, Linking, View, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, SafeAreaView, StatusBar, Platform, BackHandler, Alert, Linking, View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -22,7 +22,7 @@ export default function App() {
   const [expoPushToken, setExpoPushToken] = React.useState(null);
   const [errorRed, setErrorRed] = React.useState(false);
 
-  const APP_URL = 'https://vercel.app';
+  const APP_URL = 'secure-report-app.vercel.app/';
 
   React.useEffect(() => {
     let intervaloToken = null;
@@ -301,9 +301,6 @@ export default function App() {
       Linking.openURL(url).catch(() => {});
       return false;
     }
-    if (url.includes('vercel.com') && !url.includes('vercel.app')) {
-      return false;
-    }
     return true;
   };
 
@@ -334,7 +331,6 @@ export default function App() {
           onMessage={manejarMensajeWeb}
           onShouldStartLoadWithRequest={manejarNavegacion}
           onError={() => setErrorRed(true)}
-          setSupportMultipleWindows={false}
           originWhitelist={['*']}
           javaScriptEnabled={true}
           domStorageEnabled={true}
@@ -345,6 +341,12 @@ export default function App() {
           mediaPlaybackRequiresUserAction={false}
           allowsInlineMediaPlayback={true}
           startInLoadingState={true}
+          renderLoading={() => (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color="#3b82f6" />
+              <Text style={styles.loadingText}>Conectando con Seguridad VIP 3000...</Text>
+            </View>
+          )}
         />
       )}
     </SafeAreaView>
@@ -358,6 +360,22 @@ const styles = StyleSheet.create({
   },
   webview: {
     flex: 1,
+    backgroundColor: '#0f172a',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#0f172a',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#cbd5e1',
+    marginTop: 12,
+    fontSize: 14,
   },
   errorContainer: {
     flex: 1,
