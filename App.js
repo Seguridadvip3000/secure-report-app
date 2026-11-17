@@ -22,7 +22,7 @@ export default function App() {
   const [expoPushToken, setExpoPushToken] = React.useState(null);
   const [errorRed, setErrorRed] = React.useState(false);
 
-  const APP_URL = 'https://secure-report-app.vercel.app/';
+  const APP_URL = 'https://vercel.app';
 
   React.useEffect(() => {
     let intervaloToken = null;
@@ -46,19 +46,44 @@ export default function App() {
           });
         }
 
-        if (finalStatus === 'granted') {
-          const projectId =
-            Constants?.expoConfig?.extra?.eas?.projectId ||
-            Constants?.easConfig?.projectId ||
-            'fbcc2e61-3ffd-4736-84bb-7ed46021bbe3';
+        if (finalStatus !== 'granted') {
+          webViewRef.current?.postMessage(
+            JSON.stringify({
+              type: 'NATIVE_PUSH_ERROR',
+              error: 'Permiso de notificaciones denegado en Android.',
+            })
+          );
+          return;
+        }
+
+        const projectId =
+          Constants?.expoConfig?.extra?.eas?.projectId ||
+          Constants?.easConfig?.projectId ||
+          'fbcc2e61-3ffd-4736-84bb-7ed46021bbe3';
+
+        try {
           const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
           if (tokenData?.data) {
             setExpoPushToken(tokenData.data);
             if (intervaloToken) clearInterval(intervaloToken);
+            return;
           }
+        } catch (expoErr) {
+          const deviceToken = await Notifications.getDevicePushTokenAsync();
+          if (deviceToken?.data) {
+            setExpoPushToken(`FCM:${deviceToken.data}`);
+            if (intervaloToken) clearInterval(intervaloToken);
+            return;
+          }
+          throw expoErr;
         }
       } catch (err) {
-        console.log('Reintentando token push:', err?.message);
+        webViewRef.current?.postMessage(
+          JSON.stringify({
+            type: 'NATIVE_PUSH_ERROR',
+            error: String(err?.message || err),
+          })
+        );
       }
     };
 

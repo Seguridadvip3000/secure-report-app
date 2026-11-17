@@ -183,6 +183,7 @@ export default function App() {
 }
 function Layout() {
   const { currentUser } = useAuth();
+  const [diagnosticoPush, setDiagnosticoPush] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!currentUser) return;
@@ -206,12 +207,19 @@ function Layout() {
     const manejarTokenDesdeApp = async (event: MessageEvent) => {
       try {
         const datos = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (datos?.type === 'NATIVE_PUSH_ERROR' && datos.error) {
+          setDiagnosticoPush(`Error Push APK: ${datos.error}`);
+        }
         if (datos?.type === 'NATIVE_PUSH_TOKEN' && datos.token && currentUser?.id) {
+          setDiagnosticoPush(null);
           const { supabase } = await import('./lib/supabase');
-          await supabase.rpc('registrar_push_token', {
+          const { error } = await supabase.rpc('registrar_push_token', {
             p_user_id: currentUser.id,
             p_token: datos.token,
           });
+          if (error) {
+            setDiagnosticoPush(`Error guardando en Supabase: ${error.message}`);
+          }
         }
       } catch (err) {
         console.error('Error guardando push token desde WebView:', err);
@@ -242,6 +250,14 @@ function Layout() {
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-50 overflow-x-hidden">
       <Sidebar />
       <main className="flex-1 w-full pt-20 md:pt-0 overflow-y-auto">
+        {diagnosticoPush && (
+          <div className="bg-amber-900/90 text-amber-100 text-xs px-4 py-2 flex items-center justify-between border-b border-amber-700">
+            <span>⚠️ {diagnosticoPush}</span>
+            <button onClick={() => setDiagnosticoPush(null)} className="underline ml-3 font-semibold">
+              Cerrar
+            </button>
+          </div>
+        )}
         <Outlet />
       </main>
     </div>
