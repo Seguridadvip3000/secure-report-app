@@ -22,7 +22,7 @@ export default function App() {
   const [expoPushToken, setExpoPushToken] = React.useState(null);
   const [errorRed, setErrorRed] = React.useState(false);
 
-  const APP_URL = 'secure-report-app.vercel.app/';
+  const APP_URL = 'https://secure-report-app.vercel.app/';
 
   React.useEffect(() => {
     let intervaloToken = null;
