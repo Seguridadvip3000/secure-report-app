@@ -2,6 +2,23 @@ import { supabase } from '../lib/supabase';
 
 const idsNotificados = new Set<string>();
 
+const dispararNotificacionCompleta = async (notif: {
+  title: string;
+  body: string;
+  target_roles: string[];
+  target_project?: string | null;
+}) => {
+  await supabase.from('notifications').insert([notif]);
+
+  try {
+    await supabase.functions.invoke('enviar-push-movil', {
+      body: { record: notif },
+    });
+  } catch (err) {
+    console.warn('Aviso invocando push móvil:', err);
+  }
+};
+
 const reproducirSonidoAlerta = (esEmergencia = false) => {
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -75,7 +92,6 @@ const mostrarBannerEnPantalla = (title: string, body: string, esEmergencia = fal
     }, 8000);
   }
 };
-
 export const notificationService = {
   async requestPermission(): Promise<NotificationPermission> {
     if (!('Notification' in window)) return 'denied';
@@ -154,7 +170,6 @@ export const notificationService = {
       this.showPushNotification(notif.title, notif.body, esEmergencia);
     };
 
-    // 1. Canal Realtime instantáneo
     const channel = supabase
       .channel(`notificaciones-rol-${rol}-${Date.now()}`)
       .on(
@@ -166,7 +181,6 @@ export const notificationService = {
       )
       .subscribe();
 
-    // 2. Respaldo de sondeo cada 8 segundos (evita pérdida por ahorro de batería en Android)
     const intervaloRespaldo = setInterval(async () => {
       try {
         const { data } = await supabase
@@ -189,26 +203,22 @@ export const notificationService = {
   },
   // 1. NUEVO REPORTE
   async notifyNewReportCreated(proyecto: string, tituloNovedad: string): Promise<void> {
-    await supabase.from('notifications').insert([
-      {
-        title: '📄 Nuevo Reporte Registrado',
-        body: `Proyecto ${proyecto}: ${tituloNovedad}`,
-        target_roles: ['operaciones', 'cecom', 'directiva', 'admin', 'administrador'],
-        target_project: proyecto,
-      },
-    ]);
+    await dispararNotificacionCompleta({
+      title: '📄 Nuevo Reporte Registrado',
+      body: `Proyecto ${proyecto}: ${tituloNovedad}`,
+      target_roles: ['operaciones', 'cecom', 'directiva', 'admin', 'administrador'],
+      target_project: proyecto,
+    });
   },
 
   // 2. BOTÓN DE PÁNICO S.O.S
   async notifyEmergencySOS(nombreLider: string, proyecto: string, lat: number, lng: number): Promise<void> {
-    await supabase.from('notifications').insert([
-      {
-        title: '🚨 ¡ALERTA S.O.S DE EMERGENCIA!',
-        body: `El oficial ${nombreLider} activó el botón de pánico en ${proyecto}. GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`,
-        target_roles: ['operaciones', 'cecom', 'directiva', 'admin', 'administrador'],
-        target_project: proyecto,
-      },
-    ]);
+    await dispararNotificacionCompleta({
+      title: '🚨 ¡ALERTA S.O.S DE EMERGENCIA!',
+      body: `El oficial ${nombreLider} activó el botón de pánico en ${proyecto}. GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+      target_roles: ['operaciones', 'cecom', 'directiva', 'admin', 'administrador'],
+      target_project: proyecto,
+    });
   },
 
   // 3. NUEVO REGISTRO DE USUARIO
@@ -219,40 +229,34 @@ export const notificationService = {
         ? ['operaciones', 'directiva', 'admin', 'administrador']
         : ['directiva', 'admin', 'administrador'];
 
-    await supabase.from('notifications').insert([
-      {
-        title: '👤 Nueva Solicitud de Registro',
-        body: `${nombre_completo} (@${username}) solicita acceso como ${role.toUpperCase()}.`,
-        target_roles: rolesDestino,
-        target_project: null,
-      },
-    ]);
+    await dispararNotificacionCompleta({
+      title: '👤 Nueva Solicitud de Registro',
+      body: `${nombre_completo} (@${username}) solicita acceso como ${role.toUpperCase()}.`,
+      target_roles: rolesDestino,
+      target_project: null,
+    });
   },
 
   // 4. REPORTE ENVIADO AL CLIENTE
   async notifyReportApproved(tituloNovedad: string, proyecto: string): Promise<void> {
-    await supabase.from('notifications').insert([
-      {
-        title: '✅ Nuevo Reporte Verificado',
-        body: `${proyecto}: ${tituloNovedad}`,
-        target_roles: ['cliente'],
-        target_project: proyecto,
-      },
-    ]);
+    await dispararNotificacionCompleta({
+      title: '✅ Nuevo Reporte Verificado',
+      body: `${proyecto}: ${tituloNovedad}`,
+      target_roles: ['cliente'],
+      target_project: proyecto,
+    });
   },
 
   // 5. ENTRADA / SALIDA DE LÍDER
   async notifyLiderAttendance(nombreLider: string, proyecto: string, tipo: 'ENTRADA' | 'SALIDA'): Promise<void> {
     const icono = tipo === 'ENTRADA' ? '🟢' : '🔴';
     const accion = tipo === 'ENTRADA' ? 'reportó ENTRADA' : 'reportó SALIDA';
-    await supabase.from('notifications').insert([
-      {
-        title: `${icono} Control de Asistencia (${tipo})`,
-        body: `El líder ${nombreLider} ${accion} en el proyecto ${proyecto}.`,
-        target_roles: ['cliente', 'operaciones', 'directiva', 'admin', 'administrador'],
-        target_project: proyecto,
-      },
-    ]);
+    await dispararNotificacionCompleta({
+      title: `${icono} Control de Asistencia (${tipo})`,
+      body: `El líder ${nombreLider} ${accion} en el proyecto ${proyecto}.`,
+      target_roles: ['cliente', 'operaciones', 'directiva', 'admin', 'administrador'],
+      target_project: proyecto,
+    });
   },
 
   // 6. SUPERVISIÓN DE OPERACIONES
@@ -265,13 +269,11 @@ export const notificationService = {
     const icono = tipo === 'INICIO' ? '🛡️' : '🏁';
     const accion = tipo === 'INICIO' ? 'INGRESÓ A SUPERVISAR' : 'FINALIZÓ SUPERVISIÓN EN';
     const detalleLider = liderAsociado ? ` (Líder en sitio: ${liderAsociado})` : '';
-    await supabase.from('notifications').insert([
-      {
-        title: `${icono} Supervisión Operativa (${tipo})`,
-        body: `${nombreOperaciones} ${accion} el proyecto ${proyecto}${detalleLider}.`,
-        target_roles: ['directiva', 'admin', 'administrador'],
-        target_project: proyecto,
-      },
-    ]);
+    await dispararNotificacionCompleta({
+      title: `${icono} Supervisión Operativa (${tipo})`,
+      body: `${nombreOperaciones} ${accion} el proyecto ${proyecto}${detalleLider}.`,
+      target_roles: ['directiva', 'admin', 'administrador'],
+      target_project: proyecto,
+    });
   },
 };
