@@ -22,7 +22,7 @@ export default function App() {
   const [expoPushToken, setExpoPushToken] = React.useState(null);
   const [errorRed, setErrorRed] = React.useState(false);
 
-  const APP_URL = 'https://vercel.app';
+  const APP_URL = 'https://secure-report-app.vercel.app/';
 
   React.useEffect(() => {
     let intervaloToken = null;
@@ -276,6 +276,9 @@ export default function App() {
       Linking.openURL(url).catch(() => {});
       return false;
     }
+    if (url.includes('vercel.com') && !url.includes('vercel.app')) {
+      return false;
+    }
     return true;
   };
 
@@ -286,7 +289,7 @@ export default function App() {
         <View style={styles.errorContainer}>
           <Text style={styles.errorTitle}>Sin conexión con el servidor</Text>
           <Text style={styles.errorText}>
-            Tu operadora móvil o red actual bloqueó el acceso a vercel.app. Verifica tu conexión o cambia de red e intenta de nuevo.
+            Verifica tu conexión a datos móviles o Wi-Fi e intenta nuevamente.
           </Text>
           <TouchableOpacity
             style={styles.retryButton}
@@ -306,6 +309,7 @@ export default function App() {
           onMessage={manejarMensajeWeb}
           onShouldStartLoadWithRequest={manejarNavegacion}
           onError={() => setErrorRed(true)}
+          setSupportMultipleWindows={false}
           originWhitelist={['*']}
           javaScriptEnabled={true}
           domStorageEnabled={true}
