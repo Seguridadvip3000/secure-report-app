@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { notificationService } from '../services/notificationService';
 import QRScannerModal from '../components/QRScannerModal';
-import { AlertCircle, CheckCircle2, FilePlus, LogIn, LogOut, Clock, QrCode } from 'lucide-react';
+import { AlertCircle, CheckCircle2, FilePlus, LogIn, LogOut, Clock, QrCode, Users } from 'lucide-react';
 
 export default function LiderHome() {
   const { currentUser } = useAuth();
@@ -196,7 +196,6 @@ export default function LiderHome() {
   };
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
-      {/* Modal de Escaneo QR en Vivo (Obligatorio para Entrada y Salida) */}
       {accionQRActiva && (
         <QRScannerModal
           titulo={`Escanear QR para ${accionQRActiva}`}
@@ -207,7 +206,6 @@ export default function LiderHome() {
         />
       )}
 
-      {/* Tarjeta de Identificación Operativa */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-blue-600 flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
           <span className="text-xs font-bold text-blue-600 tracking-wider block">SEGURIDAD VIP 3000 C.A.</span>
@@ -227,7 +225,6 @@ export default function LiderHome() {
         </div>
       </div>
 
-      {/* Notificaciones de estado */}
       {notificacion && (
         <div
           className={`max-w-xl mx-auto p-4 rounded-xl text-sm border flex items-start gap-2 text-left ${
@@ -245,7 +242,6 @@ export default function LiderHome() {
         </div>
       )}
 
-      {/* Control de Asistencia por QR en Vivo (Entrada y Salida) */}
       <div className="max-w-xl mx-auto bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
           <h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">
@@ -287,8 +283,14 @@ export default function LiderHome() {
         )}
       </div>
 
-      {/* Acceso Rápido a Crear Reporte */}
-      <div className="max-w-xl mx-auto">
+      <div className="max-w-xl mx-auto space-y-3">
+        <button
+          onClick={() => navigate('/asistencia')}
+          className="w-full bg-slate-900 hover:bg-slate-800 text-white p-4 rounded-2xl shadow-sm flex items-center justify-center gap-3 font-bold text-base transition-all active:scale-95 cursor-pointer"
+        >
+          <Users size={22} /> ASISTENCIA Y PLANTILLA DEL PROYECTO
+        </button>
+
         <button
           onClick={() => navigate('/crear-reporte')}
           className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-2xl shadow-sm flex items-center justify-center gap-3 font-bold text-base transition-all active:scale-95 cursor-pointer"
@@ -297,7 +299,6 @@ export default function LiderHome() {
         </button>
       </div>
 
-      {/* Panel del Botón de Emergencia Táctico */}
       <div className="bg-white rounded-2xl shadow-md border border-slate-100 p-6 md:p-8 text-center space-y-5 max-w-xl mx-auto">
         <div>
           <h3 className="text-lg font-bold text-red-600 tracking-wide uppercase flex items-center justify-center gap-2">
