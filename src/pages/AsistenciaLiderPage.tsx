@@ -54,6 +54,7 @@ export default function AsistenciaLiderPage() {
       : ['SIN PROYECTO ASIGNADO'];
 
   const [proyectoSeleccionado, setProyectoSeleccionado] = useState<string>(proyectosUsuario[0]);
+  const [listaProyectosGlobales, setListaProyectosGlobales] = useState<string[]>([]);
   const [seccionPrincipal, setSeccionPrincipal] = useState<'PLANTILLA' | 'PASE_ASISTENCIA'>('PLANTILLA');
   const [subMenuPlantilla, setSubMenuPlantilla] = useState<'ACTIVA' | 'REGISTRAR' | 'HISTORIAL'>('ACTIVA');
 
@@ -80,6 +81,34 @@ export default function AsistenciaLiderPage() {
 
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
   const nombreRegistrador = currentUser?.nombre_completo || currentUser?.username || 'Líder';
+  const cargarProyectosDisponibles = async () => {
+    try {
+      const nombresProyectos = new Set<string>(proyectosUsuario.filter((p) => p && p !== '*'));
+
+      const { data: projsTabla } = await supabase.from('projects').select('name').order('name', { ascending: true });
+      if (Array.isArray(projsTabla)) {
+        projsTabla.forEach((p: any) => {
+          if (p?.name) nombresProyectos.add(String(p.name).trim());
+        });
+      }
+
+      const { data: usersTabla } = await supabase.from('users').select('proyectos');
+      if (Array.isArray(usersTabla)) {
+        usersTabla.forEach((u: any) => {
+          if (Array.isArray(u?.proyectos)) {
+            u.proyectos.forEach((pr: string) => {
+              if (pr && pr !== '*') nombresProyectos.add(pr.trim());
+            });
+          }
+        });
+      }
+
+      setListaProyectosGlobales(Array.from(nombresProyectos).sort());
+    } catch (e) {
+      setListaProyectosGlobales(proyectosUsuario);
+    }
+  };
+
   const cargarDatosProyecto = async () => {
     if (!proyectoSeleccionado) return;
     setCargando(true);
@@ -115,9 +144,12 @@ export default function AsistenciaLiderPage() {
   };
 
   useEffect(() => {
+    cargarProyectosDisponibles();
+  }, []);
+
+  useEffect(() => {
     cargarDatosProyecto();
   }, [proyectoSeleccionado]);
-
   const manejarRegistrarAlta = async (e: React.FormEvent) => {
     e.preventDefault();
     setMensaje(null);
@@ -128,6 +160,11 @@ export default function AsistenciaLiderPage() {
 
     if (!cedulaLimpia || !nombresLimpios || !apellidosLimpios) {
       setMensaje({ tipo: 'error', texto: 'Debe completar Cédula, Nombres y Apellidos.' });
+      return;
+    }
+
+    if (tipoIngreso === 'TRASLADO RECIBIDO' && !proyectoOrigen.trim()) {
+      setMensaje({ tipo: 'error', texto: 'Debe seleccionar el Proyecto de Origen para un Traslado Recibido.' });
       return;
     }
 
@@ -145,7 +182,7 @@ export default function AsistenciaLiderPage() {
     setGuardando(true);
     try {
       const ahora = new Date().toISOString();
-      const origenLimpio = tipoIngreso === 'TRASLADO RECIBIDO' ? proyectoOrigen.trim().toUpperCase() || null : null;
+      const origenLimpio = tipoIngreso === 'TRASLADO RECIBIDO' ? proyectoOrigen.trim() : null;
 
       const { data: insertado, error: errInsert } = await supabase
         .from('plantilla_proyectos')
@@ -201,15 +238,27 @@ export default function AsistenciaLiderPage() {
       setGuardando(false);
     }
   };
+
   const confirmarBajaPlantilla = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!oficialParaBaja) return;
+    setMensaje(null);
+
+    if (tipoBaja === 'EGRESO' && !observacionBaja.trim()) {
+      setMensaje({ tipo: 'error', texto: '⚠️ Debe escribir obligatoriamente el motivo del EGRESO para continuar.' });
+      return;
+    }
+
+    if (tipoBaja === 'TRASLADO ENVIADO' && !proyectoDestino.trim()) {
+      setMensaje({ tipo: 'error', texto: '⚠️ Debe seleccionar obligatoriamente el Proyecto Destino del traslado.' });
+      return;
+    }
 
     setGuardando(true);
-    setMensaje(null);
     try {
       const ahora = new Date().toISOString();
-      const destinoLimpio = tipoBaja === 'TRASLADO ENVIADO' ? proyectoDestino.trim().toUpperCase() || null : null;
+      const destinoLimpio = tipoBaja === 'TRASLADO ENVIADO' ? proyectoDestino.trim() : null;
+      const motivoLimpio = observacionBaja.trim() || null;
 
       const { error: errUpdate } = await supabase
         .from('plantilla_proyectos')
@@ -217,7 +266,7 @@ export default function AsistenciaLiderPage() {
           estado: 'INACTIVO',
           tipo_ultimo_movimiento: tipoBaja,
           proyecto_origen_destino: destinoLimpio,
-          observacion: observacionBaja.trim() || null,
+          observacion: motivoLimpio,
           fecha_egreso: ahora,
           updated_at: ahora,
         })
@@ -234,14 +283,56 @@ export default function AsistenciaLiderPage() {
           grupo: oficialParaBaja.grupo,
           tipo_movimiento: tipoBaja,
           proyecto_relacionado: destinoLimpio,
-          observacion: observacionBaja.trim() || null,
+          observacion: motivoLimpio,
           registrado_por: nombreRegistrador,
         },
       ]);
 
+      // Si es TRASLADO ENVIADO a otro proyecto, lo anexamos automáticamente como TRASLADO RECIBIDO en el proyecto destino
+      if (tipoBaja === 'TRASLADO ENVIADO' && destinoLimpio) {
+        const { data: nuevoDestino } = await supabase
+          .from('plantilla_proyectos')
+          .insert([
+            {
+              proyecto: destinoLimpio,
+              cedula: oficialParaBaja.cedula,
+              nombres: oficialParaBaja.nombres,
+              apellidos: oficialParaBaja.apellidos,
+              grupo: oficialParaBaja.grupo,
+              estado: 'ACTIVO',
+              tipo_ultimo_movimiento: 'TRASLADO RECIBIDO',
+              proyecto_origen_destino: proyectoSeleccionado,
+              observacion: motivoLimpio,
+              fecha_ingreso: ahora,
+              registrado_por: nombreRegistrador,
+            },
+          ])
+          .select()
+          .single();
+
+        if (nuevoDestino?.id) {
+          await supabase.from('movimientos_plantilla').insert([
+            {
+              plantilla_id: nuevoDestino.id,
+              proyecto: destinoLimpio,
+              cedula: oficialParaBaja.cedula,
+              nombre_completo: `${oficialParaBaja.nombres} ${oficialParaBaja.apellidos}`,
+              grupo: oficialParaBaja.grupo,
+              tipo_movimiento: 'TRASLADO RECIBIDO',
+              proyecto_relacionado: proyectoSeleccionado,
+              observacion: motivoLimpio,
+              registrado_por: nombreRegistrador,
+            },
+          ]);
+        }
+      }
+
       setMensaje({
         tipo: 'exito',
-        texto: `✅ ${oficialParaBaja.nombres} ${oficialParaBaja.apellidos} retirado de la plantilla (${tipoBaja}).`,
+        texto:
+          tipoBaja === 'TRASLADO ENVIADO'
+            ? `✅ ${oficialParaBaja.nombres} ${oficialParaBaja.apellidos} trasladado hacia ${destinoLimpio} correctamente.`
+            : `✅ Egreso de ${oficialParaBaja.nombres} ${oficialParaBaja.apellidos} registrado con motivo.`,
       });
       setOficialParaBaja(null);
       setTipoBaja('EGRESO');
@@ -254,7 +345,6 @@ export default function AsistenciaLiderPage() {
       setGuardando(false);
     }
   };
-
   const plantillaFiltrada = plantillaActiva.filter((item) => {
     const coincideGrupo = filtroGrupo === 'TODOS' || item.grupo === filtroGrupo;
     const texto = `${item.cedula} ${item.nombres} ${item.apellidos}`.toLowerCase();
@@ -264,6 +354,8 @@ export default function AsistenciaLiderPage() {
   const totalGrupoA = plantillaActiva.filter((p) => p.grupo === 'A').length;
   const totalGrupoB = plantillaActiva.filter((p) => p.grupo === 'B').length;
   const totalGrupoC = plantillaActiva.filter((p) => p.grupo === 'C').length;
+
+  const proyectosParaTraslado = listaProyectosGlobales.filter((p) => p !== proyectoSeleccionado);
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
@@ -334,6 +426,7 @@ export default function AsistenciaLiderPage() {
           <ClipboardCheck size={18} /> PASE DE ASISTENCIA DIARIA
         </button>
       </div>
+
       {seccionPrincipal === 'PLANTILLA' ? (
         <div className="space-y-5">
           <div className="flex flex-wrap gap-2">
@@ -373,7 +466,6 @@ export default function AsistenciaLiderPage() {
               <History size={16} /> Historial ({movimientos.length})
             </button>
           </div>
-
           {subMenuPlantilla === 'ACTIVA' && (
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -478,8 +570,11 @@ export default function AsistenciaLiderPage() {
                         <button
                           type="button"
                           onClick={() => {
+                            setMensaje(null);
                             setOficialParaBaja(oficial);
                             setTipoBaja('EGRESO');
+                            setProyectoDestino('');
+                            setObservacionBaja('');
                           }}
                           className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 flex items-center gap-1 cursor-pointer"
                         >
@@ -489,8 +584,11 @@ export default function AsistenciaLiderPage() {
                         <button
                           type="button"
                           onClick={() => {
+                            setMensaje(null);
                             setOficialParaBaja(oficial);
                             setTipoBaja('TRASLADO ENVIADO');
+                            setProyectoDestino('');
+                            setObservacionBaja('');
                           }}
                           className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 flex items-center gap-1 cursor-pointer"
                         >
@@ -571,7 +669,10 @@ export default function AsistenciaLiderPage() {
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Tipo de Alta *</label>
                   <select
                     value={tipoIngreso}
-                    onChange={(e) => setTipoIngreso(e.target.value as 'NUEVO INGRESO' | 'TRASLADO RECIBIDO')}
+                    onChange={(e) => {
+                      setTipoIngreso(e.target.value as 'NUEVO INGRESO' | 'TRASLADO RECIBIDO');
+                      setProyectoOrigen('');
+                    }}
                     className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-emerald-700 bg-emerald-50/50"
                   >
                     <option value="NUEVO INGRESO">NUEVO INGRESO</option>
@@ -581,16 +682,22 @@ export default function AsistenciaLiderPage() {
 
                 {tipoIngreso === 'TRASLADO RECIBIDO' && (
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                      Proyecto de Origen (Opcional)
+                    <label className="block text-xs font-bold text-emerald-800 uppercase mb-1">
+                      Proyecto de Origen * (Obligatorio)
                     </label>
-                    <input
-                      type="text"
+                    <select
+                      required
                       value={proyectoOrigen}
                       onChange={(e) => setProyectoOrigen(e.target.value)}
-                      placeholder="Ej: ESTACIONAMIENTO CCCT"
-                      className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm"
-                    />
+                      className="w-full border border-emerald-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="">-- Seleccione el Proyecto de Origen --</option>
+                      {proyectosParaTraslado.map((proy) => (
+                        <option key={proy} value={proy}>
+                          {proy}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 )}
               </div>
@@ -616,8 +723,11 @@ export default function AsistenciaLiderPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={guardando}
-                  className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer disabled:opacity-50"
+                  disabled={
+                    guardando ||
+                    (tipoIngreso === 'TRASLADO RECIBIDO' && !proyectoOrigen.trim())
+                  }
+                  className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {guardando ? 'Guardando...' : 'Anexar a Plantilla'}
                 </button>
@@ -653,10 +763,15 @@ export default function AsistenciaLiderPage() {
                           </div>
                           {mov.proyecto_relacionado && (
                             <p className="text-xs text-slate-600 mt-0.5">
-                              Proyecto relacionado: <strong>{mov.proyecto_relacionado}</strong>
+                              {esAlta ? 'Proyecto de Origen:' : 'Proyecto Destino:'}{' '}
+                              <strong>{mov.proyecto_relacionado}</strong>
                             </p>
                           )}
-                          {mov.observacion && <p className="text-xs text-slate-500 mt-0.5">{mov.observacion}</p>}
+                          {mov.observacion && (
+                            <p className="text-xs text-slate-600 mt-0.5">
+                              Motivo / Detalle: <strong>{mov.observacion}</strong>
+                            </p>
+                          )}
                         </div>
                         <div className="text-xs text-slate-400 text-right">
                           <div>{new Date(mov.created_at).toLocaleString('es-VE')}</div>
@@ -690,16 +805,24 @@ export default function AsistenciaLiderPage() {
       {oficialParaBaja && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <form onSubmit={confirmarBajaPlantilla} className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
-            <h3 className="text-lg font-bold text-slate-800">Retirar Oficial de la Plantilla Activa</h3>
-            <p className="text-sm text-slate-600">
-              Oficial: <strong>{oficialParaBaja.nombres} {oficialParaBaja.apellidos}</strong> (C.I. {oficialParaBaja.cedula} • Grupo {oficialParaBaja.grupo})
+            <h3 className="text-lg font-bold text-slate-800">
+              {tipoBaja === 'EGRESO' ? 'Registrar Egreso del Servicio' : 'Registrar Traslado Enviado'}
+            </h3>
+            <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              Oficial: <strong>{oficialParaBaja.nombres} {oficialParaBaja.apellidos}</strong>
+              <br />
+              Cédula: <strong>{oficialParaBaja.cedula}</strong> • Grupo: <strong>{oficialParaBaja.grupo}</strong>
             </p>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Tipo de Salida *</label>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Tipo de Movimiento *</label>
               <select
                 value={tipoBaja}
-                onChange={(e) => setTipoBaja(e.target.value as 'EGRESO' | 'TRASLADO ENVIADO')}
+                onChange={(e) => {
+                  setTipoBaja(e.target.value as 'EGRESO' | 'TRASLADO ENVIADO');
+                  setProyectoDestino('');
+                  setObservacionBaja('');
+                }}
                 className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-bold text-red-700 bg-red-50/40"
               >
                 <option value="EGRESO">EGRESO (Baja del servicio)</option>
@@ -707,29 +830,55 @@ export default function AsistenciaLiderPage() {
               </select>
             </div>
 
-            {tipoBaja === 'TRASLADO ENVIADO' && (
+            {tipoBaja === 'TRASLADO ENVIADO' ? (
+              <>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Proyecto Destino * (Obligatorio)
+                  </label>
+                  <select
+                    required
+                    value={proyectoDestino}
+                    onChange={(e) => setProyectoDestino(e.target.value)}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="">-- Seleccione el Proyecto Destino --</option>
+                    {proyectosParaTraslado.map((proy) => (
+                      <option key={proy} value={proy}>
+                        {proy}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Observación del Traslado (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={observacionBaja}
+                    onChange={(e) => setObservacionBaja(e.target.value)}
+                    placeholder="Ej: Autorizado por Operaciones..."
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
+                  />
+                </div>
+              </>
+            ) : (
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Proyecto Destino (Opcional)</label>
-                <input
-                  type="text"
-                  value={proyectoDestino}
-                  onChange={(e) => setProyectoDestino(e.target.value)}
-                  placeholder="Ej: EXPRESO CHACAITO"
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
+                <label className="block text-xs font-bold text-red-700 uppercase mb-1">
+                  Motivo del Egreso * (Obligatorio)
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={observacionBaja}
+                  onChange={(e) => setObservacionBaja(e.target.value)}
+                  placeholder="Escriba obligatoriamente el motivo del egreso (Ej: Renuncia voluntaria, abandono de puesto, baja administrativa...)"
+                  className="w-full border border-red-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
             )}
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Motivo / Observación</label>
-              <input
-                type="text"
-                value={observacionBaja}
-                onChange={(e) => setObservacionBaja(e.target.value)}
-                placeholder="Detalle del egreso o traslado..."
-                className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
-              />
-            </div>
 
             <div className="flex justify-end gap-2 pt-2">
               <button
@@ -741,8 +890,12 @@ export default function AsistenciaLiderPage() {
               </button>
               <button
                 type="submit"
-                disabled={guardando}
-                className="px-5 py-2 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-700 cursor-pointer disabled:opacity-50"
+                disabled={
+                  guardando ||
+                  (tipoBaja === 'EGRESO' && !observacionBaja.trim()) ||
+                  (tipoBaja === 'TRASLADO ENVIADO' && !proyectoDestino.trim())
+                }
+                className="px-5 py-2 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {guardando ? 'Procesando...' : `Confirmar ${tipoBaja}`}
               </button>
