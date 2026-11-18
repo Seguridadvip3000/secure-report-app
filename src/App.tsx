@@ -22,6 +22,7 @@ const SeguimientoRutasPage = lazy(() => import('./pages/SeguimientoRutasPage'));
 const EstadisticasPage = lazy(() => import('./pages/EstadisticasPage'));
 const AsistenciasPage = lazy(() => import('./pages/AsistenciasPage'));
 const SupervisionesPage = lazy(() => import('./pages/SupervisionesPage'));
+const AsistenciaLiderPage = lazy(() => import('./pages/AsistenciaLiderPage'));
 
 function LoadingScreen() {
   return (
@@ -90,6 +91,12 @@ export default function App() {
                 <Route path="crear-reporte" element={
                   <RoleRoute roles={['lider', 'supervisor', 'cecom', 'operaciones', 'directiva', 'administrador', 'admin']}>
                     <NewReport />
+                  </RoleRoute>
+                } />
+
+                <Route path="asistencia" element={
+                  <RoleRoute roles={['lider', 'operaciones', 'directiva', 'administrador', 'admin']}>
+                    <AsistenciaLiderPage />
                   </RoleRoute>
                 } />
                 
