@@ -16,12 +16,10 @@ import {
 
 export default function AnalistaHome() {
   const hoyLocal = new Date().toLocaleDateString('en-CA');
-  const primerDiaMes = `${hoyLocal.slice(0, 8)}01`;
 
   const [pestana, setPestana] = useState<'ASISTENCIAS_PROYECTO' | 'CONSULTA_CEDULA'>('ASISTENCIAS_PROYECTO');
   const [listaProyectos, setListaProyectos] = useState<string[]>([]);
 
-  // Filtros Pestaña 1: Asistencias Diarias por Proyecto
   const [proyectoFiltro, setProyectoFiltro] = useState<string>('TODOS');
   const [fechaDesdeAsist, setFechaDesdeAsist] = useState<string>(hoyLocal);
   const [fechaHastaAsist, setFechaHastaAsist] = useState<string>(hoyLocal);
@@ -29,7 +27,6 @@ export default function AnalistaHome() {
   const [asistenciasProyecto, setAsistenciasProyecto] = useState<any[]>([]);
   const [cargandoAsist, setCargandoAsist] = useState(false);
 
-  // Filtros Pestaña 2: Consulta Integral por Cédula
   const [cedulaBusqueda, setCedulaBusqueda] = useState<string>('');
   const [fechaDesdeCedula, setFechaDesdeCedula] = useState<string>('');
   const [fechaHastaCedula, setFechaHastaCedula] = useState<string>('');
@@ -104,7 +101,6 @@ export default function AnalistaHome() {
 
     setBuscandoCedula(true);
     try {
-      // 1. Buscar en plantilla_proyectos (estado actual o último registro)
       const { data: registrosPlantilla, error: errPlant } = await supabase
         .from('plantilla_proyectos')
         .select('*')
@@ -113,7 +109,6 @@ export default function AnalistaHome() {
 
       if (errPlant) throw errPlant;
 
-      // 2. Buscar todos los movimientos de plantilla (ingresos, traslados, egresos)
       let queryMovs = supabase
         .from('movimientos_plantilla')
         .select('*')
@@ -130,7 +125,6 @@ export default function AnalistaHome() {
       const { data: movsData, error: errMovs } = await queryMovs;
       if (errMovs) throw errMovs;
 
-      // 3. Buscar asistencias diarias y apoyos prestados/recibidos
       let queryAsist = supabase
         .from('asistencias_diarias_oficiales')
         .select('*')
@@ -147,30 +141,33 @@ export default function AnalistaHome() {
       const { data: asistData, error: errAsist } = await queryAsist;
       if (errAsist) throw errAsist;
 
-      if (
-        (!registrosPlantilla || registrosPlantilla.length === 0) &&
-        (!movsData || movsData.length === 0) &&
-        (!asistData || asistData.length === 0)
-      ) {
+      const listaPlantilla = Array.isArray(registrosPlantilla) ? registrosPlantilla : [];
+      const listaMovs = Array.isArray(movsData) ? movsData : [];
+      const listaAsist = Array.isArray(asistData) ? asistData : [];
+
+      if (listaPlantilla.length === 0 && listaMovs.length === 0 && listaAsist.length === 0) {
         setResultadoCedula(null);
         setErrorBusqueda(`No se encontraron registros asociados a la cédula "${cedLimpia}".`);
         return;
       }
 
       const fichaActiva =
-        (registrosPlantilla || []).find((r: any) => r.estado === 'ACTIVO') ||
-        (registrosPlantilla || []);
+        listaPlantilla.find((r: any) => r.estado === 'ACTIVO') ||
+        listaPlantilla.at(0) ||
+        null;
 
       const nombreEncontrado = fichaActiva
         ? `${fichaActiva.nombres} ${fichaActiva.apellidos}`
-        : movsData?.[0]?.nombre_completo || asistData?.[0]?.nombre_completo || 'OFICIAL';
+        : listaMovs.at(0)?.nombre_completo ||
+          listaAsist.at(0)?.nombre_completo ||
+          'OFICIAL';
 
       setResultadoCedula({
         cedula: fichaActiva?.cedula || cedLimpia,
         nombreCompleto: nombreEncontrado,
         fichaActual: fichaActiva,
-        movimientos: movsData || [],
-        asistencias: asistData || [],
+        movimientos: listaMovs,
+        asistencias: listaAsist,
       });
     } catch (err: any) {
       setErrorBusqueda('Error consultando expediente: ' + (err?.message || 'Verifique conexión.'));
@@ -201,7 +198,6 @@ export default function AnalistaHome() {
         </p>
       </div>
 
-      {/* Selector de Pestaña Principal */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
         <button
           type="button"
@@ -230,7 +226,6 @@ export default function AnalistaHome() {
 
       {pestana === 'ASISTENCIAS_PROYECTO' ? (
         <div className="space-y-5">
-          {/* Filtros */}
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
@@ -290,7 +285,6 @@ export default function AnalistaHome() {
               </select>
             </div>
           </div>
-          {/* Tarjetas Resumen */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
               <div className="text-xs font-bold text-emerald-600 uppercase">Presentes</div>
@@ -310,7 +304,6 @@ export default function AnalistaHome() {
             </div>
           </div>
 
-          {/* Lista de Registros */}
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
             {cargandoAsist ? (
               <p className="text-center text-slate-500 py-8 text-sm">Consultando registros de asistencia...</p>
@@ -379,7 +372,6 @@ export default function AnalistaHome() {
         </div>
       ) : (
         <div className="space-y-5">
-          {/* Buscador por Cédula y Período */}
           <form
             onSubmit={consultarExpedientePorCedula}
             className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4"
@@ -458,7 +450,6 @@ export default function AnalistaHome() {
 
           {resultadoCedula && (
             <div className="space-y-5">
-              {/* Ficha Ejecutiva del Oficial */}
               <div className="bg-white p-5 rounded-2xl shadow-sm border-l-4 border-teal-600 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
@@ -490,7 +481,6 @@ export default function AnalistaHome() {
                   )}
                 </div>
 
-                {/* Indicadores Históricos del Período */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-100">
                   <div className="bg-slate-50 p-3 rounded-xl">
                     <div className="text-xs font-bold text-slate-500 uppercase">Guardias Presente</div>
@@ -532,7 +522,6 @@ export default function AnalistaHome() {
                   </div>
                 </div>
               </div>
-              {/* Sección A: Historial de Movimientos de Plantilla (Ingreso, Traslados y Egresos) */}
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
                 <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
                   <ArrowRightLeft size={18} className="text-teal-600" /> Historial de Ingresos, Traslados y Egresos (
@@ -584,7 +573,6 @@ export default function AnalistaHome() {
                 )}
               </div>
 
-              {/* Sección B: Historial de Asistencias Diarias y Apoyos Prestados en Otros Servicios */}
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
                 <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
                   <CheckCircle2 size={18} className="text-blue-600" /> Historial de Asistencias Diarias y Apoyos Prestados (
