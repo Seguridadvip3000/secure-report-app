@@ -1,7 +1,21 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FileText, List, UserCheck, Map, Settings, Menu, X, LogOut, Clock, ShieldCheck, BarChart3, ClipboardCheck } from 'lucide-react';
+import {
+  FileText,
+  List,
+  UserCheck,
+  Map,
+  Settings,
+  Menu,
+  X,
+  LogOut,
+  Clock,
+  ShieldCheck,
+  BarChart3,
+  ClipboardCheck,
+  UserSearch,
+} from 'lucide-react';
 
 export default function Sidebar() {
   const { currentUser, logout } = useAuth();
@@ -14,6 +28,7 @@ export default function Sidebar() {
 
   const puedeCrearReporte = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom', 'supervisor', 'lider'].includes(rol);
   const puedeVerAsistenciaPlantilla = ['administrador', 'admin', 'directiva', 'operaciones', 'lider'].includes(rol);
+  const puedeVerPanelAnalista = ['administrador', 'admin', 'directiva', 'operaciones', 'analista'].includes(rol);
   const puedeVerListaReportes = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom', 'cliente'].includes(rol);
   const puedeVerAprobacionesUsuarios = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
   const puedeVerAsistenciasYSupervisiones = ['administrador', 'admin', 'directiva'].includes(rol);
@@ -102,6 +117,18 @@ export default function Sidebar() {
                 }`}
               >
                 <ClipboardCheck size={18} /> ASISTENCIA
+              </Link>
+            )}
+
+            {puedeVerPanelAnalista && (
+              <Link
+                to="/home-analista"
+                onClick={cerrarMenu}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === '/home-analista' ? 'bg-teal-600 text-white' : 'hover:bg-slate-900'
+                }`}
+              >
+                <UserSearch size={18} /> Control Analista
               </Link>
             )}
 

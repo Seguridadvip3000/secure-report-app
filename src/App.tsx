@@ -23,6 +23,7 @@ const EstadisticasPage = lazy(() => import('./pages/EstadisticasPage'));
 const AsistenciasPage = lazy(() => import('./pages/AsistenciasPage'));
 const SupervisionesPage = lazy(() => import('./pages/SupervisionesPage'));
 const AsistenciaLiderPage = lazy(() => import('./pages/AsistenciaLiderPage'));
+const AnalistaHome = lazy(() => import('./pages/AnalistaHome'));
 
 function LoadingScreen() {
   return (
@@ -65,6 +66,8 @@ function RootRedirect() {
       return <Navigate to="/home-directiva" replace />;
     case 'operaciones':
       return <Navigate to="/home-operaciones" replace />;
+    case 'analista':
+      return <Navigate to="/home-analista" replace />;
     case 'cecom':
       return <Navigate to="/home-cecom" replace />;
     case 'supervisor':
@@ -97,6 +100,12 @@ export default function App() {
                 <Route path="asistencia" element={
                   <RoleRoute roles={['lider', 'operaciones', 'directiva', 'administrador', 'admin']}>
                     <AsistenciaLiderPage />
+                  </RoleRoute>
+                } />
+
+                <Route path="home-analista" element={
+                  <RoleRoute roles={['analista', 'operaciones', 'directiva', 'administrador', 'admin']}>
+                    <AnalistaHome />
                   </RoleRoute>
                 } />
                 

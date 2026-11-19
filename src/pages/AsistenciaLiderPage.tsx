@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { PROYECTOS } from '../data/constants';
+import PaseAsistenciaDiariaPanel from '../components/PaseAsistenciaDiariaPanel';
 import {
   Users,
   UserPlus,
@@ -22,6 +23,7 @@ interface OficialPlantilla {
   nombres: string;
   apellidos: string;
   grupo: 'A' | 'B' | 'C';
+  turno: 'MIXTO' | 'DIURNO' | 'NOCTURNO';
   estado: 'ACTIVO' | 'INACTIVO';
   tipo_ultimo_movimiento: string;
   proyecto_origen_destino?: string | null;
@@ -37,6 +39,7 @@ interface MovimientoPlantilla {
   cedula: string;
   nombre_completo: string;
   grupo: string;
+  turno?: string;
   tipo_movimiento: 'NUEVO INGRESO' | 'TRASLADO RECIBIDO' | 'EGRESO' | 'TRASLADO ENVIADO';
   proyecto_relacionado?: string | null;
   observacion?: string | null;
@@ -71,18 +74,20 @@ export default function AsistenciaLiderPage() {
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
   const [grupo, setGrupo] = useState<'A' | 'B' | 'C'>('A');
+  const [turnoAlta, setTurnoAlta] = useState<'MIXTO' | 'DIURNO' | 'NOCTURNO'>('MIXTO');
   const [tipoIngreso, setTipoIngreso] = useState<'NUEVO INGRESO' | 'TRASLADO RECIBIDO'>('NUEVO INGRESO');
   const [proyectoOrigen, setProyectoOrigen] = useState('');
   const [observacionIngreso, setObservacionIngreso] = useState('');
 
   const [oficialParaBaja, setOficialParaBaja] = useState<OficialPlantilla | null>(null);
   const [tipoBaja, setTipoBaja] = useState<'EGRESO' | 'TRASLADO ENVIADO'>('EGRESO');
+  const [turnoBaja, setTurnoBaja] = useState<'MIXTO' | 'DIURNO' | 'NOCTURNO'>('MIXTO');
   const [proyectoDestino, setProyectoDestino] = useState('');
   const [observacionBaja, setObservacionBaja] = useState('');
 
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
   const nombreRegistrador = currentUser?.nombre_completo || currentUser?.username || 'Líder';
-   const cargarProyectosDisponibles = async () => {
+  const cargarProyectosDisponibles = async () => {
     try {
       const nombresProyectos = new Set<string>([
         ...(Array.isArray(PROYECTOS) ? PROYECTOS : []),
@@ -198,6 +203,7 @@ export default function AsistenciaLiderPage() {
             nombres: nombresLimpios,
             apellidos: apellidosLimpios,
             grupo,
+            turno: turnoAlta,
             estado: 'ACTIVO',
             tipo_ultimo_movimiento: tipoIngreso,
             proyecto_origen_destino: origenLimpio,
@@ -218,6 +224,7 @@ export default function AsistenciaLiderPage() {
           cedula: cedulaLimpia,
           nombre_completo: `${nombresLimpios} ${apellidosLimpios}`,
           grupo,
+          turno: turnoAlta,
           tipo_movimiento: tipoIngreso,
           proyecto_relacionado: origenLimpio,
           observacion: observacionIngreso.trim() || null,
@@ -229,12 +236,13 @@ export default function AsistenciaLiderPage() {
       setNombres('');
       setApellidos('');
       setGrupo('A');
+      setTurnoAlta('MIXTO');
       setProyectoOrigen('');
       setObservacionIngreso('');
       setSubMenuPlantilla('ACTIVA');
       setMensaje({
         tipo: 'exito',
-        texto: `✅ ${nombresLimpios} ${apellidosLimpios} anexado (${tipoIngreso} - Grupo ${grupo}).`,
+        texto: `✅ ${nombresLimpios} ${apellidosLimpios} anexado (${tipoIngreso} • Grupo ${grupo} • Turno ${turnoAlta}).`,
       });
       await cargarDatosProyecto();
     } catch (err: any) {
@@ -243,7 +251,6 @@ export default function AsistenciaLiderPage() {
       setGuardando(false);
     }
   };
-
   const confirmarBajaPlantilla = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!oficialParaBaja) return;
@@ -269,6 +276,7 @@ export default function AsistenciaLiderPage() {
         .from('plantilla_proyectos')
         .update({
           estado: 'INACTIVO',
+          turno: turnoBaja,
           tipo_ultimo_movimiento: tipoBaja,
           proyecto_origen_destino: destinoLimpio,
           observacion: motivoLimpio,
@@ -286,6 +294,7 @@ export default function AsistenciaLiderPage() {
           cedula: oficialParaBaja.cedula,
           nombre_completo: `${oficialParaBaja.nombres} ${oficialParaBaja.apellidos}`,
           grupo: oficialParaBaja.grupo,
+          turno: turnoBaja,
           tipo_movimiento: tipoBaja,
           proyecto_relacionado: destinoLimpio,
           observacion: motivoLimpio,
@@ -293,7 +302,6 @@ export default function AsistenciaLiderPage() {
         },
       ]);
 
-      // Si es TRASLADO ENVIADO a otro proyecto, lo anexamos automáticamente como TRASLADO RECIBIDO en el proyecto destino
       if (tipoBaja === 'TRASLADO ENVIADO' && destinoLimpio) {
         const { data: nuevoDestino } = await supabase
           .from('plantilla_proyectos')
@@ -304,6 +312,7 @@ export default function AsistenciaLiderPage() {
               nombres: oficialParaBaja.nombres,
               apellidos: oficialParaBaja.apellidos,
               grupo: oficialParaBaja.grupo,
+              turno: turnoBaja,
               estado: 'ACTIVO',
               tipo_ultimo_movimiento: 'TRASLADO RECIBIDO',
               proyecto_origen_destino: proyectoSeleccionado,
@@ -323,6 +332,7 @@ export default function AsistenciaLiderPage() {
               cedula: oficialParaBaja.cedula,
               nombre_completo: `${oficialParaBaja.nombres} ${oficialParaBaja.apellidos}`,
               grupo: oficialParaBaja.grupo,
+              turno: turnoBaja,
               tipo_movimiento: 'TRASLADO RECIBIDO',
               proyecto_relacionado: proyectoSeleccionado,
               observacion: motivoLimpio,
@@ -336,8 +346,8 @@ export default function AsistenciaLiderPage() {
         tipo: 'exito',
         texto:
           tipoBaja === 'TRASLADO ENVIADO'
-            ? `✅ ${oficialParaBaja.nombres} ${oficialParaBaja.apellidos} trasladado hacia ${destinoLimpio} correctamente.`
-            : `✅ Egreso de ${oficialParaBaja.nombres} ${oficialParaBaja.apellidos} registrado con motivo.`,
+            ? `✅ ${oficialParaBaja.nombres} ${oficialParaBaja.apellidos} trasladado hacia ${destinoLimpio} (Turno ${turnoBaja}).`
+            : `✅ Egreso de ${oficialParaBaja.nombres} ${oficialParaBaja.apellidos} registrado (Turno ${turnoBaja}).`,
       });
       setOficialParaBaja(null);
       setTipoBaja('EGRESO');
@@ -359,7 +369,6 @@ export default function AsistenciaLiderPage() {
   const totalGrupoA = plantillaActiva.filter((p) => p.grupo === 'A').length;
   const totalGrupoB = plantillaActiva.filter((p) => p.grupo === 'B').length;
   const totalGrupoC = plantillaActiva.filter((p) => p.grupo === 'C').length;
-
   const proyectosParaTraslado = listaProyectosGlobales.filter((p) => p !== proyectoSeleccionado);
 
   return (
@@ -431,7 +440,6 @@ export default function AsistenciaLiderPage() {
           <ClipboardCheck size={18} /> PASE DE ASISTENCIA DIARIA
         </button>
       </div>
-
       {seccionPrincipal === 'PLANTILLA' ? (
         <div className="space-y-5">
           <div className="flex flex-wrap gap-2">
@@ -471,6 +479,7 @@ export default function AsistenciaLiderPage() {
               <History size={16} /> Historial ({movimientos.length})
             </button>
           </div>
+
           {subMenuPlantilla === 'ACTIVA' && (
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -484,7 +493,6 @@ export default function AsistenciaLiderPage() {
                   <div className="text-xs font-bold text-slate-500 uppercase">Total</div>
                   <div className="text-2xl font-black text-slate-800">{plantillaActiva.length}</div>
                 </button>
-
                 <button
                   type="button"
                   onClick={() => setFiltroGrupo('A')}
@@ -495,7 +503,6 @@ export default function AsistenciaLiderPage() {
                   <div className="text-xs font-bold text-blue-600 uppercase">Grupo A</div>
                   <div className="text-2xl font-black text-slate-800">{totalGrupoA}</div>
                 </button>
-
                 <button
                   type="button"
                   onClick={() => setFiltroGrupo('B')}
@@ -506,7 +513,6 @@ export default function AsistenciaLiderPage() {
                   <div className="text-xs font-bold text-indigo-600 uppercase">Grupo B</div>
                   <div className="text-2xl font-black text-slate-800">{totalGrupoB}</div>
                 </button>
-
                 <button
                   type="button"
                   onClick={() => setFiltroGrupo('C')}
@@ -557,6 +563,9 @@ export default function AsistenciaLiderPage() {
                           <span className="px-2.5 py-0.5 rounded-md text-xs font-black bg-blue-100 text-blue-800">
                             GRUPO {oficial.grupo}
                           </span>
+                          <span className="px-2.5 py-0.5 rounded-md text-xs font-black bg-slate-800 text-white">
+                            {oficial.turno || 'MIXTO'}
+                          </span>
                           <span className="font-bold text-slate-800 text-sm">
                             {oficial.apellidos}, {oficial.nombres}
                           </span>
@@ -578,6 +587,7 @@ export default function AsistenciaLiderPage() {
                             setMensaje(null);
                             setOficialParaBaja(oficial);
                             setTipoBaja('EGRESO');
+                            setTurnoBaja(oficial.turno || 'MIXTO');
                             setProyectoDestino('');
                             setObservacionBaja('');
                           }}
@@ -592,6 +602,7 @@ export default function AsistenciaLiderPage() {
                             setMensaje(null);
                             setOficialParaBaja(oficial);
                             setTipoBaja('TRASLADO ENVIADO');
+                            setTurnoBaja(oficial.turno || 'MIXTO');
                             setProyectoDestino('');
                             setObservacionBaja('');
                           }}
@@ -633,17 +644,33 @@ export default function AsistenciaLiderPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Grupo *</label>
-                  <select
-                    value={grupo}
-                    onChange={(e) => setGrupo(e.target.value as 'A' | 'B' | 'C')}
-                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800"
-                  >
-                    <option value="A">GRUPO A</option>
-                    <option value="B">GRUPO B</option>
-                    <option value="C">GRUPO C</option>
-                  </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Grupo *</label>
+                    <select
+                      value={grupo}
+                      onChange={(e) => setGrupo(e.target.value as 'A' | 'B' | 'C')}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-800"
+                    >
+                      <option value="A">GRUPO A</option>
+                      <option value="B">GRUPO B</option>
+                      <option value="C">GRUPO C</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Turno *</label>
+                    <select
+                      required
+                      value={turnoAlta}
+                      onChange={(e) => setTurnoAlta(e.target.value as 'MIXTO' | 'DIURNO' | 'NOCTURNO')}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-bold text-blue-800 bg-blue-50/40"
+                    >
+                      <option value="MIXTO">MIXTO</option>
+                      <option value="DIURNO">DIURNO</option>
+                      <option value="NOCTURNO">NOCTURNO</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div>
@@ -761,6 +788,11 @@ export default function AsistenciaLiderPage() {
                             >
                               {mov.tipo_movimiento}
                             </span>
+                            {mov.turno && (
+                              <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-800 text-white">
+                                {mov.turno}
+                              </span>
+                            )}
                             <span className="font-bold text-sm text-slate-800">{mov.nombre_completo}</span>
                             <span className="text-xs text-slate-500">
                               (C.I. {mov.cedula} • Grupo {mov.grupo})
@@ -791,20 +823,12 @@ export default function AsistenciaLiderPage() {
           )}
         </div>
       ) : (
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 text-center space-y-3">
-          <ClipboardCheck size={36} className="text-blue-600 mx-auto" />
-          <h3 className="text-lg font-bold text-slate-800">Pase de Asistencia Diaria por Grupo</h3>
-          <p className="text-sm text-slate-500 max-w-md mx-auto">
-            Tienes <strong>{plantillaActiva.length} oficiales activos</strong> en <strong>{proyectoSeleccionado}</strong>. En la siguiente fase activaremos el pase de lista diario sobre esta plantilla.
-          </p>
-          <button
-            type="button"
-            onClick={() => setSeccionPrincipal('PLANTILLA')}
-            className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold cursor-pointer"
-          >
-            Volver a Plantilla
-          </button>
-        </div>
+        <PaseAsistenciaDiariaPanel
+          proyectoSeleccionado={proyectoSeleccionado}
+          plantillaActiva={plantillaActiva}
+          listaProyectosGlobales={listaProyectosGlobales}
+          nombreRegistrador={nombreRegistrador}
+        />
       )}
 
       {oficialParaBaja && (
@@ -819,20 +843,36 @@ export default function AsistenciaLiderPage() {
               Cédula: <strong>{oficialParaBaja.cedula}</strong> • Grupo: <strong>{oficialParaBaja.grupo}</strong>
             </p>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Tipo de Movimiento *</label>
-              <select
-                value={tipoBaja}
-                onChange={(e) => {
-                  setTipoBaja(e.target.value as 'EGRESO' | 'TRASLADO ENVIADO');
-                  setProyectoDestino('');
-                  setObservacionBaja('');
-                }}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-bold text-red-700 bg-red-50/40"
-              >
-                <option value="EGRESO">EGRESO (Baja del servicio)</option>
-                <option value="TRASLADO ENVIADO">TRASLADO ENVIADO (Enviado a otro proyecto)</option>
-              </select>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Movimiento *</label>
+                <select
+                  value={tipoBaja}
+                  onChange={(e) => {
+                    setTipoBaja(e.target.value as 'EGRESO' | 'TRASLADO ENVIADO');
+                    setProyectoDestino('');
+                    setObservacionBaja('');
+                  }}
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-bold text-red-700 bg-red-50/40"
+                >
+                  <option value="EGRESO">EGRESO</option>
+                  <option value="TRASLADO ENVIADO">TRASLADO ENVIADO</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Turno *</label>
+                <select
+                  required
+                  value={turnoBaja}
+                  onChange={(e) => setTurnoBaja(e.target.value as 'MIXTO' | 'DIURNO' | 'NOCTURNO')}
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-bold text-blue-800 bg-blue-50/40"
+                >
+                  <option value="MIXTO">MIXTO</option>
+                  <option value="DIURNO">DIURNO</option>
+                  <option value="NOCTURNO">NOCTURNO</option>
+                </select>
+              </div>
             </div>
 
             {tipoBaja === 'TRASLADO ENVIADO' ? (
@@ -879,7 +919,7 @@ export default function AsistenciaLiderPage() {
                   rows={3}
                   value={observacionBaja}
                   onChange={(e) => setObservacionBaja(e.target.value)}
-                  placeholder="Escriba obligatoriamente el motivo del egreso (Ej: Renuncia voluntaria, abandono de puesto, baja administrativa...)"
+                  placeholder="Escriba obligatoriamente el motivo del egreso..."
                   className="w-full border border-red-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
               </div>
