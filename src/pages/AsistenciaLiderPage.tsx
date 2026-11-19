@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { PROYECTOS } from '../data/constants';
 import {
   Users,
   UserPlus,
@@ -81,14 +82,18 @@ export default function AsistenciaLiderPage() {
 
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
   const nombreRegistrador = currentUser?.nombre_completo || currentUser?.username || 'Líder';
-  const cargarProyectosDisponibles = async () => {
+   const cargarProyectosDisponibles = async () => {
     try {
-      const nombresProyectos = new Set<string>(proyectosUsuario.filter((p) => p && p !== '*'));
+      const nombresProyectos = new Set<string>([
+        ...(Array.isArray(PROYECTOS) ? PROYECTOS : []),
+        ...proyectosUsuario.filter((p) => p && p !== '*'),
+      ]);
 
-      const { data: projsTabla } = await supabase.from('projects').select('name').order('name', { ascending: true });
+      const { data: projsTabla } = await supabase.from('projects').select('*');
       if (Array.isArray(projsTabla)) {
         projsTabla.forEach((p: any) => {
-          if (p?.name) nombresProyectos.add(String(p.name).trim());
+          const val = p?.nombre || p?.name || p?.proyecto;
+          if (val) nombresProyectos.add(String(val).trim());
         });
       }
 
@@ -105,7 +110,7 @@ export default function AsistenciaLiderPage() {
 
       setListaProyectosGlobales(Array.from(nombresProyectos).sort());
     } catch (e) {
-      setListaProyectosGlobales(proyectosUsuario);
+      setListaProyectosGlobales(Array.isArray(PROYECTOS) ? PROYECTOS : proyectosUsuario);
     }
   };
 
