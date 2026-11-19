@@ -6,7 +6,6 @@ import {
   Calendar,
   Building2,
   ClipboardCheck,
-  UserSearch,
   ArrowRightLeft,
   CheckCircle2,
   AlertCircle,
@@ -220,7 +219,7 @@ export default function AnalistaHome() {
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <UserSearch size={18} /> HISTORIAL DE OFICIAL POR CÉDULA
+          <Search size={18} /> HISTORIAL DE OFICIAL POR CÉDULA
         </button>
       </div>
 

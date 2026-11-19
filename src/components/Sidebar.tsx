@@ -14,7 +14,7 @@ import {
   ShieldCheck,
   BarChart3,
   ClipboardCheck,
-  UserSearch,
+  Search,
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -128,7 +128,7 @@ export default function Sidebar() {
                   location.pathname === '/home-analista' ? 'bg-teal-600 text-white' : 'hover:bg-slate-900'
                 }`}
               >
-                <UserSearch size={18} /> Control Analista
+                <Search size={18} /> Control Analista
               </Link>
             )}
 
