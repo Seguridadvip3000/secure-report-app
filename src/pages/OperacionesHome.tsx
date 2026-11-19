@@ -18,6 +18,8 @@ import {
   CheckCircle2,
   QrCode,
   BarChart3,
+  ClipboardCheck,
+  Search,
 } from 'lucide-react';
 
 export default function OperacionesHome() {
@@ -64,7 +66,6 @@ export default function OperacionesHome() {
 
     verificarSupervisionActual();
   }, [currentUser]);
-
   const obtenerGpsOperaciones = (): Promise<{ lat: number; lng: number }> => {
     return new Promise((resolve) => {
       if (!('geolocation' in navigator)) {
@@ -156,7 +157,8 @@ export default function OperacionesHome() {
     } finally {
       setProcesandoSup(false);
     }
-  };  return (
+  };
+  return (
     <div className="space-y-6 p-4 md:p-6">
       {accionQRSup && (
         <QRScannerModal
@@ -290,6 +292,28 @@ export default function OperacionesHome() {
         </button>
 
         <button
+          onClick={() => navigate('/home-analista')}
+          className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-teal-500 hover:bg-teal-50 transition-all group text-left"
+        >
+          <div className="w-14 h-14 bg-teal-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+            <Search size={28} className="text-teal-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-800 mb-1">3. Control Analista (Asistencia y Cédula)</h3>
+          <p className="text-sm text-slate-500">Consultar asistencias por proyecto, modificar registros, PDF e historial por cédula</p>
+        </button>
+
+        <button
+          onClick={() => navigate('/asistencia')}
+          className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-cyan-500 hover:bg-cyan-50 transition-all group text-left"
+        >
+          <div className="w-14 h-14 bg-cyan-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+            <ClipboardCheck size={28} className="text-cyan-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-800 mb-1">4. Plantilla y Asistencia Diaria</h3>
+          <p className="text-sm text-slate-500">Gestionar plantilla activa, traslados, servicios especiales y pase de lista</p>
+        </button>
+
+        <button
           onClick={() => navigate('/aprobaciones')}
           className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-amber-500 hover:bg-amber-50 transition-all group text-left relative"
         >
@@ -301,7 +325,7 @@ export default function OperacionesHome() {
           <div className="w-14 h-14 bg-amber-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
             <UserCheck size={28} className="text-amber-600" />
           </div>
-          <h3 className="text-lg font-semibold text-slate-800 mb-1">3. Aprobaciones</h3>
+          <h3 className="text-lg font-semibold text-slate-800 mb-1">5. Aprobaciones</h3>
           <p className="text-sm text-slate-500">Aprobar registros de nuevos líderes y supervisores</p>
         </button>
 
@@ -312,7 +336,7 @@ export default function OperacionesHome() {
           <div className="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
             <BarChart3 size={28} className="text-emerald-600" />
           </div>
-          <h3 className="text-lg font-semibold text-slate-800 mb-1">4. Estadísticas y Gráficos</h3>
+          <h3 className="text-lg font-semibold text-slate-800 mb-1">6. Estadísticas y Gráficos</h3>
           <p className="text-sm text-slate-500">Visualizar reportes y exportar informes en Excel y PDF</p>
         </button>
       </div>

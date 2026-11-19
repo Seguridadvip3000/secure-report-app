@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 
 export interface RegistroAsistenciaPDF {
+  proyecto?: string;
   cedula: string;
   nombre_completo: string;
   grupo: string;
@@ -15,6 +16,7 @@ export interface RegistroAsistenciaPDF {
 }
 
 export interface AuditoriaModificacionPDF {
+  proyecto?: string;
   cedula: string;
   nombre_completo: string;
   estatus_anterior: string;
@@ -24,15 +26,20 @@ export interface AuditoriaModificacionPDF {
   created_at: string;
 }
 
+export interface MovimientoDiaPDF {
+  proyecto?: string;
+  tipo_movimiento: string;
+  cedula: string;
+  nombre_completo: string;
+  proyecto_relacionado?: string | null;
+  observacion?: string | null;
+}
+
 export interface DatosInformeDiarioPDF {
   proyecto: string;
   fecha: string;
   registros: RegistroAsistenciaPDF[];
-  movimientosDia: {
-    tipo_movimiento: string;
-    cedula: string;
-    nombre_completo: string;
-  }[];
+  movimientosDia: MovimientoDiaPDF[];
   auditoriaModificaciones: AuditoriaModificacionPDF[];
 }
 
@@ -59,6 +66,170 @@ const cargarLogoBase64 = (): Promise<string | null> => {
       resolve(null);
     }
   });
+};
+const dibujarBloqueVariablesYMotivos = (
+  doc: jsPDF,
+  datos: DatosInformeDiarioPDF,
+  yInicial: number,
+  margin: number,
+  pageWidth: number,
+  pageHeight: number,
+  dibujarEncabezado: () => void
+) => {
+  let y = yInicial;
+
+  const nuevosIngresos = datos.movimientosDia.filter((m) => m.tipo_movimiento === 'NUEVO INGRESO').length;
+  const egresos = datos.movimientosDia.filter((m) => m.tipo_movimiento === 'EGRESO').length;
+  const bajasPorSalud = datos.registros.filter((r) => r.estatus === 'BAJA POR SALUD').length;
+
+  const servEspPropio =
+    datos.registros.filter((r) => r.estatus === 'SERVICIO ESPECIAL PROPIO').length +
+    datos.movimientosDia.filter((m) => m.tipo_movimiento === 'SERVICIO ESPECIAL PROPIO').length;
+
+  const servEspRecibido =
+    datos.registros.filter((r) => r.estatus === 'SERVICIO ESPECIAL RECIBIDO').length +
+    datos.movimientosDia.filter((m) => m.tipo_movimiento === 'SERVICIO ESPECIAL RECIBIDO').length;
+
+  const servEspEfectivo = servEspPropio + servEspRecibido;
+
+  const servEspEnviado =
+    datos.registros.filter((r) => r.estatus === 'SERVICIO ESPECIAL ENVIADO').length +
+    datos.movimientosDia.filter((m) => m.tipo_movimiento === 'SERVICIO ESPECIAL ENVIADO').length;
+
+  const apoyosRecibidos = datos.registros.filter((r) => r.estatus === 'APOYO RECIBIDO').length;
+  const apoyosEnviados = datos.registros.filter((r) => r.estatus === 'APOYO ENVIADO').length;
+  const faltasDelDia = datos.registros.filter((r) => r.estatus === 'FALTA INJUSTIFICADA').length;
+
+  if (y > pageHeight - 62) {
+    doc.addPage();
+    dibujarEncabezado();
+    y = 40;
+  } else {
+    y += 4;
+  }
+
+  doc.setFillColor(241, 245, 249);
+  doc.setDrawColor(148, 163, 184);
+  doc.rect(margin, y, pageWidth - margin * 2, 36, 'FD');
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text('RESUMEN DE VARIABLES OPERATIVAS DEL DÍA', margin + 3, y + 6);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.2);
+
+  const col1 = margin + 4;
+  const col2 = margin + 68;
+  const col3 = margin + 132;
+
+  doc.text(`• Nuevos Ingresos: ${nuevosIngresos}`, col1, y + 13);
+  doc.text(`• Servicio Especial Efectivo: ${servEspEfectivo}`, col1, y + 20);
+  doc.text(`  (Propio: ${servEspPropio} | Recibido: ${servEspRecibido})`, col1, y + 26.5);
+
+  doc.text(`• Apoyos Recibidos: ${apoyosRecibidos}`, col2, y + 13);
+  doc.text(`• Servicio Especial Enviado: ${servEspEnviado}`, col2, y + 20);
+  doc.text(`• Apoyos Enviados: ${apoyosEnviados}`, col2, y + 26.5);
+
+  doc.setTextColor(185, 28, 28);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`• Faltas del Día: ${faltasDelDia}`, col3, y + 13);
+  doc.text(`• Bajas por Salud: ${bajasPorSalud}`, col3, y + 20);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`• Egresos: ${egresos}`, col3, y + 26.5);
+
+  y += 42;
+
+  const novedadesConMotivo: string[] = [];
+
+  datos.movimientosDia.forEach((m) => {
+    if (
+      [
+        'EGRESO',
+        'TRASLADO ENVIADO',
+        'TRASLADO RECIBIDO',
+        'SERVICIO ESPECIAL ENVIADO',
+        'SERVICIO ESPECIAL RECIBIDO',
+      ].includes(m.tipo_movimiento)
+    ) {
+      const proyTag = m.proyecto ? `[${m.proyecto}] ` : '';
+      const destinoOrigen = m.proyecto_relacionado ? ` (${m.proyecto_relacionado})` : '';
+      const motivo = m.observacion ? ` — Motivo/Detalle: ${m.observacion}` : ' — Sin motivo especificado';
+      novedadesConMotivo.push(`• ${proyTag}[${m.tipo_movimiento}] ${m.nombre_completo} (${m.cedula})${destinoOrigen}${motivo}`);
+    }
+  });
+
+  datos.registros.forEach((r) => {
+    if (r.estatus === 'BAJA POR SALUD') {
+      const proyTag = r.proyecto ? `[${r.proyecto}] ` : '';
+      const motivoSalud = r.justificacion_modificacion || r.observacion || 'Sin motivo especificado';
+      novedadesConMotivo.push(`• ${proyTag}[BAJA POR SALUD] ${r.nombre_completo} (${r.cedula}) — Motivo: ${motivoSalud}`);
+    }
+  });
+
+  if (novedadesConMotivo.length > 0) {
+    if (y > pageHeight - 35) {
+      doc.addPage();
+      dibujarEncabezado();
+      y = 40;
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('DETALLE DE EGRESOS, TRASLADOS Y BAJAS POR SALUD (MOTIVOS):', margin, y);
+    y += 5;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.8);
+    doc.setTextColor(30, 41, 59);
+
+    novedadesConMotivo.forEach((item) => {
+      if (y > pageHeight - 15) {
+        doc.addPage();
+        y = 20;
+      }
+      const lineas = doc.splitTextToSize(item, pageWidth - margin * 2);
+      doc.text(lineas, margin, y);
+      y += lineas.length * 4.2 + 1.5;
+    });
+
+    y += 3;
+  }
+
+  if (datos.auditoriaModificaciones.length > 0) {
+    if (y > pageHeight - 35) {
+      doc.addPage();
+      dibujarEncabezado();
+      y = 40;
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(180, 83, 9);
+    doc.text('BITÁCORA DE MODIFICACIONES REALIZADAS:', margin, y);
+    y += 5;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(51, 65, 85);
+
+    datos.auditoriaModificaciones.forEach((mod) => {
+      if (y > pageHeight - 15) {
+        doc.addPage();
+        y = 20;
+      }
+      const horaMod = new Date(mod.created_at).toLocaleString('es-VE', {
+        timeZone: 'America/Caracas',
+      });
+      const proyMod = mod.proyecto ? `[${mod.proyecto}] ` : '';
+      const linea = `[${horaMod}] ${proyMod}${mod.modificado_por} modificó a ${mod.nombre_completo} (${mod.cedula}): ${mod.estatus_anterior} -> ${mod.estatus_nuevo}. Justificación: ${mod.justificacion}`;
+      const lineasEnvueltas = doc.splitTextToSize(linea, pageWidth - margin * 2);
+      doc.text(lineasEnvueltas, margin, y);
+      y += lineasEnvueltas.length * 4 + 1.5;
+    });
+  }
 };
 export async function generarPDFAsistenciaDiaria(
   datos: DatosInformeDiarioPDF,
@@ -88,7 +259,7 @@ export async function generarPDFAsistenciaDiaria(
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9.5);
     doc.setTextColor(203, 213, 225);
-    doc.text(`Fecha de Guardia: ${datos.fecha}   •   Seguridad VIP 3000 C.A.`, xTexto, 27);
+    doc.text(`Fecha: ${datos.fecha}   •   Seguridad VIP 3000 C.A.`, xTexto, 27);
   };
 
   const dibujarCabeceraTabla = (yPos: number) => {
@@ -109,6 +280,7 @@ export async function generarPDFAsistenciaDiaria(
   let y = 39;
   dibujarCabeceraTabla(y);
   y += 9;
+
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
 
@@ -145,7 +317,7 @@ export async function generarPDFAsistenciaDiaria(
         ? `${reg.estatus} (${reg.proyecto_apoyo.slice(0, 14)})`
         : reg.estatus;
 
-      if (reg.estatus === 'FALTA INJUSTIFICADA') {
+      if (reg.estatus === 'FALTA INJUSTIFICADA' || reg.estatus === 'BAJA POR SALUD') {
         doc.setTextColor(185, 28, 28);
         doc.setFont('helvetica', 'bold');
       } else if (reg.estatus === 'PRESENTE') {
@@ -163,101 +335,8 @@ export async function generarPDFAsistenciaDiaria(
       y += 7.2;
     });
   }
-  // Calcular variables finales solicitadas
-  const nuevosIngresos = datos.movimientosDia.filter((m) => m.tipo_movimiento === 'NUEVO INGRESO').length;
-  const egresos = datos.movimientosDia.filter((m) => m.tipo_movimiento === 'EGRESO').length;
 
-  const servEspPropio =
-    datos.registros.filter((r) => r.estatus === 'SERVICIO ESPECIAL PROPIO').length +
-    datos.movimientosDia.filter((m) => m.tipo_movimiento === 'SERVICIO ESPECIAL PROPIO').length;
-
-  const servEspRecibido =
-    datos.registros.filter((r) => r.estatus === 'SERVICIO ESPECIAL RECIBIDO').length +
-    datos.movimientosDia.filter((m) => m.tipo_movimiento === 'SERVICIO ESPECIAL RECIBIDO').length;
-
-  const servEspEfectivo = servEspPropio + servEspRecibido;
-
-  const servEspEnviado =
-    datos.registros.filter((r) => r.estatus === 'SERVICIO ESPECIAL ENVIADO').length +
-    datos.movimientosDia.filter((m) => m.tipo_movimiento === 'SERVICIO ESPECIAL ENVIADO').length;
-
-  const apoyosRecibidos = datos.registros.filter((r) => r.estatus === 'APOYO RECIBIDO').length;
-  const apoyosEnviados = datos.registros.filter((r) => r.estatus === 'APOYO ENVIADO').length;
-  const faltasDelDia = datos.registros.filter((r) => r.estatus === 'FALTA INJUSTIFICADA').length;
-
-  if (y > pageHeight - 62) {
-    doc.addPage();
-    dibujarEncabezado();
-    y = 40;
-  } else {
-    y += 4;
-  }
-
-  // Caja de Resumen de Variables al final
-  doc.setFillColor(241, 245, 249);
-  doc.setDrawColor(148, 163, 184);
-  doc.rect(margin, y, pageWidth - margin * 2, 34, 'FD');
-
-  doc.setTextColor(15, 23, 42);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.text('RESUMEN DE VARIABLES OPERATIVAS DEL DÍA', margin + 3, y + 6);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.2);
-
-  const col1 = margin + 4;
-  const col2 = margin + 68;
-  const col3 = margin + 132;
-
-  doc.text(`• Nuevos Ingresos: ${nuevosIngresos}`, col1, y + 13);
-  doc.text(`• Servicio Especial Efectivo: ${servEspEfectivo}`, col1, y + 20);
-  doc.text(`  (Propio: ${servEspPropio} | Recibido: ${servEspRecibido})`, col1, y + 26.5);
-
-  doc.text(`• Apoyos Recibidos: ${apoyosRecibidos}`, col2, y + 13);
-  doc.text(`• Servicio Especial Enviado: ${servEspEnviado}`, col2, y + 20);
-  doc.text(`• Apoyos Enviados: ${apoyosEnviados}`, col2, y + 26.5);
-
-  doc.setTextColor(185, 28, 28);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`• Faltas del Día: ${faltasDelDia}`, col3, y + 13);
-  doc.setTextColor(15, 23, 42);
-  doc.text(`• Egresos: ${egresos}`, col3, y + 20);
-
-  y += 40;
-
-  // Bitácora de Modificaciones realizadas por la Analista
-  if (datos.auditoriaModificaciones.length > 0) {
-    if (y > pageHeight - 35) {
-      doc.addPage();
-      dibujarEncabezado();
-      y = 40;
-    }
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.setTextColor(180, 83, 9);
-    doc.text('BITÁCORA DE MODIFICACIONES REALIZADAS POR ANALISTA:', margin, y);
-    y += 5;
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(51, 65, 85);
-
-    datos.auditoriaModificaciones.forEach((mod) => {
-      if (y > pageHeight - 15) {
-        doc.addPage();
-        y = 20;
-      }
-      const horaMod = new Date(mod.created_at).toLocaleString('es-VE', {
-        timeZone: 'America/Caracas',
-      });
-      const linea = `[${horaMod}] ${mod.modificado_por} modificó a ${mod.nombre_completo} (${mod.cedula}): ${mod.estatus_anterior} -> ${mod.estatus_nuevo}. Justificación: ${mod.justificacion}`;
-      const lineasEnvueltas = doc.splitTextToSize(linea, pageWidth - margin * 2);
-      doc.text(lineasEnvueltas, margin, y);
-      y += lineasEnvueltas.length * 4 + 1.5;
-    });
-  }
+  dibujarBloqueVariablesYMotivos(doc, datos, y, margin, pageWidth, pageHeight, dibujarEncabezado);
 
   const nombreArchivo = `Asistencia_${datos.proyecto.replace(/\s+/g, '_')}_${datos.fecha}.pdf`;
 
@@ -268,4 +347,96 @@ export async function generarPDFAsistenciaDiaria(
   } else {
     doc.save(nombreArchivo);
   }
+}
+export async function generarPDFInformeDiarioDirectiva(datos: DatosInformeDiarioPDF) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 14;
+
+  const logoBase64 = await cargarLogoBase64();
+
+  const dibujarEncabezado = () => {
+    doc.setFillColor(127, 29, 29);
+    doc.rect(margin, 10, pageWidth - margin * 2, 24, 'F');
+
+    if (logoBase64) {
+      doc.addImage(logoBase64, 'JPEG', margin + 3, 12.5, 19, 19);
+    }
+
+    const xTexto = logoBase64 ? margin + 26 : margin + 5;
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text(`INFORME DIARIO DE OPERACIONES — ${datos.proyecto.toUpperCase()}`, xTexto, 19.5);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(254, 202, 202);
+    doc.text(`Fecha: ${datos.fecha}   •   Uso Exclusivo Directiva — Seguridad VIP 3000 C.A.`, xTexto, 27);
+  };
+
+  dibujarEncabezado();
+  let y = 40;
+
+  const proyectosUnicos = Array.from(
+    new Set(datos.registros.map((r) => r.proyecto || datos.proyecto).filter(Boolean))
+  ).sort();
+
+  doc.setFillColor(226, 232, 240);
+  doc.rect(margin, y, pageWidth - margin * 2, 7.5, 'F');
+  doc.setTextColor(15, 23, 42);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+
+  doc.text('PROYECTO / SERVICIO', margin + 2, y + 5);
+  doc.text('PRES.', margin + 88, y + 5);
+  doc.text('S. ESP.', margin + 106, y + 5);
+  doc.text('APOYOS', margin + 124, y + 5);
+  doc.text('FALTAS', margin + 144, y + 5);
+  doc.text('B. SALUD', margin + 164, y + 5);
+  y += 9.5;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+
+  proyectosUnicos.forEach((proy, idx) => {
+    if (y > pageHeight - 55) {
+      doc.addPage();
+      dibujarEncabezado();
+      y = 40;
+    }
+
+    const regsProy = datos.registros.filter((r) => (r.proyecto || datos.proyecto) === proy);
+    const pres = regsProy.filter((r) => r.estatus === 'PRESENTE').length;
+    const sesp = regsProy.filter((r) =>
+      ['SERVICIO ESPECIAL PROPIO', 'SERVICIO ESPECIAL RECIBIDO'].includes(r.estatus)
+    ).length;
+    const apoy = regsProy.filter((r) => ['APOYO RECIBIDO', 'APOYO ENVIADO'].includes(r.estatus)).length;
+    const falt = regsProy.filter((r) => r.estatus === 'FALTA INJUSTIFICADA').length;
+    const bsal = regsProy.filter((r) => r.estatus === 'BAJA POR SALUD').length;
+
+    if (idx % 2 === 1) {
+      doc.setFillColor(248, 250, 252);
+      doc.rect(margin, y - 3.5, pageWidth - margin * 2, 7, 'F');
+    }
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'bold');
+    doc.text(proy.slice(0, 42), margin + 2, y + 1);
+    doc.setFont('helvetica', 'normal');
+    doc.text(String(pres), margin + 91, y + 1);
+    doc.text(String(sesp), margin + 109, y + 1);
+    doc.text(String(apoy), margin + 127, y + 1);
+    doc.text(String(falt), margin + 147, y + 1);
+    doc.text(String(bsal), margin + 168, y + 1);
+
+    doc.setDrawColor(226, 232, 240);
+    doc.line(margin, y + 3.2, pageWidth - margin, y + 3.2);
+    y += 7.2;
+  });
+
+  dibujarBloqueVariablesYMotivos(doc, datos, y, margin, pageWidth, pageHeight, dibujarEncabezado);
+
+  doc.save(`Informe_Diario_Directiva_${datos.fecha}.pdf`);
 }
