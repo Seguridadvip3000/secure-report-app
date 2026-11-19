@@ -14,6 +14,8 @@ import {
   ArrowRightLeft,
   Building2,
   ClipboardCheck,
+  Lock,
+  Mail,
 } from 'lucide-react';
 
 interface OficialPlantilla {
@@ -33,6 +35,17 @@ interface OficialPlantilla {
   registrado_por?: string | null;
 }
 
+type TipoAltaPlantilla =
+  | 'NUEVO INGRESO'
+  | 'TRASLADO RECIBIDO'
+  | 'SERVICIO ESPECIAL RECIBIDO'
+  | 'SERVICIO ESPECIAL PROPIO';
+
+type TipoBajaPlantilla =
+  | 'EGRESO'
+  | 'TRASLADO ENVIADO'
+  | 'SERVICIO ESPECIAL ENVIADO';
+
 interface MovimientoPlantilla {
   id: string;
   proyecto: string;
@@ -40,15 +53,31 @@ interface MovimientoPlantilla {
   nombre_completo: string;
   grupo: string;
   turno?: string;
-  tipo_movimiento: 'NUEVO INGRESO' | 'TRASLADO RECIBIDO' | 'EGRESO' | 'TRASLADO ENVIADO';
+  tipo_movimiento: TipoAltaPlantilla | TipoBajaPlantilla;
   proyecto_relacionado?: string | null;
   observacion?: string | null;
   registrado_por?: string | null;
   created_at: string;
 }
 
+const obtenerHoraCaracas = () => {
+  const partes = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Caracas',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date());
+  const [hh, mm] = partes.split(':').map(Number);
+  return { hora: hh, minuto: mm, texto: partes };
+};
+
 export default function AsistenciaLiderPage() {
   const { currentUser } = useAuth();
+
+  const rolActual = (currentUser?.role || '').toLowerCase();
+  const esLider = rolActual === 'lider';
+  const { hora: horaCaracas, texto: horaTexto } = obtenerHoraCaracas();
+  const plantillaBloqueadaPorHorario = esLider && horaCaracas >= 9;
 
   const proyectosUsuario: string[] =
     Array.isArray(currentUser?.proyectos) && currentUser.proyectos.length > 0
@@ -57,7 +86,7 @@ export default function AsistenciaLiderPage() {
       ? [currentUser.proyecto_id]
       : ['SIN PROYECTO ASIGNADO'];
 
-  const [proyectoSeleccionado, setProyectoSeleccionado] = useState<string>(proyectosUsuario[0]);
+  const [proyectoSeleccionado, setProyectoSeleccionado] = useState<string>(proyectosUsuario);
   const [listaProyectosGlobales, setListaProyectosGlobales] = useState<string[]>([]);
   const [seccionPrincipal, setSeccionPrincipal] = useState<'PLANTILLA' | 'PASE_ASISTENCIA'>('PLANTILLA');
   const [subMenuPlantilla, setSubMenuPlantilla] = useState<'ACTIVA' | 'REGISTRAR' | 'HISTORIAL'>('ACTIVA');
@@ -75,15 +104,18 @@ export default function AsistenciaLiderPage() {
   const [apellidos, setApellidos] = useState('');
   const [grupo, setGrupo] = useState<'A' | 'B' | 'C'>('A');
   const [turnoAlta, setTurnoAlta] = useState<'MIXTO' | 'DIURNO' | 'NOCTURNO'>('MIXTO');
-  const [tipoIngreso, setTipoIngreso] = useState<'NUEVO INGRESO' | 'TRASLADO RECIBIDO'>('NUEVO INGRESO');
+  const [tipoIngreso, setTipoIngreso] = useState<TipoAltaPlantilla>('NUEVO INGRESO');
   const [proyectoOrigen, setProyectoOrigen] = useState('');
   const [observacionIngreso, setObservacionIngreso] = useState('');
 
   const [oficialParaBaja, setOficialParaBaja] = useState<OficialPlantilla | null>(null);
-  const [tipoBaja, setTipoBaja] = useState<'EGRESO' | 'TRASLADO ENVIADO'>('EGRESO');
+  const [tipoBaja, setTipoBaja] = useState<TipoBajaPlantilla>('EGRESO');
   const [turnoBaja, setTurnoBaja] = useState<'MIXTO' | 'DIURNO' | 'NOCTURNO'>('MIXTO');
   const [proyectoDestino, setProyectoDestino] = useState('');
   const [observacionBaja, setObservacionBaja] = useState('');
+
+  const [correosAnalistas, setCorreosAnalistas] = useState<string[]>([]);
+  const [motivoCorreoPlantilla, setMotivoCorreoPlantilla] = useState('');
 
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
   const nombreRegistrador = currentUser?.nombre_completo || currentUser?.username || 'Líder';
@@ -114,7 +146,7 @@ export default function AsistenciaLiderPage() {
       }
 
       setListaProyectosGlobales(Array.from(nombresProyectos).sort());
-    } catch (e) {
+    } catch {
       setListaProyectosGlobales(Array.isArray(PROYECTOS) ? PROYECTOS : proyectosUsuario);
     }
   };
@@ -155,6 +187,19 @@ export default function AsistenciaLiderPage() {
 
   useEffect(() => {
     cargarProyectosDisponibles();
+    const cargarAnalistas = async () => {
+      try {
+        const { data } = await supabase
+          .from('users')
+          .select('email')
+          .eq('role', 'analista')
+          .eq('status', 'aprobado');
+        if (Array.isArray(data)) {
+          setCorreosAnalistas(data.map((u: any) => u.email).filter(Boolean));
+        }
+      } catch {}
+    };
+    cargarAnalistas();
   }, []);
 
   useEffect(() => {
@@ -164,17 +209,27 @@ export default function AsistenciaLiderPage() {
     e.preventDefault();
     setMensaje(null);
 
+    if (plantillaBloqueadaPorHorario) {
+      setMensaje({
+        tipo: 'error',
+        texto: '⚠️ Horario cerrado (09:00 AM). Solicite este movimiento por correo a la Analista.',
+      });
+      return;
+    }
+
     const cedulaLimpia = cedula.trim().toUpperCase();
     const nombresLimpios = nombres.trim().toUpperCase();
     const apellidosLimpios = apellidos.trim().toUpperCase();
+    const requiereOrigen =
+      tipoIngreso === 'TRASLADO RECIBIDO' || tipoIngreso === 'SERVICIO ESPECIAL RECIBIDO';
 
     if (!cedulaLimpia || !nombresLimpios || !apellidosLimpios) {
       setMensaje({ tipo: 'error', texto: 'Debe completar Cédula, Nombres y Apellidos.' });
       return;
     }
 
-    if (tipoIngreso === 'TRASLADO RECIBIDO' && !proyectoOrigen.trim()) {
-      setMensaje({ tipo: 'error', texto: 'Debe seleccionar el Proyecto de Origen para un Traslado Recibido.' });
+    if (requiereOrigen && !proyectoOrigen.trim()) {
+      setMensaje({ tipo: 'error', texto: `Debe seleccionar el Proyecto de Origen para ${tipoIngreso}.` });
       return;
     }
 
@@ -192,7 +247,7 @@ export default function AsistenciaLiderPage() {
     setGuardando(true);
     try {
       const ahora = new Date().toISOString();
-      const origenLimpio = tipoIngreso === 'TRASLADO RECIBIDO' ? proyectoOrigen.trim() : null;
+      const origenLimpio = requiereOrigen ? proyectoOrigen.trim() : null;
 
       const { data: insertado, error: errInsert } = await supabase
         .from('plantilla_proyectos')
@@ -256,20 +311,31 @@ export default function AsistenciaLiderPage() {
     if (!oficialParaBaja) return;
     setMensaje(null);
 
+    if (plantillaBloqueadaPorHorario) {
+      setMensaje({
+        tipo: 'error',
+        texto: '⚠️ Horario cerrado (09:00 AM). Solicite este movimiento por correo a la Analista.',
+      });
+      return;
+    }
+
+    const requiereDestino =
+      tipoBaja === 'TRASLADO ENVIADO' || tipoBaja === 'SERVICIO ESPECIAL ENVIADO';
+
     if (tipoBaja === 'EGRESO' && !observacionBaja.trim()) {
       setMensaje({ tipo: 'error', texto: '⚠️ Debe escribir obligatoriamente el motivo del EGRESO para continuar.' });
       return;
     }
 
-    if (tipoBaja === 'TRASLADO ENVIADO' && !proyectoDestino.trim()) {
-      setMensaje({ tipo: 'error', texto: '⚠️ Debe seleccionar obligatoriamente el Proyecto Destino del traslado.' });
+    if (requiereDestino && !proyectoDestino.trim()) {
+      setMensaje({ tipo: 'error', texto: `⚠️ Debe seleccionar obligatoriamente el Proyecto Destino para ${tipoBaja}.` });
       return;
     }
 
     setGuardando(true);
     try {
       const ahora = new Date().toISOString();
-      const destinoLimpio = tipoBaja === 'TRASLADO ENVIADO' ? proyectoDestino.trim() : null;
+      const destinoLimpio = requiereDestino ? proyectoDestino.trim() : null;
       const motivoLimpio = observacionBaja.trim() || null;
 
       const { error: errUpdate } = await supabase
@@ -302,7 +368,10 @@ export default function AsistenciaLiderPage() {
         },
       ]);
 
-      if (tipoBaja === 'TRASLADO ENVIADO' && destinoLimpio) {
+      if (requiereDestino && destinoLimpio) {
+        const tipoContraparte =
+          tipoBaja === 'TRASLADO ENVIADO' ? 'TRASLADO RECIBIDO' : 'SERVICIO ESPECIAL RECIBIDO';
+
         const { data: nuevoDestino } = await supabase
           .from('plantilla_proyectos')
           .insert([
@@ -314,7 +383,7 @@ export default function AsistenciaLiderPage() {
               grupo: oficialParaBaja.grupo,
               turno: turnoBaja,
               estado: 'ACTIVO',
-              tipo_ultimo_movimiento: 'TRASLADO RECIBIDO',
+              tipo_ultimo_movimiento: tipoContraparte,
               proyecto_origen_destino: proyectoSeleccionado,
               observacion: motivoLimpio,
               fecha_ingreso: ahora,
@@ -333,7 +402,7 @@ export default function AsistenciaLiderPage() {
               nombre_completo: `${oficialParaBaja.nombres} ${oficialParaBaja.apellidos}`,
               grupo: oficialParaBaja.grupo,
               turno: turnoBaja,
-              tipo_movimiento: 'TRASLADO RECIBIDO',
+              tipo_movimiento: tipoContraparte,
               proyecto_relacionado: proyectoSeleccionado,
               observacion: motivoLimpio,
               registrado_por: nombreRegistrador,
@@ -344,10 +413,7 @@ export default function AsistenciaLiderPage() {
 
       setMensaje({
         tipo: 'exito',
-        texto:
-          tipoBaja === 'TRASLADO ENVIADO'
-            ? `✅ ${oficialParaBaja.nombres} ${oficialParaBaja.apellidos} trasladado hacia ${destinoLimpio} (Turno ${turnoBaja}).`
-            : `✅ Egreso de ${oficialParaBaja.nombres} ${oficialParaBaja.apellidos} registrado (Turno ${turnoBaja}).`,
+        texto: `✅ Movimiento ${tipoBaja} de ${oficialParaBaja.nombres} ${oficialParaBaja.apellidos} (Turno ${turnoBaja}) procesado correctamente.`,
       });
       setOficialParaBaja(null);
       setTipoBaja('EGRESO');
@@ -359,6 +425,29 @@ export default function AsistenciaLiderPage() {
     } finally {
       setGuardando(false);
     }
+  };
+
+  const enviarCorreoPlantillaAnalista = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!motivoCorreoPlantilla.trim()) return;
+
+    await supabase.from('notifications').insert([
+      {
+        title: `📩 Solicitud de Movimiento en Plantilla — ${proyectoSeleccionado}`,
+        body: `Líder ${nombreRegistrador} solicita movimiento en plantilla (${proyectoSeleccionado}): ${motivoCorreoPlantilla.trim()}`,
+        target_roles: ['analista', 'operaciones', 'administrador'],
+        target_project: proyectoSeleccionado,
+      },
+    ]);
+
+    const destinatarios = correosAnalistas.join(',');
+    const asunto = encodeURIComponent(`Solicitud de Movimiento en Plantilla - ${proyectoSeleccionado}`);
+    const cuerpo = encodeURIComponent(
+      `Buen día Estimada Analista,\n\nSolicito registrar el siguiente movimiento en la plantilla del proyecto ${proyectoSeleccionado}:\n\n${motivoCorreoPlantilla.trim()}\n\nSolicitado por: ${nombreRegistrador}`
+    );
+    window.location.href = `mailto:${destinatarios}?subject=${asunto}&body=${cuerpo}`;
+    setMotivoCorreoPlantilla('');
+    setMensaje({ tipo: 'exito', texto: '✅ Correo preparado para la Analista.' });
   };
   const plantillaFiltrada = plantillaActiva.filter((item) => {
     const coincideGrupo = filtroGrupo === 'TODOS' || item.grupo === filtroGrupo;
@@ -380,7 +469,7 @@ export default function AsistenciaLiderPage() {
             <ClipboardCheck className="text-blue-600" size={26} /> Control de Asistencia y Plantilla
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Gestión de personal activo, ingresos, traslados y egresos por proyecto.
+            Registro permitido para Líderes hasta las <strong>09:00 AM</strong>.
           </p>
         </div>
 
@@ -442,6 +531,38 @@ export default function AsistenciaLiderPage() {
       </div>
       {seccionPrincipal === 'PLANTILLA' ? (
         <div className="space-y-5">
+          {plantillaBloqueadaPorHorario && (
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 space-y-3">
+              <div className="flex items-start gap-3">
+                <Lock className="text-amber-700 shrink-0 mt-0.5" size={20} />
+                <div>
+                  <h4 className="font-bold text-amber-900 text-sm uppercase">
+                    Movimientos de Plantilla Cerrados (Hora actual: {horaTexto} — Límite: 09:00 AM)
+                  </h4>
+                  <p className="text-xs text-amber-800 mt-1">
+                    Después de las 09:00 AM no puede registrar altas, traslados ni egresos. Envíe correo a la Analista:
+                  </p>
+                </div>
+              </div>
+              <form onSubmit={enviarCorreoPlantillaAnalista} className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  required
+                  value={motivoCorreoPlantilla}
+                  onChange={(e) => setMotivoCorreoPlantilla(e.target.value)}
+                  placeholder="Describa el ingreso, traslado o egreso requerido..."
+                  className="flex-1 border border-amber-300 rounded-xl px-3 py-2 text-xs bg-white"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-700 hover:bg-amber-800 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Mail size={14} /> Enviar Correo a Analista
+                </button>
+              </form>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -455,17 +576,19 @@ export default function AsistenciaLiderPage() {
               <Users size={16} /> Plantilla Activa ({plantillaActiva.length})
             </button>
 
-            <button
-              type="button"
-              onClick={() => setSubMenuPlantilla('REGISTRAR')}
-              className={`px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer ${
-                subMenuPlantilla === 'REGISTRAR'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50'
-              }`}
-            >
-              <UserPlus size={16} /> Registrar Plantilla
-            </button>
+            {!plantillaBloqueadaPorHorario && (
+              <button
+                type="button"
+                onClick={() => setSubMenuPlantilla('REGISTRAR')}
+                className={`px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer ${
+                  subMenuPlantilla === 'REGISTRAR'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50'
+                }`}
+              >
+                <UserPlus size={16} /> Registrar Plantilla
+              </button>
+            )}
 
             <button
               type="button"
@@ -479,7 +602,6 @@ export default function AsistenciaLiderPage() {
               <History size={16} /> Historial ({movimientos.length})
             </button>
           </div>
-
           {subMenuPlantilla === 'ACTIVA' && (
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -543,13 +665,6 @@ export default function AsistenciaLiderPage() {
                   <p className="text-slate-500 text-sm">
                     No hay personal activo registrado para <strong>{proyectoSeleccionado}</strong>.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => setSubMenuPlantilla('REGISTRAR')}
-                    className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold cursor-pointer"
-                  >
-                    <UserPlus size={16} /> Registrar Primer Oficial
-                  </button>
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
@@ -580,44 +695,46 @@ export default function AsistenciaLiderPage() {
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMensaje(null);
-                            setOficialParaBaja(oficial);
-                            setTipoBaja('EGRESO');
-                            setTurnoBaja(oficial.turno || 'MIXTO');
-                            setProyectoDestino('');
-                            setObservacionBaja('');
-                          }}
-                          className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 flex items-center gap-1 cursor-pointer"
-                        >
-                          <UserMinus size={14} /> Egreso
-                        </button>
+                      {!plantillaBloqueadaPorHorario && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMensaje(null);
+                              setOficialParaBaja(oficial);
+                              setTipoBaja('EGRESO');
+                              setTurnoBaja(oficial.turno || 'MIXTO');
+                              setProyectoDestino('');
+                              setObservacionBaja('');
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 flex items-center gap-1 cursor-pointer"
+                          >
+                            <UserMinus size={14} /> Egreso
+                          </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMensaje(null);
-                            setOficialParaBaja(oficial);
-                            setTipoBaja('TRASLADO ENVIADO');
-                            setTurnoBaja(oficial.turno || 'MIXTO');
-                            setProyectoDestino('');
-                            setObservacionBaja('');
-                          }}
-                          className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 flex items-center gap-1 cursor-pointer"
-                        >
-                          <ArrowRightLeft size={14} /> Traslado Enviado
-                        </button>
-                      </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMensaje(null);
+                              setOficialParaBaja(oficial);
+                              setTipoBaja('TRASLADO ENVIADO');
+                              setTurnoBaja(oficial.turno || 'MIXTO');
+                              setProyectoDestino('');
+                              setObservacionBaja('');
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 flex items-center gap-1 cursor-pointer"
+                          >
+                            <ArrowRightLeft size={14} /> Traslado / Serv. Esp. Enviado
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               )}
             </div>
           )}
-          {subMenuPlantilla === 'REGISTRAR' && (
+          {subMenuPlantilla === 'REGISTRAR' && !plantillaBloqueadaPorHorario && (
             <form
               onSubmit={manejarRegistrarAlta}
               className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-5"
@@ -702,17 +819,19 @@ export default function AsistenciaLiderPage() {
                   <select
                     value={tipoIngreso}
                     onChange={(e) => {
-                      setTipoIngreso(e.target.value as 'NUEVO INGRESO' | 'TRASLADO RECIBIDO');
+                      setTipoIngreso(e.target.value as TipoAltaPlantilla);
                       setProyectoOrigen('');
                     }}
                     className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-emerald-700 bg-emerald-50/50"
                   >
                     <option value="NUEVO INGRESO">NUEVO INGRESO</option>
                     <option value="TRASLADO RECIBIDO">TRASLADO RECIBIDO</option>
+                    <option value="SERVICIO ESPECIAL RECIBIDO">SERVICIO ESPECIAL RECIBIDO</option>
+                    <option value="SERVICIO ESPECIAL PROPIO">SERVICIO ESPECIAL PROPIO</option>
                   </select>
                 </div>
 
-                {tipoIngreso === 'TRASLADO RECIBIDO' && (
+                {(tipoIngreso === 'TRASLADO RECIBIDO' || tipoIngreso === 'SERVICIO ESPECIAL RECIBIDO') && (
                   <div>
                     <label className="block text-xs font-bold text-emerald-800 uppercase mb-1">
                       Proyecto de Origen * (Obligatorio)
@@ -757,7 +876,8 @@ export default function AsistenciaLiderPage() {
                   type="submit"
                   disabled={
                     guardando ||
-                    (tipoIngreso === 'TRASLADO RECIBIDO' && !proyectoOrigen.trim())
+                    ((tipoIngreso === 'TRASLADO RECIBIDO' || tipoIngreso === 'SERVICIO ESPECIAL RECIBIDO') &&
+                      !proyectoOrigen.trim())
                   }
                   className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
@@ -776,7 +896,11 @@ export default function AsistenciaLiderPage() {
               ) : (
                 <div className="divide-y divide-slate-100">
                   {movimientos.map((mov) => {
-                    const esAlta = mov.tipo_movimiento === 'NUEVO INGRESO' || mov.tipo_movimiento === 'TRASLADO RECIBIDO';
+                    const esAlta =
+                      mov.tipo_movimiento === 'NUEVO INGRESO' ||
+                      mov.tipo_movimiento === 'TRASLADO RECIBIDO' ||
+                      mov.tipo_movimiento === 'SERVICIO ESPECIAL RECIBIDO' ||
+                      mov.tipo_movimiento === 'SERVICIO ESPECIAL PROPIO';
                     return (
                       <div key={mov.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
@@ -830,13 +954,10 @@ export default function AsistenciaLiderPage() {
           nombreRegistrador={nombreRegistrador}
         />
       )}
-
-      {oficialParaBaja && (
+      {oficialParaBaja && !plantillaBloqueadaPorHorario && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <form onSubmit={confirmarBajaPlantilla} className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
-            <h3 className="text-lg font-bold text-slate-800">
-              {tipoBaja === 'EGRESO' ? 'Registrar Egreso del Servicio' : 'Registrar Traslado Enviado'}
-            </h3>
+            <h3 className="text-lg font-bold text-slate-800">Registrar Salida / Traslado de Plantilla</h3>
             <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
               Oficial: <strong>{oficialParaBaja.nombres} {oficialParaBaja.apellidos}</strong>
               <br />
@@ -849,7 +970,7 @@ export default function AsistenciaLiderPage() {
                 <select
                   value={tipoBaja}
                   onChange={(e) => {
-                    setTipoBaja(e.target.value as 'EGRESO' | 'TRASLADO ENVIADO');
+                    setTipoBaja(e.target.value as TipoBajaPlantilla);
                     setProyectoDestino('');
                     setObservacionBaja('');
                   }}
@@ -857,6 +978,7 @@ export default function AsistenciaLiderPage() {
                 >
                   <option value="EGRESO">EGRESO</option>
                   <option value="TRASLADO ENVIADO">TRASLADO ENVIADO</option>
+                  <option value="SERVICIO ESPECIAL ENVIADO">SERVICIO ESPECIAL ENVIADO</option>
                 </select>
               </div>
 
@@ -875,7 +997,7 @@ export default function AsistenciaLiderPage() {
               </div>
             </div>
 
-            {tipoBaja === 'TRASLADO ENVIADO' ? (
+            {tipoBaja !== 'EGRESO' ? (
               <>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
@@ -898,13 +1020,13 @@ export default function AsistenciaLiderPage() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                    Observación del Traslado (Opcional)
+                    Observación (Opcional)
                   </label>
                   <input
                     type="text"
                     value={observacionBaja}
                     onChange={(e) => setObservacionBaja(e.target.value)}
-                    placeholder="Ej: Autorizado por Operaciones..."
+                    placeholder="Detalle adicional..."
                     className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm"
                   />
                 </div>
@@ -938,7 +1060,7 @@ export default function AsistenciaLiderPage() {
                 disabled={
                   guardando ||
                   (tipoBaja === 'EGRESO' && !observacionBaja.trim()) ||
-                  (tipoBaja === 'TRASLADO ENVIADO' && !proyectoDestino.trim())
+                  (tipoBaja !== 'EGRESO' && !proyectoDestino.trim())
                 }
                 className="px-5 py-2 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
