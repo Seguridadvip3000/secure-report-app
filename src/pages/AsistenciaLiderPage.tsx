@@ -113,8 +113,9 @@ export default function AsistenciaLiderPage() {
 
   const rolActual = (currentUser?.role || '').toLowerCase();
   const esLider = rolActual === 'lider';
-  const { fechaStr: hoyLocal, horaNum: horaCaracas, hora24: horaTexto } = obtenerFechaHoraCaracas();
-  const bloqueadoPorHorario = esLider && horaCaracas >= 9;
+  const { fechaStr: hoyLocal, hora24: horaTexto } = obtenerFechaHoraCaracas();
+  // Modo pruebas: bloqueo horario de las 09:00 AM desactivado temporalmente
+  const bloqueadoPorHorario = false;
 
   const grupoMixtoHoy = obtenerGrupoMixtoPorFecha(hoyLocal);
   const grupo24x24Hoy = obtenerGrupo24x24PorFecha(hoyLocal);
@@ -219,37 +220,6 @@ export default function AsistenciaLiderPage() {
           temporales.push(reg);
         }
       });
-
-      const faltantesAuto: any[] = [];
-      if (horaCaracas >= 9 && activos.length > 0) {
-        activos.forEach((of) => {
-          const ced = of.cedula.toUpperCase();
-          if (!mapaHoy[ced] && leTocaGuardiaHoy(of.grupo, of.turno, hoyLocal)) {
-            const autoFalta = {
-              fecha: hoyLocal,
-              proyecto: proyectoSeleccionado,
-              proyecto_apoyo: null,
-              cedula: ced,
-              nombre_completo: `${of.apellidos}, ${of.nombres}`,
-              cargo: of.cargo || 'OFICIAL',
-              grupo: of.grupo,
-              turno: of.turno || 'MIXTO',
-              hora_entrada: '--:--',
-              estatus: 'FALTA INJUSTIFICADA',
-              observacion: 'Falta automática: sin registro antes de las 09:00 AM',
-              registrado_por: 'SISTEMA (CIERRE 09:00 AM)',
-            };
-            faltantesAuto.push(autoFalta);
-            mapaHoy[ced] = autoFalta;
-          }
-        });
-
-        if (faltantesAuto.length > 0) {
-          await supabase
-            .from('asistencias_diarias_oficiales')
-            .upsert(faltantesAuto, { onConflict: 'fecha,proyecto,cedula,turno' });
-        }
-      }
 
       setAsistenciasHoyMap(mapaHoy);
       setRecibidosTemporalesHoy(temporales);
@@ -865,7 +835,7 @@ export default function AsistenciaLiderPage() {
           <p className="text-sm text-slate-500 mt-1">
             Guardia Hoy ({hoyLocal}): <strong className="text-blue-700">Mixto Grp {grupoMixtoHoy}</strong> •{' '}
             <strong className="text-indigo-700">24x24 Grp {grupo24x24Hoy}</strong> •{' '}
-            <strong className="text-slate-700">Personal 12h</strong> (Cierre 09:00 AM).
+            <strong className="text-slate-700">Personal 12h</strong> (Modo pruebas activo).
           </p>
         </div>
 
@@ -934,9 +904,6 @@ export default function AsistenciaLiderPage() {
               <h4 className="font-bold text-amber-900 text-sm uppercase">
                 Registro Cerrado (Hora actual: {horaTexto} — Límite: 09:00 AM)
               </h4>
-              <p className="text-xs text-amber-800 mt-1">
-                Todo personal de guardia sin marcar quedó registrado como Falta Injustificada. Envíe correo a la Analista si requiere alguna corrección:
-              </p>
             </div>
           </div>
           <form onSubmit={enviarCorreoPlantillaAnalista} className="flex flex-col sm:flex-row gap-2">

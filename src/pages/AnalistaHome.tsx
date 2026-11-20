@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { PROYECTOS } from '../data/constants';
-import { leTocaGuardiaHoy } from '../utils/rotacionGuardia';
 import {
   generarPDFAsistenciaDiaria,
   generarPDFInformeDiarioDirectiva,
@@ -82,64 +81,6 @@ export default function AnalistaHome() {
   const consultarAsistenciasProyecto = async () => {
     setCargandoAsist(true);
     try {
-      const horaCaracasStr = new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'America/Caracas',
-        hour: '2-digit',
-        hour12: false,
-      }).format(new Date());
-      const horaNum = Number(horaCaracasStr);
-
-      // Si se consulta un proyecto y fecha específica post-09:00 AM, asegurar falta automática
-      // ÚNICAMENTE para el personal al que le tocaba guardia ese día (rotación 24x48, 24x24 A/B y 12h)
-      if (
-        proyectoFiltro !== 'TODOS' &&
-        fechaDesdeAsist === fechaHastaAsist &&
-        (fechaDesdeAsist < hoyLocal || (fechaDesdeAsist === hoyLocal && horaNum >= 9))
-      ) {
-        const { data: activosProy } = await supabase
-          .from('plantilla_proyectos')
-          .select('*')
-          .eq('proyecto', proyectoFiltro)
-          .eq('estado', 'ACTIVO');
-
-        const { data: existentesDia } = await supabase
-          .from('asistencias_diarias_oficiales')
-          .select('cedula')
-          .eq('proyecto', proyectoFiltro)
-          .eq('fecha', fechaDesdeAsist);
-
-        const setExistentes = new Set(
-          (existentesDia || []).map((e: any) => String(e.cedula).toUpperCase())
-        );
-
-        const faltantesAuto: any[] = [];
-        (activosProy || []).forEach((of: any) => {
-          const ced = String(of.cedula).toUpperCase();
-          if (!setExistentes.has(ced) && leTocaGuardiaHoy(of.grupo, of.turno, fechaDesdeAsist)) {
-            faltantesAuto.push({
-              fecha: fechaDesdeAsist,
-              proyecto: proyectoFiltro,
-              proyecto_apoyo: null,
-              cedula: ced,
-              nombre_completo: `${of.apellidos}, ${of.nombres}`,
-              cargo: of.cargo || 'OFICIAL',
-              grupo: of.grupo,
-              turno: of.turno || 'MIXTO',
-              hora_entrada: '--:--',
-              estatus: 'FALTA INJUSTIFICADA',
-              observacion: 'Falta automática: sin registro antes de las 09:00 AM',
-              registrado_por: 'SISTEMA (CIERRE 09:00 AM)',
-            });
-          }
-        });
-
-        if (faltantesAuto.length > 0) {
-          await supabase
-            .from('asistencias_diarias_oficiales')
-            .upsert(faltantesAuto, { onConflict: 'fecha,proyecto,cedula,turno' });
-        }
-      }
-
       let query = supabase
         .from('asistencias_diarias_oficiales')
         .select('*')
@@ -298,7 +239,6 @@ export default function AnalistaHome() {
       setGuardandoCambio(false);
     }
   };
-
   const exportarOImprimirAsistenciaProyecto = async (modo: 'DESCARGAR' | 'IMPRIMIR') => {
     if (proyectoFiltro === 'TODOS') {
       setMensajeGlobal({
@@ -356,6 +296,7 @@ export default function AnalistaHome() {
       auditoriaModificaciones: auditoriaDia,
     });
   };
+
   const consultarExpedientePorCedula = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorBusqueda(null);
@@ -501,7 +442,6 @@ export default function AnalistaHome() {
           <Search size={18} /> HISTORIAL DE OFICIAL POR CÉDULA
         </button>
       </div>
-
       {pestana === 'ASISTENCIAS_PROYECTO' ? (
         <div className="space-y-5">
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
@@ -968,6 +908,7 @@ export default function AnalistaHome() {
                 </select>
               </div>
             </div>
+
             {puedeEditarHoraDirectiva && (
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
