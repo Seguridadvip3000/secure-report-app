@@ -15,6 +15,7 @@ import {
   BarChart3,
   ClipboardCheck,
   Search,
+  Users,
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -27,7 +28,8 @@ export default function Sidebar() {
   const nombreElemento = currentUser?.nombre_completo || '';
 
   const puedeCrearReporte = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom', 'supervisor', 'lider'].includes(rol);
-  const puedeVerAsistenciaPlantilla = ['administrador', 'admin', 'directiva', 'operaciones', 'lider'].includes(rol);
+  const puedeVerAsistenciaLider = rol === 'lider';
+  const puedeVerMonitorAsistencia = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom'].includes(rol);
   const puedeVerPanelAnalista = ['administrador', 'admin', 'directiva', 'operaciones', 'analista'].includes(rol);
   const puedeVerListaReportes = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom', 'cliente'].includes(rol);
   const puedeVerAprobacionesUsuarios = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
@@ -43,6 +45,13 @@ export default function Sidebar() {
     await logout();
     navigate('/auth', { replace: true });
   };
+
+  const etiquetaMonitor =
+    rol === 'cecom'
+      ? 'Fuerza Operativa'
+      : rol === 'operaciones'
+      ? 'Personal Operativo'
+      : 'Asistencia Proyectos';
 
   return (
     <>
@@ -108,7 +117,7 @@ export default function Sidebar() {
               </Link>
             )}
 
-            {puedeVerAsistenciaPlantilla && (
+            {puedeVerAsistenciaLider && (
               <Link
                 to="/asistencia"
                 onClick={cerrarMenu}
@@ -117,6 +126,18 @@ export default function Sidebar() {
                 }`}
               >
                 <ClipboardCheck size={18} /> ASISTENCIA
+              </Link>
+            )}
+
+            {puedeVerMonitorAsistencia && (
+              <Link
+                to="/monitor-asistencia"
+                onClick={cerrarMenu}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === '/monitor-asistencia' ? 'bg-cyan-600 text-white' : 'hover:bg-slate-900'
+                }`}
+              >
+                <Users size={18} /> {etiquetaMonitor}
               </Link>
             )}
 
