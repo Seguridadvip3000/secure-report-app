@@ -16,12 +16,11 @@ import {
   AlertCircle,
   Building2,
   ClipboardCheck,
-  Lock,
-  Mail,
   Check,
   X,
   MoreHorizontal,
   Shield,
+  Calendar,
 } from 'lucide-react';
 
 export type CargoOperativo =
@@ -56,7 +55,7 @@ interface OficialPlantilla {
   tipo_ultimo_movimiento: string;
   proyecto_origen_destino?: string | null;
   observacion?: string | null;
-  fecha_ingreso: string;
+  fecha_ingreso?: string | null;
   fecha_egreso?: string | null;
   registrado_por?: string | null;
 }
@@ -69,10 +68,10 @@ type TipoAltaPlantilla =
 
 type TipoOtroMovimiento =
   | 'APOYO ENVIADO'
-  | 'SERVICIO ESPECIAL PROPIO'
   | 'TRASLADO ENVIADO'
   | 'VACACIONES'
   | 'FALTA JUSTIFICADA'
+  | 'DESCANSO'
   | 'EGRESO';
 
 interface MovimientoPlantilla {
@@ -89,6 +88,20 @@ interface MovimientoPlantilla {
   registrado_por?: string | null;
   created_at: string;
 }
+
+const PROYECTOS_CON_JEFE_OP = ['ESTACIONAMIENTO CCCT', 'COMERCIO CCCT'];
+const PROYECTOS_CON_DIURNO = [
+  'CHACAITO',
+  'BARUTA',
+  'TRINIDAD',
+  'CENTRO PLAZA',
+  'CONCRESA',
+  'TRINITARIAS',
+  'LA GRANJA',
+  'ASOPROSUR',
+  'ASOPRSUR',
+];
+const PROYECTOS_CON_NOCTURNO = ['YARIBU', 'DUNCAN LA CALIFORNIA'];
 
 const obtenerFechaHoraCaracas = () => {
   const ahora = new Date();
@@ -113,9 +126,10 @@ export default function AsistenciaLiderPage() {
 
   const rolActual = (currentUser?.role || '').toLowerCase();
   const esLider = rolActual === 'lider';
-  const { fechaStr: hoyLocal, hora24: horaTexto } = obtenerFechaHoraCaracas();
-  // Modo pruebas: bloqueo horario de las 09:00 AM desactivado temporalmente
-  const bloqueadoPorHorario = false;
+  const { fechaStr: hoyLocal } = obtenerFechaHoraCaracas();
+
+  // Modo pruebas activo: bloqueo horario desactivado
+  const bloqueadoAsistenciaBase = false;
 
   const grupoMixtoHoy = obtenerGrupoMixtoPorFecha(hoyLocal);
   const grupo24x24Hoy = obtenerGrupo24x24PorFecha(hoyLocal);
@@ -139,16 +153,19 @@ export default function AsistenciaLiderPage() {
   );
 
   const [plantillaActiva, setPlantillaActiva] = useState<OficialPlantilla[]>([]);
+  const [asistenciasHoyList, setAsistenciasHoyList] = useState<any[]>([]);
   const [asistenciasHoyMap, setAsistenciasHoyMap] = useState<Record<string, any>>({});
   const [recibidosTemporalesHoy, setRecibidosTemporalesHoy] = useState<any[]>([]);
+  const [liderActivoPorQR, setLiderActivoPorQR] = useState<boolean>(false);
   const [movimientos, setMovimientos] = useState<MovimientoPlantilla[]>([]);
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  const [filtroPlantilla, setFiltroPlantilla] = useState<'TODOS' | 'MIXTO' | '24X24' | '12H'>('TODOS');
+  const [filtroPlantilla, setFiltroPlantilla] = useState<'TODOS' | 'MIXTO' | '24X24' | 'DIURNO_NOCTURNO'>('TODOS');
   const [busqueda, setBusqueda] = useState('');
   const [mostrarFrancosParaServEsp, setMostrarFrancosParaServEsp] = useState(false);
 
+  // Formulario Registrar Personal (siempre operativo)
   const [cedula, setCedula] = useState('');
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
@@ -159,14 +176,16 @@ export default function AsistenciaLiderPage() {
   const [proyectoOrigen, setProyectoOrigen] = useState('');
   const [observacionIngreso, setObservacionIngreso] = useState('');
 
+  // Modal OTRO
   const [oficialOtro, setOficialOtro] = useState<OficialPlantilla | null>(null);
   const [tipoOtro, setTipoOtro] = useState<TipoOtroMovimiento>('APOYO ENVIADO');
   const [turnoOtro, setTurnoOtro] = useState<HorarioOperativo>('MIXTO');
   const [proyectoDestinoOtro, setProyectoDestinoOtro] = useState('');
   const [observacionOtro, setObservacionOtro] = useState('');
 
-  const [correosAnalistas, setCorreosAnalistas] = useState<string[]>([]);
-  const [motivoCorreoPlantilla, setMotivoCorreoPlantilla] = useState('');
+  // Modal Editar Fecha de Ingreso (para registros cargados por SQL)
+  const [oficialEditandoFecha, setOficialEditandoFecha] = useState<OficialPlantilla | null>(null);
+  const [nuevaFechaIngresoInput, setNuevaFechaIngresoInput] = useState<string>(hoyLocal);
 
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
   const nombreRegistrador = currentUser?.nombre_completo || currentUser?.username || 'Líder';
@@ -191,6 +210,38 @@ export default function AsistenciaLiderPage() {
     }
   };
 
+  const verificarPresenciaLiderPorQR = async (proyecto: string) => {
+    try {
+      const { data: logsHoy } = await supabase
+        .from('attendance_logs')
+        .select('*')
+        .eq('project_name', proyecto)
+        .gte('created_at', `${hoyLocal}T00:00:00`)
+        .lte('created_at', `${hoyLocal}T23:59:59`)
+        .order('created_at', { ascending: true });
+
+      const listaLogs = Array.isArray(logsHoy) ? logsHoy : [];
+      if (listaLogs.length === 0) {
+        setLiderActivoPorQR(false);
+        return;
+      }
+
+      // Buscar el último evento QR del día (ENTRADA deja 01, SALIDA deja 00)
+      const ultimoLog = listaLogs.at(-1);
+      const tipoEvento = String(
+        ultimoLog?.type || ultimoLog?.event_type || ultimoLog?.action || ultimoLog?.tipo || ''
+      ).toUpperCase();
+
+      if (tipoEvento.includes('SALIDA') || tipoEvento.includes('OUT') || tipoEvento.includes('EXIT')) {
+        setLiderActivoPorQR(false);
+      } else {
+        setLiderActivoPorQR(true);
+      }
+    } catch {
+      setLiderActivoPorQR(false);
+    }
+  };
+
   const cargarDatosProyecto = async () => {
     if (!proyectoSeleccionado) return;
     setCargando(true);
@@ -212,17 +263,22 @@ export default function AsistenciaLiderPage() {
         .eq('proyecto', proyectoSeleccionado)
         .eq('fecha', hoyLocal);
 
+      const listaHoy = Array.isArray(dataAsistHoy) ? dataAsistHoy : [];
       const mapaHoy: Record<string, any> = {};
       const temporales: any[] = [];
-      (dataAsistHoy || []).forEach((reg: any) => {
+
+      listaHoy.forEach((reg: any) => {
         mapaHoy[String(reg.cedula).toUpperCase()] = reg;
         if (reg.estatus === 'SERVICIO ESPECIAL RECIBIDO' || reg.estatus === 'APOYO RECIBIDO') {
           temporales.push(reg);
         }
       });
 
+      setAsistenciasHoyList(listaHoy);
       setAsistenciasHoyMap(mapaHoy);
       setRecibidosTemporalesHoy(temporales);
+
+      await verificarPresenciaLiderPorQR(proyectoSeleccionado);
 
       const { data: dataMovs } = await supabase
         .from('movimientos_plantilla')
@@ -244,19 +300,6 @@ export default function AsistenciaLiderPage() {
 
   useEffect(() => {
     cargarProyectosDisponibles();
-    const cargarAnalistas = async () => {
-      try {
-        const { data } = await supabase
-          .from('users')
-          .select('email')
-          .eq('role', 'analista')
-          .eq('status', 'aprobado');
-        if (Array.isArray(data)) {
-          setCorreosAnalistas(data.map((u: any) => u.email).filter(Boolean));
-        }
-      } catch {}
-    };
-    cargarAnalistas();
   }, []);
 
   useEffect(() => {
@@ -264,16 +307,24 @@ export default function AsistenciaLiderPage() {
   }, [proyectoSeleccionado]);
   const marcarAsistenciaDirecta = async (
     oficial: OficialPlantilla,
-    nuevoEstatus: 'PRESENTE' | 'FALTA INJUSTIFICADA'
+    nuevoEstatus:
+      | 'PRESENTE'
+      | 'FALTA INJUSTIFICADA'
+      | 'SERVICIO ESPECIAL MIXTO'
+      | 'SERVICIO ESPECIAL DIURNO/NOCTURNO'
   ) => {
     setMensaje(null);
     const ced = oficial.cedula.toUpperCase();
     const registroPrevio = asistenciasHoyMap[ced];
 
-    if (bloqueadoPorHorario) {
+    const esServicioEspecial =
+      nuevoEstatus === 'SERVICIO ESPECIAL MIXTO' ||
+      nuevoEstatus === 'SERVICIO ESPECIAL DIURNO/NOCTURNO';
+
+    if (!esServicioEspecial && bloqueadoAsistenciaBase) {
       setMensaje({
         tipo: 'error',
-        texto: '⚠️ Horario cerrado (09:00 AM). Solicite la modificación por correo a la Analista.',
+        texto: '⚠️ Horario cerrado (09:00 AM). Solo puede activar Servicios Especiales o registrar nuevos ingresos.',
       });
       return;
     }
@@ -289,8 +340,11 @@ export default function AsistenciaLiderPage() {
     setGuardando(true);
     try {
       const momento = obtenerFechaHoraCaracas();
-      const turnoOf = oficial.turno || 'MIXTO';
-      const horaEntrada = nuevoEstatus === 'PRESENTE' ? momento.hora12 : '--:--';
+      const turnoOf =
+        nuevoEstatus === 'SERVICIO ESPECIAL MIXTO'
+          ? 'MIXTO'
+          : oficial.turno || 'MIXTO';
+      const horaEntrada = nuevoEstatus === 'FALTA INJUSTIFICADA' ? '--:--' : momento.hora12;
 
       const { error } = await supabase.from('asistencias_diarias_oficiales').upsert(
         [
@@ -305,10 +359,7 @@ export default function AsistenciaLiderPage() {
             turno: turnoOf,
             hora_entrada: horaEntrada,
             estatus: nuevoEstatus,
-            observacion:
-              nuevoEstatus === 'PRESENTE'
-                ? 'Marcado PRESENTE en Guardia Diaria'
-                : 'Marcado AUSENTE en Guardia Diaria',
+            observacion: `${nuevoEstatus} activado por ${nombreRegistrador}`,
             registrado_por: nombreRegistrador,
             updated_at: new Date().toISOString(),
           },
@@ -318,12 +369,29 @@ export default function AsistenciaLiderPage() {
 
       if (error) throw error;
 
+      if (esServicioEspecial) {
+        await supabase.from('movimientos_plantilla').insert([
+          {
+            plantilla_id: oficial.id,
+            proyecto: proyectoSeleccionado,
+            cedula: ced,
+            nombre_completo: `${oficial.nombres} ${oficial.apellidos}`,
+            cargo: oficial.cargo || 'OFICIAL',
+            grupo: oficial.grupo,
+            turno: turnoOf,
+            tipo_movimiento: nuevoEstatus,
+            observacion: `Activado desde personal franco (${horaEntrada})`,
+            registrado_por: nombreRegistrador,
+          },
+        ]);
+      }
+
       setMensaje({
         tipo: 'exito',
         texto:
-          nuevoEstatus === 'PRESENTE'
-            ? `✅ ${oficial.apellidos}, ${oficial.nombres} marcado PRESENTE (${horaEntrada}).`
-            : `❌ ${oficial.apellidos}, ${oficial.nombres} marcado AUSENTE.`,
+          nuevoEstatus === 'FALTA INJUSTIFICADA'
+            ? `❌ ${oficial.apellidos}, ${oficial.nombres} marcado AUSENTE.`
+            : `✅ ${oficial.apellidos}, ${oficial.nombres} registrado como ${nuevoEstatus} (${horaEntrada}).`,
       });
       await cargarDatosProyecto();
     } catch (err: any) {
@@ -335,17 +403,11 @@ export default function AsistenciaLiderPage() {
       setGuardando(false);
     }
   };
+  // Registrar Personal en Plantilla / Recibido 24h (SIEMPRE OPERATIVO, SIN LÍMITE DE HORA)
+  // Además lo incluye automáticamente en la asistencia del día con sus observaciones
   const manejarRegistrarAlta = async (e: React.FormEvent) => {
     e.preventDefault();
     setMensaje(null);
-
-    if (bloqueadoPorHorario) {
-      setMensaje({
-        tipo: 'error',
-        texto: '⚠️ Horario cerrado (09:00 AM). Solicite este registro por correo a la Analista.',
-      });
-      return;
-    }
 
     const cedulaLimpia = cedula.trim().toUpperCase();
     const nombresLimpios = nombres.trim().toUpperCase();
@@ -377,35 +439,39 @@ export default function AsistenciaLiderPage() {
       const momento = obtenerFechaHoraCaracas();
       const ahora = new Date().toISOString();
       const origenLimpio = requiereOrigen ? proyectoOrigen.trim() : null;
+      const obsTexto =
+        observacionIngreso.trim() ||
+        `${tipoIngreso}${origenLimpio ? ` desde ${origenLimpio}` : ''}`;
+
+      // 1. Siempre se incluye automáticamente en la asistencia del día
+      const { error: errAsistDia } = await supabase
+        .from('asistencias_diarias_oficiales')
+        .upsert(
+          [
+            {
+              fecha: momento.fechaStr,
+              proyecto: proyectoSeleccionado,
+              proyecto_apoyo: origenLimpio,
+              cedula: cedulaLimpia,
+              nombre_completo: `${apellidosLimpios}, ${nombresLimpios}`,
+              cargo: cargoAlta,
+              grupo: grupoFinal,
+              turno: turnoAlta,
+              hora_entrada: momento.hora12,
+              estatus: esTemporal24h ? tipoIngreso : 'PRESENTE',
+              observacion: `${tipoIngreso}${origenLimpio ? ` (Origen: ${origenLimpio})` : ''} — ${obsTexto}`,
+              registrado_por: nombreRegistrador,
+              updated_at: ahora,
+            },
+          ],
+          { onConflict: 'fecha,proyecto,cedula,turno' }
+        );
+
+      if (errAsistDia) throw errAsistDia;
 
       if (esTemporal24h) {
-        const { error: errAsistTemp } = await supabase
-          .from('asistencias_diarias_oficiales')
-          .upsert(
-            [
-              {
-                fecha: momento.fechaStr,
-                proyecto: proyectoSeleccionado,
-                proyecto_apoyo: origenLimpio,
-                cedula: cedulaLimpia,
-                nombre_completo: `${apellidosLimpios}, ${nombresLimpios}`,
-                cargo: cargoAlta,
-                grupo: grupoFinal,
-                turno: turnoAlta,
-                hora_entrada: momento.hora12,
-                estatus: tipoIngreso,
-                observacion:
-                  observacionIngreso.trim() ||
-                  `${tipoIngreso} (24h) desde ${origenLimpio}`,
-                registrado_por: nombreRegistrador,
-                updated_at: ahora,
-              },
-            ],
-            { onConflict: 'fecha,proyecto,cedula,turno' }
-          );
-
-        if (errAsistTemp) throw errAsistTemp;
-
+        // Servicio Especial Recibido o Apoyo Recibido:
+        // Se mantiene reflejado en asistencia del día e histórico del oficial, pero NO ingresa a plantilla fija
         await supabase.from('movimientos_plantilla').insert([
           {
             proyecto: proyectoSeleccionado,
@@ -416,18 +482,18 @@ export default function AsistenciaLiderPage() {
             turno: turnoAlta,
             tipo_movimiento: tipoIngreso,
             proyecto_relacionado: origenLimpio,
-            observacion:
-              observacionIngreso.trim() ||
-              `Registro temporal 24h desde ${origenLimpio}`,
+            observacion: obsTexto,
             registrado_por: nombreRegistrador,
           },
         ]);
 
         setMensaje({
           tipo: 'exito',
-          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta}) registrado por 24h como ${tipoIngreso} (desde ${origenLimpio}).`,
+          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta}) registrado como ${tipoIngreso} e incluido en la asistencia de hoy (${momento.hora12}). No quedará fijo en la plantilla.`,
         });
       } else {
+        // Nuevo Ingreso o Traslado Recibido:
+        // Se anexa a la plantilla fija con fecha/hora actual por defecto + historial + asistencia del día
         const yaExisteActivo = plantillaActiva.some(
           (p) => p.cedula.trim().toUpperCase() === cedulaLimpia && p.estado === 'ACTIVO'
         );
@@ -454,7 +520,7 @@ export default function AsistenciaLiderPage() {
               estado: 'ACTIVO',
               tipo_ultimo_movimiento: tipoIngreso,
               proyecto_origen_destino: origenLimpio,
-              observacion: observacionIngreso.trim() || null,
+              observacion: obsTexto,
               fecha_ingreso: ahora,
               registrado_por: nombreRegistrador,
             },
@@ -475,14 +541,14 @@ export default function AsistenciaLiderPage() {
             turno: turnoAlta,
             tipo_movimiento: tipoIngreso,
             proyecto_relacionado: origenLimpio,
-            observacion: observacionIngreso.trim() || null,
+            observacion: obsTexto,
             registrado_por: nombreRegistrador,
           },
         ]);
 
         setMensaje({
           tipo: 'exito',
-          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta} • ${turnoAlta}) anexado a la plantilla fija.`,
+          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta} • ${turnoAlta}) anexado a la plantilla fija e incluido en la asistencia de hoy (${momento.hora12}).`,
         });
       }
 
@@ -502,28 +568,45 @@ export default function AsistenciaLiderPage() {
       setGuardando(false);
     }
   };
+  const guardarFechaIngresoManual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!oficialEditandoFecha || !nuevaFechaIngresoInput) return;
+
+    setGuardando(true);
+    try {
+      const fechaISO = `${nuevaFechaIngresoInput}T07:00:00-04:00`;
+      const { error } = await supabase
+        .from('plantilla_proyectos')
+        .update({
+          fecha_ingreso: fechaISO,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', oficialEditandoFecha.id);
+
+      if (error) throw error;
+
+      setMensaje({
+        tipo: 'exito',
+        texto: `✅ Fecha de ingreso de ${oficialEditandoFecha.nombres} ${oficialEditandoFecha.apellidos} actualizada a ${nuevaFechaIngresoInput}.`,
+      });
+      setOficialEditandoFecha(null);
+      await cargarDatosProyecto();
+    } catch (err: any) {
+      setMensaje({ tipo: 'error', texto: 'Error guardando fecha: ' + (err?.message || 'Error.') });
+    } finally {
+      setGuardando(false);
+    }
+  };
+
   const confirmarMovimientoOtro = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!oficialOtro) return;
     setMensaje(null);
 
-    if (bloqueadoPorHorario) {
-      setMensaje({
-        tipo: 'error',
-        texto: '⚠️ Horario cerrado (09:00 AM). Solicite este movimiento por correo a la Analista.',
-      });
-      return;
-    }
-
     const requiereDestino = tipoOtro === 'TRASLADO ENVIADO' || tipoOtro === 'APOYO ENVIADO';
 
-    if (tipoOtro === 'EGRESO' && !observacionOtro.trim()) {
-      setMensaje({ tipo: 'error', texto: '⚠️ Debe escribir obligatoriamente el motivo del EGRESO.' });
-      return;
-    }
-
-    if (tipoOtro === 'FALTA JUSTIFICADA' && !observacionOtro.trim()) {
-      setMensaje({ tipo: 'error', texto: '⚠️ Debe escribir el motivo de la FALTA JUSTIFICADA.' });
+    if ((tipoOtro === 'EGRESO' || tipoOtro === 'FALTA JUSTIFICADA') && !observacionOtro.trim()) {
+      setMensaje({ tipo: 'error', texto: `⚠️ Debe escribir obligatoriamente el motivo de ${tipoOtro}.` });
       return;
     }
 
@@ -545,15 +628,12 @@ export default function AsistenciaLiderPage() {
       const ced = oficialOtro.cedula.toUpperCase();
 
       const esNovedadDiariaSinBajaPlantilla =
-        tipoOtro === 'SERVICIO ESPECIAL PROPIO' ||
         tipoOtro === 'APOYO ENVIADO' ||
         tipoOtro === 'VACACIONES' ||
-        tipoOtro === 'FALTA JUSTIFICADA';
+        tipoOtro === 'FALTA JUSTIFICADA' ||
+        tipoOtro === 'DESCANSO';
 
       if (esNovedadDiariaSinBajaPlantilla) {
-        const llevaHoraEntrada =
-          tipoOtro === 'SERVICIO ESPECIAL PROPIO' || tipoOtro === 'APOYO ENVIADO';
-
         await supabase.from('asistencias_diarias_oficiales').upsert(
           [
             {
@@ -565,7 +645,7 @@ export default function AsistenciaLiderPage() {
               cargo: cargoOficial,
               grupo: oficialOtro.grupo,
               turno: turnoOtro,
-              hora_entrada: llevaHoraEntrada ? momento.hora12 : '--:--',
+              hora_entrada: tipoOtro === 'APOYO ENVIADO' ? momento.hora12 : '--:--',
               estatus: tipoOtro,
               observacion: motivoLimpio || `${tipoOtro}${destinoLimpio ? ` hacia ${destinoLimpio}` : ''}`,
               registrado_por: nombreRegistrador,
@@ -671,7 +751,7 @@ export default function AsistenciaLiderPage() {
 
         setMensaje({
           tipo: 'exito',
-          texto: `✅ Movimiento ${tipoOtro} de ${oficialOtro.nombres} ${oficialOtro.apellidos} procesado correctamente.`,
+          texto: `✅ Movimiento ${tipoOtro} de ${oficialOtro.nombres} ${oficialOtro.apellidos} procesado.`,
         });
       }
 
@@ -685,61 +765,88 @@ export default function AsistenciaLiderPage() {
       setGuardando(false);
     }
   };
-  const enviarCorreoPlantillaAnalista = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!motivoCorreoPlantilla.trim()) return;
+  // Cálculo del Cuadro Ejecutivo de Plantilla del Día
+  const estatusAsistentes = [
+    'PRESENTE',
+    'SERVICIO ESPECIAL PROPIO',
+    'SERVICIO ESPECIAL MIXTO',
+    'SERVICIO ESPECIAL DIURNO/NOCTURNO',
+    'SERVICIO ESPECIAL RECIBIDO',
+    'APOYO RECIBIDO',
+  ];
 
-    await supabase.from('notifications').insert([
-      {
-        title: `📩 Solicitud de Ajuste de Asistencia/Plantilla — ${proyectoSeleccionado}`,
-        body: `Líder ${nombreRegistrador} solicita ajuste (${proyectoSeleccionado}): ${motivoCorreoPlantilla.trim()}`,
-        target_roles: ['analista', 'operaciones', 'administrador'],
-        target_project: proyectoSeleccionado,
-      },
-    ]);
+  const asistentesHoy = asistenciasHoyList.filter((a) =>
+    estatusAsistentes.includes(String(a.estatus || '').toUpperCase())
+  );
 
-    const destinatarios = correosAnalistas.join(',');
-    const asunto = encodeURIComponent(`Solicitud de Ajuste - ${proyectoSeleccionado} (${hoyLocal})`);
-    const cuerpo = encodeURIComponent(
-      `Buen día Estimada Analista,\n\nSolicito su apoyo para realizar el siguiente ajuste en ${proyectoSeleccionado} (${hoyLocal}):\n\n${motivoCorreoPlantilla.trim()}\n\nSolicitado por: ${nombreRegistrador}`
-    );
-    window.location.href = `mailto:${destinatarios}?subject=${asunto}&body=${cuerpo}`;
-    setMotivoCorreoPlantilla('');
-    setMensaje({ tipo: 'exito', texto: '✅ Correo preparado para la Analista.' });
-  };
+  const proyUpper = proyectoSeleccionado.toUpperCase();
+  const tieneJefeOp = PROYECTOS_CON_JEFE_OP.includes(proyUpper);
+  const tieneDiurno = PROYECTOS_CON_DIURNO.includes(proyUpper);
+  const tieneNocturno = PROYECTOS_CON_NOCTURNO.includes(proyUpper);
 
+  const countLider = liderActivoPorQR ? 1 : 0;
+  const countJefeOp = tieneJefeOp
+    ? asistentesHoy.filter((a) => String(a.cargo || '').toUpperCase() === 'J. OPERACIONES').length
+    : 0;
+  const countOficialesMixtos = asistentesHoy.filter(
+    (a) =>
+      String(a.cargo || '').toUpperCase() !== 'LIDER' &&
+      String(a.cargo || '').toUpperCase() !== 'J. OPERACIONES' &&
+      ['MIXTO', '24X24'].includes(String(a.turno || 'MIXTO').toUpperCase())
+  ).length;
+  const countOficialesDiurnos = asistentesHoy.filter(
+    (a) =>
+      String(a.cargo || '').toUpperCase() !== 'LIDER' &&
+      String(a.cargo || '').toUpperCase() !== 'J. OPERACIONES' &&
+      String(a.turno || '').toUpperCase() === 'DIURNO'
+  ).length;
+  const countOficialesNocturnos = asistentesHoy.filter(
+    (a) =>
+      String(a.cargo || '').toUpperCase() !== 'LIDER' &&
+      String(a.cargo || '').toUpperCase() !== 'J. OPERACIONES' &&
+      String(a.turno || '').toUpperCase() === 'NOCTURNO'
+  ).length;
+
+  const totalPersonalPresenteDia =
+    countLider +
+    countJefeOp +
+    countOficialesMixtos +
+    countOficialesDiurnos +
+    countOficialesNocturnos;
+
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+
+  // Personal de Guardia Hoy (siempre visible incluso si cierra la hora)
   const personalDeGuardiaHoy = plantillaActiva.filter((of) =>
     leTocaGuardiaHoy(of.grupo, of.turno, hoyLocal)
   );
-  const personalFrancoHoy = plantillaActiva.filter(
-    (of) => !leTocaGuardiaHoy(of.grupo, of.turno, hoyLocal)
-  );
 
-  const plantillaGeneralFiltrada = plantillaActiva.filter((item) => {
-    const trn = (item.turno || 'MIXTO').toUpperCase();
-    const coincideFiltro =
-      filtroPlantilla === 'TODOS'
-        ? true
-        : filtroPlantilla === '12H'
-        ? trn === 'DIURNO' || trn === 'NOCTURNO'
-        : trn === filtroPlantilla;
-    const texto = `${item.cedula} ${item.nombres} ${item.apellidos} ${item.cargo || ''}`.toLowerCase();
-    return coincideFiltro && texto.includes(busqueda.toLowerCase().trim());
+  // Personal Franco / Libre Hoy:
+  // Incluye los grupos mixtos francos, los 24x24 francos (sin botón S.E) y los diurnos/nocturnos marcados como DESCANSO
+  const personalFrancoHoy = plantillaActiva.filter((of) => {
+    const trn = (of.turno || 'MIXTO').toUpperCase();
+    const ced = of.cedula.toUpperCase();
+    const marca = asistenciasHoyMap[ced];
+    if (trn === 'DIURNO' || trn === 'NOCTURNO') {
+      return marca?.estatus === 'DESCANSO';
+    }
+    return !leTocaGuardiaHoy(of.grupo, of.turno, hoyLocal);
   });
 
   const proyectosParaTraslado = listaProyectosGlobales.filter((p) => p !== proyectoSeleccionado);
 
   const formatearBadgeHorario = (of: OficialPlantilla) => {
     const trn = (of.turno || 'MIXTO').toUpperCase();
-    if (trn === 'DIURNO' || trn === 'NOCTURNO') return `12H • ${trn}`;
+    if (trn === 'DIURNO' || trn === 'NOCTURNO') return trn;
     if (trn === '24X24') return `24X24 • GRP ${of.grupo}`;
     return `MIXTO • GRP ${of.grupo}`;
   };
-
   const renderFilaOperativa = (oficial: OficialPlantilla, esFranco: boolean) => {
     const ced = oficial.cedula.toUpperCase();
     const marcaHoy = asistenciasHoyMap[ced];
     const yaMarcadoPorLider = esLider && !!marcaHoy;
+    const trn = (oficial.turno || 'MIXTO').toUpperCase();
+    const permiteServicioEspecial = trn === 'MIXTO' || trn === 'DIURNO' || trn === 'NOCTURNO';
 
     return (
       <div
@@ -766,7 +873,7 @@ export default function AsistenciaLiderPage() {
             <div className="mt-1">
               <span
                 className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                  marcaHoy.estatus === 'PRESENTE' || marcaHoy.estatus === 'SERVICIO ESPECIAL PROPIO'
+                  estatusAsistentes.includes(marcaHoy.estatus)
                     ? 'bg-emerald-100 text-emerald-800'
                     : marcaHoy.estatus === 'FALTA INJUSTIFICADA'
                     ? 'bg-red-100 text-red-800'
@@ -780,47 +887,74 @@ export default function AsistenciaLiderPage() {
           )}
         </div>
 
-        {!bloqueadoPorHorario && (
-          <div className="flex items-center gap-2 flex-wrap">
-            {!esFranco && (
-              <>
-                <button
-                  type="button"
-                  disabled={guardando || yaMarcadoPorLider}
-                  onClick={() => marcarAsistenciaDirecta(oficial, 'PRESENTE')}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1 cursor-pointer disabled:opacity-40"
-                >
-                  <Check size={14} /> PRESENTE
-                </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {!esFranco && !bloqueadoAsistenciaBase && (
+            <>
+              <button
+                type="button"
+                disabled={guardando || yaMarcadoPorLider}
+                onClick={() => marcarAsistenciaDirecta(oficial, 'PRESENTE')}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1 cursor-pointer disabled:opacity-40"
+              >
+                <Check size={14} /> PRESENTE
+              </button>
 
-                <button
-                  type="button"
-                  disabled={guardando || yaMarcadoPorLider}
-                  onClick={() => marcarAsistenciaDirecta(oficial, 'FALTA INJUSTIFICADA')}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-600 text-white hover:bg-red-700 flex items-center gap-1 cursor-pointer disabled:opacity-40"
-                >
-                  <X size={14} /> AUSENTE
-                </button>
-              </>
-            )}
+              <button
+                type="button"
+                disabled={guardando || yaMarcadoPorLider}
+                onClick={() => marcarAsistenciaDirecta(oficial, 'FALTA INJUSTIFICADA')}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-600 text-white hover:bg-red-700 flex items-center gap-1 cursor-pointer disabled:opacity-40"
+              >
+                <X size={14} /> AUSENTE
+              </button>
 
-            <button
-              type="button"
-              disabled={guardando || yaMarcadoPorLider}
-              onClick={() => {
-                setMensaje(null);
-                setOficialOtro(oficial);
-                setTipoOtro(esFranco ? 'SERVICIO ESPECIAL PROPIO' : 'APOYO ENVIADO');
-                setTurnoOtro(oficial.turno || 'MIXTO');
-                setProyectoDestinoOtro('');
-                setObservacionOtro('');
-              }}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 text-white hover:bg-amber-600 flex items-center gap-1 cursor-pointer disabled:opacity-40"
-            >
-              <MoreHorizontal size={14} /> {esFranco ? 'OTRO (Serv. Especial)' : 'OTRO'}
-            </button>
-          </div>
-        )}
+              <button
+                type="button"
+                disabled={guardando || yaMarcadoPorLider}
+                onClick={() => {
+                  setMensaje(null);
+                  setOficialOtro(oficial);
+                  setTipoOtro('APOYO ENVIADO');
+                  setTurnoOtro(oficial.turno || 'MIXTO');
+                  setProyectoDestinoOtro('');
+                  setObservacionOtro('');
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 text-white hover:bg-amber-600 flex items-center gap-1 cursor-pointer disabled:opacity-40"
+              >
+                <MoreHorizontal size={14} /> OTRO
+              </button>
+            </>
+          )}
+
+          {/* Botones S.E MIXTO y S.E DIURNO/NOCTURNO: sin límite de hora, solo para MIXTO, DIURNO o NOCTURNO (nunca 24X24) */}
+          {esFranco && permiteServicioEspecial && (
+            <>
+              <button
+                type="button"
+                disabled={guardando}
+                onClick={() => marcarAsistenciaDirecta(oficial, 'SERVICIO ESPECIAL MIXTO')}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer disabled:opacity-40"
+              >
+                S.E MIXTO
+              </button>
+
+              <button
+                type="button"
+                disabled={guardando}
+                onClick={() => marcarAsistenciaDirecta(oficial, 'SERVICIO ESPECIAL DIURNO/NOCTURNO')}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 text-white hover:bg-purple-700 cursor-pointer disabled:opacity-40"
+              >
+                S.E DIURNO/NOCTURNO
+              </button>
+            </>
+          )}
+
+          {esFranco && !permiteServicioEspecial && (
+            <span className="text-[11px] font-semibold text-slate-400 italic">
+              Franco 24X24 (Sin S.E)
+            </span>
+          )}
+        </div>
       </div>
     );
   };
@@ -833,9 +967,9 @@ export default function AsistenciaLiderPage() {
             <ClipboardCheck className="text-blue-600" size={26} /> Control de Asistencia y Plantilla
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Guardia Hoy ({hoyLocal}): <strong className="text-blue-700">Mixto Grp {grupoMixtoHoy}</strong> •{' '}
-            <strong className="text-indigo-700">24x24 Grp {grupo24x24Hoy}</strong> •{' '}
-            <strong className="text-slate-700">Personal 12h</strong> (Modo pruebas activo).
+            Guardia Hoy ({hoyLocal}): <strong className="text-blue-700">MIXTO Grp {grupoMixtoHoy}</strong> •{' '}
+            <strong className="text-indigo-700">24X24 Grp {grupo24x24Hoy}</strong> •{' '}
+            <strong className="text-slate-700">DIURNO / NOCTURNO</strong>
           </p>
         </div>
 
@@ -854,6 +988,55 @@ export default function AsistenciaLiderPage() {
               </option>
             ))}
           </select>
+        </div>
+      </div>
+
+      {/* CUADRO EJECUTIVO DE PLANTILLA DEL DÍA */}
+      <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-md space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-700 pb-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-blue-300">
+            Resumen Numérico de Plantilla Presente Hoy ({hoyLocal})
+          </span>
+          <span className="text-lg font-black text-emerald-400">
+            TOTAL: {pad2(totalPersonalPresenteDia)}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
+          <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+            <div className="text-slate-400 font-bold uppercase">Líder de Proyecto</div>
+            <div className="text-xl font-black text-white mt-0.5">{pad2(countLider)}</div>
+            <div className="text-[10px] text-slate-400">
+              {liderActivoPorQR ? 'Activo por marca QR' : 'Sin entrada QR / Con salida'}
+            </div>
+          </div>
+
+          {tieneJefeOp && (
+            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+              <div className="text-slate-400 font-bold uppercase">Jefe de Operaciones</div>
+              <div className="text-xl font-black text-white mt-0.5">{pad2(countJefeOp)}</div>
+            </div>
+          )}
+
+          <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+            <div className="text-slate-400 font-bold uppercase">Oficiales Mixtos</div>
+            <div className="text-xl font-black text-blue-300 mt-0.5">{pad2(countOficialesMixtos)}</div>
+            <div className="text-[10px] text-slate-400">Incluye MIXTO + 24X24</div>
+          </div>
+
+          {(tieneDiurno || countOficialesDiurnos > 0) && (
+            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+              <div className="text-slate-400 font-bold uppercase">Oficiales Diurnos</div>
+              <div className="text-xl font-black text-amber-300 mt-0.5">{pad2(countOficialesDiurnos)}</div>
+            </div>
+          )}
+
+          {(tieneNocturno || countOficialesNocturnos > 0) && (
+            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+              <div className="text-slate-400 font-bold uppercase">Oficiales Nocturnos</div>
+              <div className="text-xl font-black text-purple-300 mt-0.5">{pad2(countOficialesNocturnos)}</div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -895,36 +1078,6 @@ export default function AsistenciaLiderPage() {
           <Users size={18} /> PLANTILLA GENERAL ({plantillaActiva.length})
         </button>
       </div>
-
-      {bloqueadoPorHorario && (
-        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 space-y-3">
-          <div className="flex items-start gap-3">
-            <Lock className="text-amber-700 shrink-0 mt-0.5" size={20} />
-            <div>
-              <h4 className="font-bold text-amber-900 text-sm uppercase">
-                Registro Cerrado (Hora actual: {horaTexto} — Límite: 09:00 AM)
-              </h4>
-            </div>
-          </div>
-          <form onSubmit={enviarCorreoPlantillaAnalista} className="flex flex-col sm:flex-row gap-2">
-            <input
-              type="text"
-              required
-              value={motivoCorreoPlantilla}
-              onChange={(e) => setMotivoCorreoPlantilla(e.target.value)}
-              placeholder="Describa la corrección o movimiento requerido..."
-              className="flex-1 border border-amber-300 rounded-xl px-3 py-2 text-xs bg-white"
-            />
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-700 hover:bg-amber-800 flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <Mail size={14} /> Enviar Correo a Analista
-            </button>
-          </form>
-        </div>
-      )}
-
       {seccionPrincipal === 'ASISTENCIA_GUARDIA' ? (
         <div className="space-y-5">
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
@@ -934,22 +1087,20 @@ export default function AsistenciaLiderPage() {
                   <Shield className="text-blue-600" size={18} /> Personal de Guardia Hoy ({personalDeGuardiaHoy.length})
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Mixto Grp <strong>{grupoMixtoHoy}</strong> + 24x24 Grp <strong>{grupo24x24Hoy}</strong> + Personal 12h (Diurno/Nocturno).
+                  MIXTO Grp <strong>{grupoMixtoHoy}</strong> • 24X24 Grp <strong>{grupo24x24Hoy}</strong> • DIURNO / NOCTURNO
                 </p>
               </div>
-              {!bloqueadoPorHorario && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSeccionPrincipal('PLANTILLA_GENERAL');
-                    setSubMenuPlantilla('REGISTRAR');
-                    setTipoIngreso('SERVICIO ESPECIAL RECIBIDO');
-                  }}
-                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1.5 cursor-pointer self-start"
-                >
-                  <UserPlus size={15} /> + Serv. Especial / Apoyo Recibido (24h)
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setSeccionPrincipal('PLANTILLA_GENERAL');
+                  setSubMenuPlantilla('REGISTRAR');
+                  setTipoIngreso('SERVICIO ESPECIAL RECIBIDO');
+                }}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1.5 cursor-pointer self-start"
+              >
+                <UserPlus size={15} /> + Registrar Ingreso / Serv. Especial Recibido
+              </button>
             </div>
 
             {cargando ? (
@@ -992,7 +1143,7 @@ export default function AsistenciaLiderPage() {
                 className="w-full flex items-center justify-between text-left font-bold text-sm text-slate-700 cursor-pointer"
               >
                 <span>
-                  🔄 Personal en Grupos Francos / Libres Hoy ({personalFrancoHoy.length}) — Pulsar para reportar Servicio Especial Propio
+                  🔄 Personal Franco / Libre Hoy ({personalFrancoHoy.length}) — Pulsar para activar S.E MIXTO o S.E DIURNO/NOCTURNO
                 </span>
                 <span className="text-xs text-blue-600 underline">
                   {mostrarFrancosParaServEsp ? 'Ocultar' : 'Desplegar'}
@@ -1022,19 +1173,17 @@ export default function AsistenciaLiderPage() {
               <Users size={16} /> Plantilla General ({plantillaActiva.length})
             </button>
 
-            {!bloqueadoPorHorario && (
-              <button
-                type="button"
-                onClick={() => setSubMenuPlantilla('REGISTRAR')}
-                className={`px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer ${
-                  subMenuPlantilla === 'REGISTRAR'
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'bg-white text-emerald-700 border border-emerald-200'
-                }`}
-              >
-                <UserPlus size={16} /> Registrar Ingreso / Recibido 24h
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setSubMenuPlantilla('REGISTRAR')}
+              className={`px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer ${
+                subMenuPlantilla === 'REGISTRAR'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-white text-emerald-700 border border-emerald-200'
+              }`}
+            >
+              <UserPlus size={16} /> Registrar Ingreso / Recibido 24h
+            </button>
 
             <button
               type="button"
@@ -1048,11 +1197,10 @@ export default function AsistenciaLiderPage() {
               <History size={16} /> Historial ({movimientos.length})
             </button>
           </div>
-
           {subMenuPlantilla === 'LISTA_GENERAL' && (
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-5">
               <div className="flex flex-wrap gap-2">
-                {(['TODOS', 'MIXTO', '24X24', '12H'] as const).map((tab) => (
+                {(['TODOS', 'MIXTO', '24X24', 'DIURNO_NOCTURNO'] as const).map((tab) => (
                   <button
                     key={tab}
                     type="button"
@@ -1066,10 +1214,10 @@ export default function AsistenciaLiderPage() {
                     {tab === 'TODOS'
                       ? `Todos (${plantillaActiva.length})`
                       : tab === 'MIXTO'
-                      ? 'Mixto 24x48 (A/B/C)'
+                      ? 'MIXTO (A / B / C)'
                       : tab === '24X24'
-                      ? '24x24 (A/B)'
-                      : 'Diurno / Nocturno (12h)'}
+                      ? '24X24 (A / B)'
+                      : 'DIURNO / NOCTURNO'}
                   </button>
                 ))}
               </div>
@@ -1085,43 +1233,126 @@ export default function AsistenciaLiderPage() {
                 />
               </div>
 
-              <div className="divide-y divide-slate-100">
-                {plantillaGeneralFiltrada.map((oficial) => (
-                  <div key={oficial.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2 py-0.5 rounded text-xs font-black bg-blue-100 text-blue-800">
-                        {formatearBadgeHorario(oficial)}
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-xs font-black bg-teal-100 text-teal-800">
-                        {oficial.cargo || 'OFICIAL'}
-                      </span>
-                      <span className="font-bold text-sm text-slate-800">
-                        {oficial.apellidos}, {oficial.nombres}
-                      </span>
-                      <span className="text-xs font-mono text-slate-500">C.I. {oficial.cedula}</span>
-                    </div>
+              {(['MIXTO', '24X24', 'DIURNO_NOCTURNO'] as const)
+                .filter((sec) => filtroPlantilla === 'TODOS' || filtroPlantilla === sec)
+                .map((seccionHorario) => {
+                  const listaSeccion = plantillaActiva.filter((item) => {
+                    const trn = (item.turno || 'MIXTO').toUpperCase();
+                    const texto = `${item.cedula} ${item.nombres} ${item.apellidos} ${item.cargo || ''}`.toLowerCase();
+                    if (!texto.includes(busqueda.toLowerCase().trim())) return false;
+                    if (seccionHorario === 'MIXTO') return trn === 'MIXTO';
+                    if (seccionHorario === '24X24') return trn === '24X24';
+                    return trn === 'DIURNO' || trn === 'NOCTURNO';
+                  });
 
-                    {!bloqueadoPorHorario && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOficialOtro(oficial);
-                          setTipoOtro('TRASLADO ENVIADO');
-                          setTurnoOtro(oficial.turno || 'MIXTO');
-                          setProyectoDestinoOtro('');
-                          setObservacionOtro('');
-                        }}
-                        className="px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 self-start cursor-pointer"
-                      >
-                        Traslado / Egreso
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
+                  const subgrupos =
+                    seccionHorario === 'MIXTO'
+                      ? ['A', 'B', 'C']
+                      : seccionHorario === '24X24'
+                      ? ['A', 'B']
+                      : ['UNICO'];
+                  return (
+                    <div key={seccionHorario} className="border border-slate-200 rounded-xl p-4 space-y-3">
+                      <h3 className="text-sm font-black text-slate-800 uppercase border-b border-slate-100 pb-2">
+                        {seccionHorario === 'MIXTO'
+                          ? `HORARIO MIXTO (${listaSeccion.length})`
+                          : seccionHorario === '24X24'
+                          ? `HORARIO 24X24 (${listaSeccion.length})`
+                          : `HORARIO DIURNO / NOCTURNO (${listaSeccion.length})`}
+                      </h3>
+
+                      {subgrupos.map((subGrp) => {
+                        const miembrosSub =
+                          subGrp === 'UNICO'
+                            ? listaSeccion
+                            : listaSeccion.filter((m) => (m.grupo || 'A').toUpperCase() === subGrp);
+
+                        return (
+                          <div key={subGrp} className="space-y-1.5">
+                            {subGrp !== 'UNICO' && (
+                              <div className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md inline-block">
+                                GRUPO {subGrp} ({miembrosSub.length})
+                              </div>
+                            )}
+                            {miembrosSub.length === 0 ? (
+                              <p className="text-xs text-slate-400 pl-2">Sin personal registrado en este grupo.</p>
+                            ) : (
+                              <div className="divide-y divide-slate-100">
+                                {miembrosSub.map((oficial) => (
+                                  <div
+                                    key={oficial.id}
+                                    className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                                  >
+                                    <div>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="px-2 py-0.5 rounded text-xs font-black bg-teal-100 text-teal-800">
+                                          {oficial.cargo || 'OFICIAL'}
+                                        </span>
+                                        <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700">
+                                          {oficial.turno}
+                                        </span>
+                                        <span className="font-bold text-sm text-slate-800">
+                                          {oficial.apellidos}, {oficial.nombres}
+                                        </span>
+                                        <span className="text-xs font-mono text-slate-500">C.I. {oficial.cedula}</span>
+                                      </div>
+                                      <div className="text-[11px] text-slate-500 mt-0.5">
+                                        Fecha de Ingreso:{' '}
+                                        {oficial.fecha_ingreso ? (
+                                          <strong>
+                                            {new Date(oficial.fecha_ingreso).toLocaleDateString('es-VE')}
+                                          </strong>
+                                        ) : (
+                                          <span className="text-amber-700 font-bold">
+                                            Sin fecha (Pendiente por editar)
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOficialEditandoFecha(oficial);
+                                          setNuevaFechaIngresoInput(
+                                            oficial.fecha_ingreso
+                                              ? new Date(oficial.fecha_ingreso).toLocaleDateString('en-CA')
+                                              : hoyLocal
+                                          );
+                                        }}
+                                        className="px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 flex items-center gap-1 cursor-pointer"
+                                      >
+                                        <Calendar size={12} /> Fecha Ingreso
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOficialOtro(oficial);
+                                          setTipoOtro('TRASLADO ENVIADO');
+                                          setTurnoOtro(oficial.turno || 'MIXTO');
+                                          setProyectoDestinoOtro('');
+                                          setObservacionOtro('');
+                                        }}
+                                        className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer"
+                                      >
+                                        Traslado / Egreso
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
             </div>
           )}
-          {subMenuPlantilla === 'REGISTRAR' && !bloqueadoPorHorario && (
+          {subMenuPlantilla === 'REGISTRAR' && (
             <form
               onSubmit={manejarRegistrarAlta}
               className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-5"
@@ -1191,17 +1422,17 @@ export default function AsistenciaLiderPage() {
                     }}
                     className="w-full border border-blue-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-blue-900 bg-blue-50/40"
                   >
-                    <option value="MIXTO">MIXTO (24x48 • Rotación A/B/C)</option>
-                    <option value="24X24">24X24 (Rotación Grupo A / B)</option>
-                    <option value="DIURNO">DIURNO (12 Horas)</option>
-                    <option value="NOCTURNO">NOCTURNO (12 Horas)</option>
+                    <option value="MIXTO">MIXTO</option>
+                    <option value="24X24">24X24</option>
+                    <option value="DIURNO">DIURNO</option>
+                    <option value="NOCTURNO">NOCTURNO</option>
                   </select>
                 </div>
 
                 {(turnoAlta === 'MIXTO' || turnoAlta === '24X24') && (
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                      {turnoAlta === '24X24' ? 'Grupo 24x24 (A o B) *' : 'Grupo Mixto (A, B o C) *'}
+                      {turnoAlta === '24X24' ? 'Grupo 24X24 (A o B) *' : 'Grupo MIXTO (A, B o C) *'}
                     </label>
                     <select
                       value={grupo}
@@ -1252,6 +1483,17 @@ export default function AsistenciaLiderPage() {
                     </select>
                   </div>
                 )}
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Observación</label>
+                  <input
+                    type="text"
+                    value={observacionIngreso}
+                    onChange={(e) => setObservacionIngreso(e.target.value)}
+                    placeholder="Detalle adicional (se reflejará en la asistencia del día)..."
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm"
+                  />
+                </div>
               </div>
 
               <div className="flex justify-end gap-3">
@@ -1272,6 +1514,7 @@ export default function AsistenciaLiderPage() {
               </div>
             </form>
           )}
+
           {subMenuPlantilla === 'HISTORIAL' && (
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
               <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3">
@@ -1293,7 +1536,7 @@ export default function AsistenciaLiderPage() {
           )}
         </div>
       )}
-      {oficialOtro && !bloqueadoPorHorario && (
+      {oficialOtro && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <form onSubmit={confirmarMovimientoOtro} className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
             <h3 className="text-lg font-bold text-slate-800">Registrar Novedad / Movimiento (OTRO)</h3>
@@ -1316,10 +1559,10 @@ export default function AsistenciaLiderPage() {
                   className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-bold text-amber-800 bg-amber-50/50"
                 >
                   <option value="APOYO ENVIADO">APOYO ENVIADO</option>
-                  <option value="SERVICIO ESPECIAL PROPIO">SERVICIO ESPECIAL PROPIO</option>
                   <option value="TRASLADO ENVIADO">TRASLADO ENVIADO</option>
                   <option value="VACACIONES">VACACIONES</option>
                   <option value="FALTA JUSTIFICADA">FALTA JUSTIFICADA</option>
+                  <option value="DESCANSO">LIBRE / DESCANSO</option>
                   <option value="EGRESO">EGRESO</option>
                 </select>
               </div>
@@ -1391,6 +1634,43 @@ export default function AsistenciaLiderPage() {
                 className="px-5 py-2 rounded-xl text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 cursor-pointer disabled:opacity-40"
               >
                 {guardando ? 'Guardando...' : `Confirmar ${tipoOtro}`}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {oficialEditandoFecha && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <form onSubmit={guardarFechaIngresoManual} className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl">
+            <h3 className="text-base font-bold text-slate-800">Editar Fecha de Ingreso</h3>
+            <p className="text-xs text-slate-600">
+              Personal: <strong>{oficialEditandoFecha.nombres} {oficialEditandoFecha.apellidos}</strong> ({oficialEditandoFecha.cedula})
+            </p>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Fecha de Ingreso *</label>
+              <input
+                type="date"
+                required
+                value={nuevaFechaIngresoInput}
+                onChange={(e) => setNuevaFechaIngresoInput(e.target.value)}
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setOficialEditandoFecha(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={guardando}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 cursor-pointer"
+              >
+                {guardando ? 'Guardando...' : 'Guardar Fecha'}
               </button>
             </div>
           </form>

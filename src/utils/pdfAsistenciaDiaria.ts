@@ -86,19 +86,23 @@ const dibujarBloqueVariablesYMotivos = (
     (r) => r.estatus === 'VACACIONES' || r.estatus === 'FALTA JUSTIFICADA'
   ).length;
 
-  const servEspPropio =
-    datos.registros.filter((r) => r.estatus === 'SERVICIO ESPECIAL PROPIO').length +
-    datos.movimientosDia.filter((m) => m.tipo_movimiento === 'SERVICIO ESPECIAL PROPIO').length;
+  const servEspPropio = datos.registros.filter((r) =>
+    [
+      'SERVICIO ESPECIAL PROPIO',
+      'SERVICIO ESPECIAL MIXTO',
+      'SERVICIO ESPECIAL DIURNO/NOCTURNO',
+    ].includes(r.estatus)
+  ).length;
 
-  const servEspRecibido =
-    datos.registros.filter((r) => r.estatus === 'SERVICIO ESPECIAL RECIBIDO').length +
-    datos.movimientosDia.filter((m) => m.tipo_movimiento === 'SERVICIO ESPECIAL RECIBIDO').length;
+  const servEspRecibido = datos.registros.filter(
+    (r) => r.estatus === 'SERVICIO ESPECIAL RECIBIDO'
+  ).length;
 
   const servEspEfectivo = servEspPropio + servEspRecibido;
 
-  const servEspEnviado =
-    datos.registros.filter((r) => r.estatus === 'SERVICIO ESPECIAL ENVIADO').length +
-    datos.movimientosDia.filter((m) => m.tipo_movimiento === 'SERVICIO ESPECIAL ENVIADO').length;
+  const servEspEnviado = datos.registros.filter(
+    (r) => r.estatus === 'SERVICIO ESPECIAL ENVIADO'
+  ).length;
 
   const apoyosRecibidos = datos.registros.filter((r) => r.estatus === 'APOYO RECIBIDO').length;
   const apoyosEnviados = datos.registros.filter((r) => r.estatus === 'APOYO ENVIADO').length;
@@ -130,7 +134,7 @@ const dibujarBloqueVariablesYMotivos = (
 
   doc.text(`• Nuevos Ingresos: ${nuevosIngresos}`, col1, y + 13);
   doc.text(`• Servicio Especial Efectivo: ${servEspEfectivo}`, col1, y + 20);
-  doc.text(`  (Propio: ${servEspPropio} | Recibido: ${servEspRecibido})`, col1, y + 26.5);
+  doc.text(`  (Propio/S.E: ${servEspPropio} | Recibido: ${servEspRecibido})`, col1, y + 26.5);
   doc.text(`• Vacaciones / F. Just.: ${vacacionesYFaltasJust}`, col1, y + 33.5);
 
   doc.text(`• Apoyos Recibidos: ${apoyosRecibidos}`, col2, y + 13);
@@ -317,10 +321,11 @@ export async function generarPDFAsistenciaDiaria(
       doc.text(String(reg.cargo || 'OFICIAL').slice(0, 13), margin + 25, y + 1);
       doc.text(String(reg.nombre_completo || '').slice(0, 29), margin + 49, y + 1);
 
+      const trnNorm = String(reg.turno || 'MIXTO').toUpperCase();
       const etiqHorario =
-        reg.turno === 'DIURNO' || reg.turno === 'NOCTURNO'
-          ? `12H-${reg.turno.slice(0, 4)}`
-          : `${reg.turno}-G${reg.grupo}`;
+        trnNorm === 'DIURNO' || trnNorm === 'NOCTURNO'
+          ? trnNorm
+          : `${trnNorm}-G${reg.grupo}`;
       doc.text(etiqHorario, margin + 104, y + 1);
       doc.text(reg.hora_entrada || '--:--', margin + 131, y + 1);
 
@@ -331,7 +336,14 @@ export async function generarPDFAsistenciaDiaria(
       if (reg.estatus === 'FALTA INJUSTIFICADA' || reg.estatus === 'BAJA POR SALUD') {
         doc.setTextColor(185, 28, 28);
         doc.setFont('helvetica', 'bold');
-      } else if (reg.estatus === 'PRESENTE') {
+      } else if (
+        [
+          'PRESENTE',
+          'SERVICIO ESPECIAL PROPIO',
+          'SERVICIO ESPECIAL MIXTO',
+          'SERVICIO ESPECIAL DIURNO/NOCTURNO',
+        ].includes(reg.estatus)
+      ) {
         doc.setTextColor(21, 128, 61);
         doc.setFont('helvetica', 'bold');
       } else {
@@ -421,7 +433,12 @@ export async function generarPDFInformeDiarioDirectiva(datos: DatosInformeDiario
     const regsProy = datos.registros.filter((r) => (r.proyecto || datos.proyecto) === proy);
     const pres = regsProy.filter((r) => r.estatus === 'PRESENTE').length;
     const sesp = regsProy.filter((r) =>
-      ['SERVICIO ESPECIAL PROPIO', 'SERVICIO ESPECIAL RECIBIDO'].includes(r.estatus)
+      [
+        'SERVICIO ESPECIAL PROPIO',
+        'SERVICIO ESPECIAL MIXTO',
+        'SERVICIO ESPECIAL DIURNO/NOCTURNO',
+        'SERVICIO ESPECIAL RECIBIDO',
+      ].includes(r.estatus)
     ).length;
     const apoy = regsProy.filter((r) => ['APOYO RECIBIDO', 'APOYO ENVIADO'].includes(r.estatus)).length;
     const falt = regsProy.filter((r) => r.estatus === 'FALTA INJUSTIFICADA').length;
@@ -451,4 +468,3 @@ export async function generarPDFInformeDiarioDirectiva(datos: DatosInformeDiario
 
   doc.save(`Informe_Diario_Directiva_${datos.fecha}.pdf`);
 }
-

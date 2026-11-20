@@ -63,6 +63,10 @@ export default function AnalistaHome() {
     asistencias: any[];
   } | null>(null);
   const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null);
+
+  // Edición de Fecha de Ingreso por parte de la Analista
+  const [editandoFechaIngresoAnalista, setEditandoFechaIngresoAnalista] = useState(false);
+  const [fechaIngresoAnalistaInput, setFechaIngresoAnalistaInput] = useState<string>(hoyLocal);
   useEffect(() => {
     const cargarProyectos = async () => {
       const setProy = new Set<string>(Array.isArray(PROYECTOS) ? PROYECTOS : []);
@@ -300,6 +304,7 @@ export default function AnalistaHome() {
   const consultarExpedientePorCedula = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorBusqueda(null);
+    setEditandoFechaIngresoAnalista(false);
 
     const cedLimpia = cedulaBusqueda.trim().toUpperCase();
     if (!cedLimpia) {
@@ -371,8 +376,46 @@ export default function AnalistaHome() {
       setBuscandoCedula(false);
     }
   };
-  const totalPresentes = asistenciasProyecto.filter(
-    (a) => a.estatus === 'PRESENTE' || a.estatus === 'SERVICIO ESPECIAL PROPIO'
+
+  const guardarFechaIngresoPorAnalista = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resultadoCedula?.fichaActual || !fechaIngresoAnalistaInput) return;
+
+    setGuardandoCambio(true);
+    try {
+      const fechaISO = `${fechaIngresoAnalistaInput}T07:00:00-04:00`;
+      const { error } = await supabase
+        .from('plantilla_proyectos')
+        .update({
+          fecha_ingreso: fechaISO,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', resultadoCedula.fichaActual.id);
+
+      if (error) throw error;
+
+      setMensajeGlobal({
+        tipo: 'exito',
+        texto: `✅ Fecha de ingreso de ${resultadoCedula.nombreCompleto} actualizada a ${fechaIngresoAnalistaInput}.`,
+      });
+      setEditandoFechaIngresoAnalista(false);
+      await consultarExpedientePorCedula();
+    } catch (err: any) {
+      setMensajeGlobal({
+        tipo: 'error',
+        texto: 'Error actualizando fecha de ingreso: ' + (err?.message || 'Error.'),
+      });
+    } finally {
+      setGuardandoCambio(false);
+    }
+  };
+  const totalPresentes = asistenciasProyecto.filter((a) =>
+    [
+      'PRESENTE',
+      'SERVICIO ESPECIAL PROPIO',
+      'SERVICIO ESPECIAL MIXTO',
+      'SERVICIO ESPECIAL DIURNO/NOCTURNO',
+    ].includes(a.estatus)
   ).length;
   const totalApoyos = asistenciasProyecto.filter((a) =>
     ['APOYO ENVIADO', 'APOYO RECIBIDO', 'SERVICIO ESPECIAL RECIBIDO', 'SERVICIO ESPECIAL ENVIADO'].includes(
@@ -396,7 +439,7 @@ export default function AnalistaHome() {
           <FileSpreadsheet className="text-teal-600" size={26} /> Panel de Auditoría y Control de Asistencia
         </h1>
         <p className="text-sm text-slate-500 mt-1">
-          Control de guardia diaria por proyecto, edición auditada, descarga/impresión de PDFs y expediente por cédula.
+          Control de guardia diaria por proyecto, edición auditada siempre activa, descarga/impresión de PDFs y expediente por cédula.
         </p>
       </div>
 
@@ -498,10 +541,10 @@ export default function AnalistaHome() {
                   className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-800"
                 >
                   <option value="TODOS">TODOS LOS HORARIOS</option>
-                  <option value="MIXTO">MIXTO (24x48)</option>
+                  <option value="MIXTO">MIXTO</option>
                   <option value="24X24">24X24</option>
-                  <option value="DIURNO">DIURNO (12h)</option>
-                  <option value="NOCTURNO">NOCTURNO (12h)</option>
+                  <option value="DIURNO">DIURNO</option>
+                  <option value="NOCTURNO">NOCTURNO</option>
                 </select>
               </div>
             </div>
@@ -611,7 +654,12 @@ export default function AnalistaHome() {
                     <div className="flex items-center gap-2 self-start md:self-center">
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-bold ${
-                          reg.estatus === 'PRESENTE' || reg.estatus === 'SERVICIO ESPECIAL PROPIO'
+                          [
+                            'PRESENTE',
+                            'SERVICIO ESPECIAL PROPIO',
+                            'SERVICIO ESPECIAL MIXTO',
+                            'SERVICIO ESPECIAL DIURNO/NOCTURNO',
+                          ].includes(reg.estatus)
                             ? 'bg-emerald-100 text-emerald-800'
                             : reg.estatus.includes('APOYO') || reg.estatus.includes('SERVICIO ESPECIAL')
                             ? 'bg-amber-100 text-amber-800'
@@ -731,7 +779,6 @@ export default function AnalistaHome() {
               <span>{errorBusqueda}</span>
             </div>
           )}
-
           {resultadoCedula && (
             <div className="space-y-5">
               <div className="bg-white p-5 rounded-2xl shadow-sm border-l-4 border-teal-600 space-y-4">
@@ -751,6 +798,34 @@ export default function AnalistaHome() {
                         </>
                       )}
                     </p>
+                    {resultadoCedula.fichaActual && (
+                      <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-slate-600">
+                          Fecha de Ingreso:{' '}
+                          {resultadoCedula.fichaActual.fecha_ingreso ? (
+                            <strong>
+                              {new Date(resultadoCedula.fichaActual.fecha_ingreso).toLocaleDateString('es-VE')}
+                            </strong>
+                          ) : (
+                            <span className="text-amber-700 font-bold">Sin fecha registrada</span>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFechaIngresoAnalistaInput(
+                              resultadoCedula.fichaActual.fecha_ingreso
+                                ? new Date(resultadoCedula.fichaActual.fecha_ingreso).toLocaleDateString('en-CA')
+                                : hoyLocal
+                            );
+                            setEditandoFechaIngresoAnalista(!editandoFechaIngresoAnalista);
+                          }}
+                          className="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 cursor-pointer"
+                        >
+                          Editar Fecha de Ingreso
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {resultadoCedula.fichaActual && (
@@ -765,13 +840,41 @@ export default function AnalistaHome() {
                     </span>
                   )}
                 </div>
+
+                {editandoFechaIngresoAnalista && resultadoCedula.fichaActual && (
+                  <form
+                    onSubmit={guardarFechaIngresoPorAnalista}
+                    className="bg-blue-50/60 p-3.5 rounded-xl border border-blue-200 flex flex-wrap items-center gap-3"
+                  >
+                    <label className="text-xs font-bold text-blue-900">Nueva Fecha de Ingreso:</label>
+                    <input
+                      type="date"
+                      required
+                      value={fechaIngresoAnalistaInput}
+                      onChange={(e) => setFechaIngresoAnalistaInput(e.target.value)}
+                      className="border border-blue-300 rounded-lg px-3 py-1.5 text-xs font-semibold bg-white"
+                    />
+                    <button
+                      type="submit"
+                      disabled={guardandoCambio}
+                      className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 cursor-pointer"
+                    >
+                      {guardandoCambio ? 'Guardando...' : 'Guardar Fecha'}
+                    </button>
+                  </form>
+                )}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-100">
                   <div className="bg-slate-50 p-3 rounded-xl">
                     <div className="text-xs font-bold text-slate-500 uppercase">Guardias Presente</div>
                     <div className="text-xl font-black text-emerald-700">
                       {
-                        resultadoCedula.asistencias.filter(
-                          (a) => a.estatus === 'PRESENTE' || a.estatus === 'SERVICIO ESPECIAL PROPIO'
+                        resultadoCedula.asistencias.filter((a) =>
+                          [
+                            'PRESENTE',
+                            'SERVICIO ESPECIAL PROPIO',
+                            'SERVICIO ESPECIAL MIXTO',
+                            'SERVICIO ESPECIAL DIURNO/NOCTURNO',
+                          ].includes(a.estatus)
                         ).length
                       }
                     </div>
@@ -879,6 +982,8 @@ export default function AnalistaHome() {
                   className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold"
                 >
                   <option value="PRESENTE">PRESENTE</option>
+                  <option value="SERVICIO ESPECIAL MIXTO">S.E MIXTO</option>
+                  <option value="SERVICIO ESPECIAL DIURNO/NOCTURNO">S.E DIURNO/NOCTURNO</option>
                   <option value="SERVICIO ESPECIAL PROPIO">SERVICIO ESPECIAL PROPIO</option>
                   <option value="SERVICIO ESPECIAL RECIBIDO">SERVICIO ESPECIAL RECIBIDO</option>
                   <option value="SERVICIO ESPECIAL ENVIADO">SERVICIO ESPECIAL ENVIADO</option>
@@ -901,10 +1006,10 @@ export default function AnalistaHome() {
                   onChange={(e) => setNuevoTurno(e.target.value)}
                   className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold"
                 >
-                  <option value="MIXTO">MIXTO (24x48)</option>
+                  <option value="MIXTO">MIXTO</option>
                   <option value="24X24">24X24</option>
-                  <option value="DIURNO">DIURNO (12h)</option>
-                  <option value="NOCTURNO">NOCTURNO (12h)</option>
+                  <option value="DIURNO">DIURNO</option>
+                  <option value="NOCTURNO">NOCTURNO</option>
                 </select>
               </div>
             </div>
