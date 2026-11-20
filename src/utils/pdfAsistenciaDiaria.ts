@@ -1,19 +1,28 @@
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 
 export interface RegistroAsistenciaPDF {
-  proyecto?: string;
   cedula: string;
-  nombre_completo: string;
   cargo?: string;
+  nombre_completo: string;
   grupo: string;
-  turno: string;
-  hora_entrada?: string | null;
+  turno?: string;
+  hora_entrada?: string;
   estatus: string;
+  proyecto?: string;
   proyecto_apoyo?: string | null;
   observacion?: string | null;
   modificado_por?: string | null;
-  modificado_at?: string | null;
   justificacion_modificacion?: string | null;
+  created_at?: string;
+}
+
+export interface MovimientoDiaPDF {
+  proyecto?: string;
+  tipo_movimiento: string;
+  cedula: string;
+  nombre_completo: string;
+  proyecto_relacionado?: string | null;
+  observacion?: string | null;
 }
 
 export interface AuditoriaModificacionPDF {
@@ -27,15 +36,6 @@ export interface AuditoriaModificacionPDF {
   created_at: string;
 }
 
-export interface MovimientoDiaPDF {
-  proyecto?: string;
-  tipo_movimiento: string;
-  cedula: string;
-  nombre_completo: string;
-  proyecto_relacionado?: string | null;
-  observacion?: string | null;
-}
-
 export interface DatosInformeDiarioPDF {
   proyecto: string;
   fecha: string;
@@ -46,29 +46,55 @@ export interface DatosInformeDiarioPDF {
 
 const cargarLogoBase64 = (): Promise<string | null> => {
   return new Promise((resolve) => {
-    try {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
         canvas.height = img.height;
         const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(null);
-          return;
-        }
+        if (!ctx) return resolve(null);
         ctx.drawImage(img, 0, 0);
         resolve(canvas.toDataURL('image/jpeg', 0.9));
-      };
-      img.onerror = () => resolve(null);
-      img.src = '/logo-vip3000.jpg';
-    } catch {
-      resolve(null);
-    }
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = '/logo-vip.jpg';
   });
 };
-const dibujarBloqueVariablesYMotivos = (
+
+export const ordenarRegistrosAsistencia = <T extends RegistroAsistenciaPDF>(lista: T[]): T[] => {
+  const obtenerPrioridad = (estatus: string): number => {
+    const est = String(estatus || '').toUpperCase();
+    if (est === 'PRESENTE') return 1;
+    if (est === 'APOYO RECIBIDO') return 2;
+    if (
+      [
+        'SERVICIO ESPECIAL PROPIO',
+        'SERVICIO ESPECIAL MIXTO',
+        'SERVICIO ESPECIAL DIURNO/NOCTURNO',
+        'SERVICIO ESPECIAL RECIBIDO',
+      ].includes(est)
+    ) {
+      return 3;
+    }
+    return 4;
+  };
+
+  return [...lista].sort((a, b) => {
+    const prioA = obtenerPrioridad(a.estatus);
+    const prioB = obtenerPrioridad(b.estatus);
+    if (prioA !== prioB) return prioA - prioB;
+
+    const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return tA - tB;
+  });
+};
+function dibujarBloqueVariablesYMotivos(
   doc: jsPDF,
   datos: DatosInformeDiarioPDF,
   yInicial: number,
@@ -76,170 +102,134 @@ const dibujarBloqueVariablesYMotivos = (
   pageWidth: number,
   pageHeight: number,
   dibujarEncabezado: () => void
-) => {
-  let y = yInicial;
-
-  const nuevosIngresos = datos.movimientosDia.filter((m) => m.tipo_movimiento === 'NUEVO INGRESO').length;
-  const egresos = datos.movimientosDia.filter((m) => m.tipo_movimiento === 'EGRESO').length;
-  const bajasPorSalud = datos.registros.filter((r) => r.estatus === 'BAJA POR SALUD').length;
-  const vacacionesYFaltasJust = datos.registros.filter(
-    (r) => r.estatus === 'VACACIONES' || r.estatus === 'FALTA JUSTIFICADA'
-  ).length;
-
-  const servEspPropio = datos.registros.filter((r) =>
-    [
-      'SERVICIO ESPECIAL PROPIO',
-      'SERVICIO ESPECIAL MIXTO',
-      'SERVICIO ESPECIAL DIURNO/NOCTURNO',
-    ].includes(r.estatus)
-  ).length;
-
-  const servEspRecibido = datos.registros.filter(
-    (r) => r.estatus === 'SERVICIO ESPECIAL RECIBIDO'
-  ).length;
-
-  const servEspEfectivo = servEspPropio + servEspRecibido;
-
-  const servEspEnviado = datos.registros.filter(
-    (r) => r.estatus === 'SERVICIO ESPECIAL ENVIADO'
-  ).length;
-
-  const apoyosRecibidos = datos.registros.filter((r) => r.estatus === 'APOYO RECIBIDO').length;
-  const apoyosEnviados = datos.registros.filter((r) => r.estatus === 'APOYO ENVIADO').length;
-  const faltasDelDia = datos.registros.filter((r) => r.estatus === 'FALTA INJUSTIFICADA').length;
-
-  if (y > pageHeight - 66) {
-    doc.addPage();
-    dibujarEncabezado();
-    y = 40;
-  } else {
-    y += 4;
-  }
-
-  doc.setFillColor(241, 245, 249);
-  doc.setDrawColor(148, 163, 184);
-  doc.rect(margin, y, pageWidth - margin * 2, 41, 'FD');
-
-  doc.setTextColor(15, 23, 42);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.text('RESUMEN DE VARIABLES OPERATIVAS DEL DÍA', margin + 3, y + 6);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.1);
-
-  const col1 = margin + 4;
-  const col2 = margin + 68;
-  const col3 = margin + 132;
-
-  doc.text(`• Nuevos Ingresos: ${nuevosIngresos}`, col1, y + 13);
-  doc.text(`• Servicio Especial Efectivo: ${servEspEfectivo}`, col1, y + 20);
-  doc.text(`  (Propio/S.E: ${servEspPropio} | Recibido: ${servEspRecibido})`, col1, y + 26.5);
-  doc.text(`• Vacaciones / F. Just.: ${vacacionesYFaltasJust}`, col1, y + 33.5);
-
-  doc.text(`• Apoyos Recibidos: ${apoyosRecibidos}`, col2, y + 13);
-  doc.text(`• Servicio Especial Enviado: ${servEspEnviado}`, col2, y + 20);
-  doc.text(`• Apoyos Enviados: ${apoyosEnviados}`, col2, y + 26.5);
-
-  doc.setTextColor(185, 28, 28);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`• Faltas del Día: ${faltasDelDia}`, col3, y + 13);
-  doc.text(`• Bajas por Salud: ${bajasPorSalud}`, col3, y + 20);
-  doc.setTextColor(15, 23, 42);
-  doc.text(`• Egresos: ${egresos}`, col3, y + 26.5);
-
-  y += 47;
-
-  const novedadesConMotivo: string[] = [];
-
-  datos.movimientosDia.forEach((m) => {
-    if (
-      [
-        'EGRESO',
-        'TRASLADO ENVIADO',
-        'TRASLADO RECIBIDO',
-        'SERVICIO ESPECIAL ENVIADO',
-        'SERVICIO ESPECIAL RECIBIDO',
-      ].includes(m.tipo_movimiento)
-    ) {
-      const proyTag = m.proyecto ? `[${m.proyecto}] ` : '';
-      const destinoOrigen = m.proyecto_relacionado ? ` (${m.proyecto_relacionado})` : '';
-      const motivo = m.observacion ? ` — Motivo/Detalle: ${m.observacion}` : ' — Sin motivo especificado';
-      novedadesConMotivo.push(`• ${proyTag}[${m.tipo_movimiento}] ${m.nombre_completo} (${m.cedula})${destinoOrigen}${motivo}`);
-    }
-  });
-
-  datos.registros.forEach((r) => {
-    if (r.estatus === 'BAJA POR SALUD') {
-      const proyTag = r.proyecto ? `[${r.proyecto}] ` : '';
-      const motivoSalud = r.justificacion_modificacion || r.observacion || 'Sin motivo especificado';
-      novedadesConMotivo.push(`• ${proyTag}[BAJA POR SALUD] ${r.nombre_completo} (${r.cedula}) — Motivo: ${motivoSalud}`);
-    }
-  });
-
-  if (novedadesConMotivo.length > 0) {
-    if (y > pageHeight - 35) {
+) {
+  let y = yInicial + 6;
+  const asegurarEspacio = (altoNecesario: number) => {
+    if (y + altoNecesario > pageHeight - 15) {
       doc.addPage();
       dibujarEncabezado();
       y = 40;
     }
+  };
 
+  const bajasDelDia = datos.movimientosDia.filter((m) =>
+    ['EGRESO', 'TRASLADO ENVIADO', 'APOYO ENVIADO', 'SERVICIO ESPECIAL ENVIADO'].includes(
+      m.tipo_movimiento
+    )
+  );
+  const ingresosDelDia = datos.movimientosDia.filter((m) =>
+    ['NUEVO INGRESO', 'TRASLADO RECIBIDO', 'SERVICIO ESPECIAL RECIBIDO', 'APOYO RECIBIDO'].includes(
+      m.tipo_movimiento
+    )
+  );
+  const faltasReposVac = datos.registros.filter((r) =>
+    [
+      'FALTA INJUSTIFICADA',
+      'FALTA JUSTIFICADA',
+      'REPOSO MEDICO',
+      'BAJA POR SALUD',
+      'VACACIONES',
+      'PERMISO',
+      'DESCANSO',
+    ].includes(r.estatus)
+  );
+
+  asegurarEspacio(26);
+  doc.setFillColor(241, 245, 249);
+  doc.rect(margin, y, pageWidth - margin * 2, 7, 'F');
+  doc.setTextColor(15, 23, 42);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.text('RESUMEN DE VARIABLES, NOVEDADES Y JUSTIFICACIONES DEL DÍA', margin + 2, y + 4.8);
+  y += 10;
+
+  doc.setFontSize(7.8);
+
+  if (bajasDelDia.length > 0) {
+    asegurarEspacio(10);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.setTextColor(15, 23, 42);
-    doc.text('DETALLE DE EGRESOS, TRASLADOS Y BAJAS POR SALUD (MOTIVOS):', margin, y);
-    y += 5;
-
+    doc.setTextColor(185, 28, 28);
+    doc.text(`• Egresos / Traslados / Apoyos Enviados (${bajasDelDia.length}):`, margin + 2, y);
+    y += 4.5;
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.8);
     doc.setTextColor(30, 41, 59);
-
-    novedadesConMotivo.forEach((item) => {
-      if (y > pageHeight - 15) {
-        doc.addPage();
-        y = 20;
-      }
-      const lineas = doc.splitTextToSize(item, pageWidth - margin * 2);
-      doc.text(lineas, margin, y);
-      y += lineas.length * 4.2 + 1.5;
+    bajasDelDia.forEach((b) => {
+      asegurarEspacio(6);
+      const linea = `   - [${b.tipo_movimiento}] ${b.nombre_completo} (${b.cedula})${
+        b.proyecto_relacionado ? ` -> ${b.proyecto_relacionado}` : ''
+      }${b.observacion ? ` | Motivo: ${b.observacion}` : ''}`;
+      const partidas = doc.splitTextToSize(linea, pageWidth - margin * 2 - 4);
+      doc.text(partidas, margin + 2, y);
+      y += partidas.length * 4.2;
     });
+    y += 2;
+  }
 
-    y += 3;
+  if (ingresosDelDia.length > 0) {
+    asegurarEspacio(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(21, 128, 61);
+    doc.text(`• Ingresos / Traslados / Apoyos Recibidos (${ingresosDelDia.length}):`, margin + 2, y);
+    y += 4.5;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(30, 41, 59);
+    ingresosDelDia.forEach((ing) => {
+      asegurarEspacio(6);
+      const linea = `   - [${ing.tipo_movimiento}] ${ing.nombre_completo} (${ing.cedula})${
+        ing.proyecto_relacionado ? ` <- ${ing.proyecto_relacionado}` : ''
+      }${ing.observacion ? ` | Obs: ${ing.observacion}` : ''}`;
+      const partidas = doc.splitTextToSize(linea, pageWidth - margin * 2 - 4);
+      doc.text(partidas, margin + 2, y);
+      y += partidas.length * 4.2;
+    });
+    y += 2;
+  }
+
+  if (faltasReposVac.length > 0) {
+    asegurarEspacio(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(180, 83, 9);
+    doc.text(
+      `• Faltas / Salud / Vacaciones / Permisos (${faltasReposVac.length}):`,
+      margin + 2,
+      y
+    );
+    y += 4.5;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(30, 41, 59);
+    faltasReposVac.forEach((f) => {
+      asegurarEspacio(6);
+      const linea = `   - [${f.estatus}] ${f.nombre_completo} (${f.cedula})${
+        f.observacion ? ` | Motivo: ${f.observacion}` : ''
+      }`;
+      const partidas = doc.splitTextToSize(linea, pageWidth - margin * 2 - 4);
+      doc.text(partidas, margin + 2, y);
+      y += partidas.length * 4.2;
+    });
+    y += 2;
   }
 
   if (datos.auditoriaModificaciones.length > 0) {
-    if (y > pageHeight - 35) {
-      doc.addPage();
-      dibujarEncabezado();
-      y = 40;
-    }
-
+    asegurarEspacio(12);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.setTextColor(180, 83, 9);
-    doc.text('BITÁCORA DE MODIFICACIONES REALIZADAS:', margin, y);
-    y += 5;
-
+    doc.setTextColor(30, 64, 175);
+    doc.text(
+      `• Modificaciones Auditadas en Sistema (${datos.auditoriaModificaciones.length}):`,
+      margin + 2,
+      y
+    );
+    y += 4.5;
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(51, 65, 85);
-
-    datos.auditoriaModificaciones.forEach((mod) => {
-      if (y > pageHeight - 15) {
-        doc.addPage();
-        y = 20;
-      }
-      const horaMod = new Date(mod.created_at).toLocaleString('es-VE', {
-        timeZone: 'America/Caracas',
-      });
-      const proyMod = mod.proyecto ? `[${mod.proyecto}] ` : '';
-      const linea = `[${horaMod}] ${proyMod}${mod.modificado_por} modificó a ${mod.nombre_completo} (${mod.cedula}): ${mod.estatus_anterior} -> ${mod.estatus_nuevo}. Justificación: ${mod.justificacion}`;
-      const lineasEnvueltas = doc.splitTextToSize(linea, pageWidth - margin * 2);
-      doc.text(lineasEnvueltas, margin, y);
-      y += lineasEnvueltas.length * 4 + 1.5;
+    doc.setTextColor(30, 41, 59);
+    datos.auditoriaModificaciones.forEach((aud) => {
+      asegurarEspacio(6);
+      const linea = `   - ${aud.nombre_completo} (${aud.cedula}): ${aud.estatus_anterior} -> ${aud.estatus_nuevo} | Justificación: ${aud.justificacion} (Por: ${aud.modificado_por})`;
+      const partidas = doc.splitTextToSize(linea, pageWidth - margin * 2 - 4);
+      doc.text(partidas, margin + 2, y);
+      y += partidas.length * 4.2;
     });
   }
-};
+}
 export async function generarPDFAsistenciaDiaria(
   datos: DatosInformeDiarioPDF,
   modo: 'DESCARGAR' | 'IMPRIMIR' = 'DESCARGAR'
@@ -250,6 +240,7 @@ export async function generarPDFAsistenciaDiaria(
   const margin = 14;
 
   const logoBase64 = await cargarLogoBase64();
+  const registrosOrdenados = ordenarRegistrosAsistencia(datos.registros);
 
   const dibujarEncabezado = () => {
     doc.setFillColor(15, 23, 42);
@@ -294,12 +285,12 @@ export async function generarPDFAsistenciaDiaria(
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.6);
 
-  if (datos.registros.length === 0) {
+  if (registrosOrdenados.length === 0) {
     doc.setTextColor(100, 116, 139);
     doc.text('No se encontraron registros de guardia para esta fecha y proyecto.', margin + 2, y + 4);
     y += 10;
   } else {
-    datos.registros.forEach((reg, idx) => {
+    registrosOrdenados.forEach((reg, idx) => {
       if (y > pageHeight - 45) {
         doc.addPage();
         dibujarEncabezado();
@@ -342,6 +333,8 @@ export async function generarPDFAsistenciaDiaria(
           'SERVICIO ESPECIAL PROPIO',
           'SERVICIO ESPECIAL MIXTO',
           'SERVICIO ESPECIAL DIURNO/NOCTURNO',
+          'SERVICIO ESPECIAL RECIBIDO',
+          'APOYO RECIBIDO',
         ].includes(reg.estatus)
       ) {
         doc.setTextColor(21, 128, 61);

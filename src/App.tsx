@@ -24,6 +24,7 @@ const AsistenciasPage = lazy(() => import('./pages/AsistenciasPage'));
 const SupervisionesPage = lazy(() => import('./pages/SupervisionesPage'));
 const AsistenciaLiderPage = lazy(() => import('./pages/AsistenciaLiderPage'));
 const AnalistaHome = lazy(() => import('./pages/AnalistaHome'));
+const MonitorAsistenciaOperativa = lazy(() => import('./components/MonitorAsistenciaOperativa'));
 
 function LoadingScreen() {
   return (
@@ -79,6 +80,29 @@ function RootRedirect() {
       return <LiderHome />;
   }
 }
+function MonitorPorRolRoute() {
+  const { currentUser } = useAuth();
+  const rol = (currentUser?.role || '').toLowerCase();
+  if (rol === 'cecom') {
+    return (
+      <div className="p-4 md:p-6 max-w-6xl mx-auto">
+        <MonitorAsistenciaOperativa modo="CECOM" titulo="Fuerza Operativa por Proyecto (CECOM)" />
+      </div>
+    );
+  }
+  if (rol === 'operaciones') {
+    return (
+      <div className="p-4 md:p-6 max-w-6xl mx-auto">
+        <MonitorAsistenciaOperativa modo="OPERACIONES" titulo="Personal Operativo en Guardia (Operaciones)" />
+      </div>
+    );
+  }
+  return (
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
+      <MonitorAsistenciaOperativa modo="DIRECTIVA" titulo="Control Completo de Asistencia por Proyecto" />
+    </div>
+  );
+}
 export default function App() {
   return (
     <AuthProvider>
@@ -109,7 +133,13 @@ export default function App() {
                   </RoleRoute>
                 } />
                 
-                <Route path="lista-reportes" element={
+                <Route path="monitor-asistencia" element={
+                  <RoleRoute roles={['cecom', 'operaciones', 'directiva', 'administrador', 'admin']}>
+                    <MonitorPorRolRoute />
+                  </RoleRoute>
+                } />
+
+		  <Route path="lista-reportes" element={
                   <RoleRoute roles={['operaciones', 'cecom', 'directiva', 'administrador', 'admin', 'cliente']}>
                     <ReportList />
                   </RoleRoute>

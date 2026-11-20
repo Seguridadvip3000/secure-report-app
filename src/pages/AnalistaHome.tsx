@@ -5,33 +5,61 @@ import { PROYECTOS } from '../data/constants';
 import {
   generarPDFAsistenciaDiaria,
   generarPDFInformeDiarioDirectiva,
+  ordenarRegistrosAsistencia,
+  DatosInformeDiarioPDF,
 } from '../utils/pdfAsistenciaDiaria';
 import {
   Search,
-  Calendar,
+  ClipboardList,
+  UserCheck,
   Building2,
-  ClipboardCheck,
+  Calendar,
   ArrowRightLeft,
   CheckCircle2,
   AlertCircle,
-  Clock,
-  FileSpreadsheet,
-  Edit3,
-  Printer,
   Download,
+  Printer,
+  Edit3,
   History,
+  Clock,
+  Users,
 } from 'lucide-react';
+
+const PROYECTOS_CON_JEFE_OP = ['ESTACIONAMIENTO CCCT', 'COMERCIO CCCT'];
+const PROYECTOS_CON_DIURNO = [
+  'CHACAITO',
+  'BARUTA',
+  'TRINIDAD',
+  'CENTRO PLAZA',
+  'CONCRESA',
+  'TRINITARIAS',
+  'LA GRANJA',
+  'ASOPROSUR',
+  'ASOPRSUR',
+];
+const PROYECTOS_CON_NOCTURNO = ['YARIBU', 'DUNCAN LA CALIFORNIA'];
+
+const ESTATUS_ASISTENTES = [
+  'PRESENTE',
+  'SERVICIO ESPECIAL PROPIO',
+  'SERVICIO ESPECIAL MIXTO',
+  'SERVICIO ESPECIAL DIURNO/NOCTURNO',
+  'SERVICIO ESPECIAL RECIBIDO',
+  'APOYO RECIBIDO',
+];
 
 export default function AnalistaHome() {
   const { currentUser } = useAuth();
   const hoyLocal = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Caracas' });
 
   const rolActual = (currentUser?.role || '').toLowerCase();
-  const puedeEditarHoraDirectiva = ['directiva', 'administrador', 'admin'].includes(rolActual);
-  const esDirectivaOAdmin = ['directiva', 'administrador', 'admin'].includes(rolActual);
+  const esDirectivaOAdmin = ['directiva', 'admin', 'directivo'].includes(rolActual);
+  const puedeEditarHoraDirectiva = ['directiva', 'admin', 'directivo'].includes(rolActual);
   const nombreAnalista = currentUser?.nombre_completo || currentUser?.username || 'Analista';
 
-  const [pestana, setPestana] = useState<'ASISTENCIAS_PROYECTO' | 'CONSULTA_CEDULA'>('ASISTENCIAS_PROYECTO');
+  const [pestana, setPestana] = useState<'ASISTENCIAS_PROYECTO' | 'PLANTILLA_PROYECTO' | 'HISTORIAL_CEDULA'>(
+    'ASISTENCIAS_PROYECTO'
+  );
   const [listaProyectos, setListaProyectos] = useState<string[]>([]);
 
   const [proyectoFiltro, setProyectoFiltro] = useState<string>('TODOS');
@@ -40,21 +68,35 @@ export default function AnalistaHome() {
   const [turnoFiltro, setTurnoFiltro] = useState<string>('TODOS');
   const [asistenciasProyecto, setAsistenciasProyecto] = useState<any[]>([]);
   const [auditoriaDia, setAuditoriaDia] = useState<any[]>([]);
+  const [liderActivoPorQR, setLiderActivoPorQR] = useState<boolean>(false);
   const [cargandoAsist, setCargandoAsist] = useState(false);
 
+  // Pestaña Plantilla por Proyecto (A / B / C)
+  const [proyectoPlantilla, setProyectoPlantilla] = useState<string>('');
+  const [plantillaProyectoList, setPlantillaProyectoList] = useState<any[]>([]);
+  const [filtroHorarioPlantilla, setFiltroHorarioPlantilla] = useState<'MIXTO' | '24X24' | 'DIURNO_NOCTURNO'>('MIXTO');
+  const [grupoDesplegadoAnalista, setGrupoDesplegadoAnalista] = useState<'A' | 'B' | 'C'>('B');
+  const [oficialEditandoFechaTab, setOficialEditandoFechaTab] = useState<any | null>(null);
+  const [fechaIngresoTabInput, setFechaIngresoTabInput] = useState<string>(hoyLocal);
+  const [cargandoPlantilla, setCargandoPlantilla] = useState(false);
+
+  // Modal Modificar Asistencia
   const [registroEditando, setRegistroEditando] = useState<any | null>(null);
   const [nuevoEstatus, setNuevoEstatus] = useState<string>('PRESENTE');
   const [nuevoTurno, setNuevoTurno] = useState<string>('MIXTO');
-  const [nuevaHoraEntrada, setNuevaHoraEntrada] = useState<string>('07:00 a. m.');
+  const [nuevaHoraEntrada, setNuevaHoraEntrada] = useState<string>('');
   const [nuevoProyectoApoyo, setNuevoProyectoApoyo] = useState<string>('');
   const [justificacionCambio, setJustificacionCambio] = useState<string>('');
   const [guardandoCambio, setGuardandoCambio] = useState(false);
-  const [mensajeGlobal, setMensajeGlobal] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
 
-  const [cedulaBusqueda, setCedulaBusqueda] = useState<string>('');
-  const [fechaDesdeCedula, setFechaDesdeCedula] = useState<string>('');
-  const [fechaHastaCedula, setFechaHastaCedula] = useState<string>('');
+  // Pestaña Historial por Cédula
+  const [cedulaBusqueda, setCedulaBusqueda] = useState('');
+  const [fechaDesdeCedula, setFechaDesdeCedula] = useState('');
+  const [fechaHastaCedula, setFechaHastaCedula] = useState('');
   const [buscandoCedula, setBuscandoCedula] = useState(false);
+  const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null);
+  const [editandoFechaIngresoAnalista, setEditandoFechaIngresoAnalista] = useState(false);
+  const [fechaIngresoAnalistaInput, setFechaIngresoAnalistaInput] = useState(hoyLocal);
   const [resultadoCedula, setResultadoCedula] = useState<{
     cedula: string;
     nombreCompleto: string;
@@ -62,11 +104,8 @@ export default function AnalistaHome() {
     movimientos: any[];
     asistencias: any[];
   } | null>(null);
-  const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null);
 
-  // Edición de Fecha de Ingreso por parte de la Analista
-  const [editandoFechaIngresoAnalista, setEditandoFechaIngresoAnalista] = useState(false);
-  const [fechaIngresoAnalistaInput, setFechaIngresoAnalistaInput] = useState<string>(hoyLocal);
+  const [mensajeGlobal, setMensajeGlobal] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
   useEffect(() => {
     const cargarProyectos = async () => {
       const setProy = new Set<string>(Array.isArray(PROYECTOS) ? PROYECTOS : []);
@@ -77,46 +116,74 @@ export default function AnalistaHome() {
           if (val) setProy.add(String(val).trim());
         });
       }
-      setListaProyectos(Array.from(setProy).sort());
+      const ordenados = Array.from(setProy).sort();
+      setListaProyectos(ordenados);
+      if (ordenados.length > 0 && !proyectoPlantilla) {
+        setProyectoPlantilla(ordenados.at(0) || '');
+      }
     };
     cargarProyectos();
   }, []);
 
-  const consultarAsistenciasProyecto = async () => {
+  const verificarLiderPorQR = async (proyecto: string, fechaRef: string) => {
+    if (!proyecto || proyecto === 'TODOS') {
+      setLiderActivoPorQR(false);
+      return;
+    }
+    try {
+      const { data: logsHoy } = await supabase
+        .from('attendance_logs')
+        .select('*')
+        .eq('project_name', proyecto)
+        .gte('created_at', `${fechaRef}T00:00:00`)
+        .lte('created_at', `${fechaRef}T23:59:59`)
+        .order('created_at', { ascending: true });
+
+      const listaLogs = Array.isArray(logsHoy) ? logsHoy : [];
+      if (listaLogs.length === 0) {
+        setLiderActivoPorQR(false);
+        return;
+      }
+      const ultimoLog = listaLogs.at(-1);
+      const tipoEvento = String(
+        ultimoLog?.type || ultimoLog?.event_type || ultimoLog?.action || ultimoLog?.tipo || ''
+      ).toUpperCase();
+      setLiderActivoPorQR(
+        !(tipoEvento.includes('SALIDA') || tipoEvento.includes('OUT') || tipoEvento.includes('EXIT'))
+      );
+    } catch {
+      setLiderActivoPorQR(false);
+    }
+  };
+
+  const consultarAsistencias = async () => {
     setCargandoAsist(true);
     try {
       let query = supabase
         .from('asistencias_diarias_oficiales')
         .select('*')
         .gte('fecha', fechaDesdeAsist)
-        .lte('fecha', fechaHastaAsist)
-        .order('fecha', { ascending: false })
-        .order('proyecto', { ascending: true })
-        .order('nombre_completo', { ascending: true });
+        .lte('fecha', fechaHastaAsist);
 
-      if (proyectoFiltro !== 'TODOS') {
-        query = query.eq('proyecto', proyectoFiltro);
-      }
-      if (turnoFiltro !== 'TODOS') {
-        query = query.eq('turno', turnoFiltro);
-      }
+      if (proyectoFiltro !== 'TODOS') query = query.eq('proyecto', proyectoFiltro);
+      if (turnoFiltro !== 'TODOS') query = query.eq('turno', turnoFiltro);
 
-      const { data, error } = await query.limit(400);
+      const { data, error } = await query.limit(1000);
       if (error) throw error;
-      setAsistenciasProyecto(data || []);
+      setAsistenciasProyecto(Array.isArray(data) ? data : []);
 
-      let queryAud = supabase
+      await verificarLiderPorQR(proyectoFiltro, fechaDesdeAsist);
+
+      let qAud = supabase
         .from('auditoria_modificaciones_asistencia')
         .select('*')
         .gte('fecha', fechaDesdeAsist)
         .lte('fecha', fechaHastaAsist)
         .order('created_at', { ascending: false });
 
-      if (proyectoFiltro !== 'TODOS') {
-        queryAud = queryAud.eq('proyecto', proyectoFiltro);
-      }
-      const { data: audData } = await queryAud.limit(100);
-      setAuditoriaDia(audData || []);
+      if (proyectoFiltro !== 'TODOS') qAud = qAud.eq('proyecto', proyectoFiltro);
+      const { data: dataAud } = await qAud.limit(100);
+      setAuditoriaDia(Array.isArray(dataAud) ? dataAud : []);
     } catch (err) {
       console.error('Error consultando asistencias:', err);
     } finally {
@@ -124,17 +191,73 @@ export default function AnalistaHome() {
     }
   };
 
+  const consultarPlantillaProyecto = async (proy: string) => {
+    if (!proy) return;
+    setCargandoPlantilla(true);
+    try {
+      const { data, error } = await supabase
+        .from('plantilla_proyectos')
+        .select('*')
+        .eq('proyecto', proy)
+        .eq('estado', 'ACTIVO')
+        .order('apellidos', { ascending: true });
+
+      if (error) throw error;
+      setPlantillaProyectoList(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error consultando plantilla:', err);
+    } finally {
+      setCargandoPlantilla(false);
+    }
+  };
+
   useEffect(() => {
     if (pestana === 'ASISTENCIAS_PROYECTO') {
-      consultarAsistenciasProyecto();
+      consultarAsistencias();
     }
-  }, [pestana, proyectoFiltro, fechaDesdeAsist, fechaHastaAsist, turnoFiltro]);
+  }, [proyectoFiltro, fechaDesdeAsist, fechaHastaAsist, turnoFiltro, pestana]);
+
+  useEffect(() => {
+    if (pestana === 'PLANTILLA_PROYECTO' && proyectoPlantilla) {
+      consultarPlantillaProyecto(proyectoPlantilla);
+    }
+  }, [proyectoPlantilla, pestana]);
+  const guardarFechaIngresoDesdePlantilla = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!oficialEditandoFechaTab || !fechaIngresoTabInput) return;
+
+    setGuardandoCambio(true);
+    try {
+      const fechaISO = `${fechaIngresoTabInput}T07:00:00-04:00`;
+      const { error } = await supabase
+        .from('plantilla_proyectos')
+        .update({
+          fecha_ingreso: fechaISO,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', oficialEditandoFechaTab.id);
+
+      if (error) throw error;
+
+      setMensajeGlobal({
+        tipo: 'exito',
+        texto: `✅ Fecha de ingreso de ${oficialEditandoFechaTab.nombres} ${oficialEditandoFechaTab.apellidos} actualizada a ${fechaIngresoTabInput}.`,
+      });
+      setOficialEditandoFechaTab(null);
+      await consultarPlantillaProyecto(proyectoPlantilla);
+    } catch (err: any) {
+      setMensajeGlobal({ tipo: 'error', texto: 'Error guardando fecha: ' + (err?.message || 'Error.') });
+    } finally {
+      setGuardandoCambio(false);
+    }
+  };
+
   const abrirModalEdicion = (reg: any) => {
     setMensajeGlobal(null);
     setRegistroEditando(reg);
-    setNuevoEstatus(reg.estatus || 'PRESENTE');
+    setNuevoEstatus(reg.estatus);
     setNuevoTurno(reg.turno || 'MIXTO');
-    setNuevaHoraEntrada(reg.hora_entrada || '07:00 a. m.');
+    setNuevaHoraEntrada(reg.hora_entrada || '07:00 AM');
     setNuevoProyectoApoyo(reg.proyecto_apoyo || '');
     setJustificacionCambio('');
   };
@@ -146,51 +269,32 @@ export default function AnalistaHome() {
     if (!justificacionCambio.trim()) {
       setMensajeGlobal({
         tipo: 'error',
-        texto:
-          nuevoEstatus === 'BAJA POR SALUD'
-            ? '⚠️ Debe explicar obligatoriamente el porqué de la BAJA POR SALUD.'
-            : '⚠️ Debe escribir obligatoriamente una observación que justifique la modificación.',
+        texto: '⚠️ Debe escribir obligatoriamente el motivo o justificación de la modificación.',
       });
       return;
     }
 
-    const requiereDestino =
-      nuevoEstatus === 'APOYO ENVIADO' ||
-      nuevoEstatus === 'SERVICIO ESPECIAL ENVIADO' ||
-      nuevoEstatus === 'APOYO RECIBIDO' ||
-      nuevoEstatus === 'SERVICIO ESPECIAL RECIBIDO';
+    const requiereProyectoRel = [
+      'APOYO ENVIADO',
+      'SERVICIO ESPECIAL ENVIADO',
+      'APOYO RECIBIDO',
+      'SERVICIO ESPECIAL RECIBIDO',
+    ].includes(nuevoEstatus);
 
-    if (requiereDestino && !nuevoProyectoApoyo.trim()) {
+    if (requiereProyectoRel && !nuevoProyectoApoyo.trim()) {
       setMensajeGlobal({
         tipo: 'error',
-        texto: '⚠️ Debe seleccionar el proyecto relacionado para este movimiento.',
+        texto: `⚠️ Debe seleccionar el Proyecto Origen/Destino para ${nuevoEstatus}.`,
       });
       return;
     }
 
     setGuardandoCambio(true);
     try {
-      const ahoraISO = new Date().toISOString();
-      const sinHora = [
-        'FALTA INJUSTIFICADA',
-        'FALTA JUSTIFICADA',
-        'VACACIONES',
-        'DESCANSO',
-        'BAJA POR SALUD',
-      ].includes(nuevoEstatus);
-
-      const horaFinal = sinHora
-        ? '--:--'
-        : puedeEditarHoraDirectiva
-        ? nuevaHoraEntrada
-        : registroEditando.hora_entrada && registroEditando.hora_entrada !== '--:--'
-        ? registroEditando.hora_entrada
-        : new Intl.DateTimeFormat('es-VE', {
-            timeZone: 'America/Caracas',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true,
-          }).format(new Date());
+      const ahora = new Date().toISOString();
+      const justifLimpia = justificacionCambio.trim();
+      const proyRel = requiereProyectoRel ? nuevoProyectoApoyo.trim() : null;
+      const horaFinal = puedeEditarHoraDirectiva ? nuevaHoraEntrada.trim() : registroEditando.hora_entrada;
 
       const { error: errUpd } = await supabase
         .from('asistencias_diarias_oficiales')
@@ -198,12 +302,11 @@ export default function AnalistaHome() {
           estatus: nuevoEstatus,
           turno: nuevoTurno,
           hora_entrada: horaFinal,
-          proyecto_apoyo: requiereDestino ? nuevoProyectoApoyo.trim() : null,
-          observacion: `${registroEditando.observacion ? registroEditando.observacion + ' | ' : ''}[${nuevoEstatus} - ${nombreAnalista}: ${justificacionCambio.trim()}]`,
+          proyecto_apoyo: proyRel,
           modificado_por: nombreAnalista,
-          modificado_at: ahoraISO,
-          justificacion_modificacion: justificacionCambio.trim(),
-          updated_at: ahoraISO,
+          modificado_at: ahora,
+          justificacion_modificacion: justifLimpia,
+          updated_at: ahora,
         })
         .eq('id', registroEditando.id);
 
@@ -218,160 +321,124 @@ export default function AnalistaHome() {
           nombre_completo: registroEditando.nombre_completo,
           estatus_anterior: registroEditando.estatus,
           estatus_nuevo: nuevoEstatus,
-          turno_anterior: registroEditando.turno,
-          turno_nuevo: nuevoTurno,
-          hora_entrada_anterior: registroEditando.hora_entrada,
-          hora_entrada_nueva: horaFinal,
-          justificacion: justificacionCambio.trim(),
+          justificacion: justifLimpia,
           modificado_por: nombreAnalista,
         },
       ]);
 
       setMensajeGlobal({
         tipo: 'exito',
-        texto: `✅ Asistencia de ${registroEditando.nombre_completo} actualizada a ${nuevoEstatus} y auditada correctamente.`,
+        texto: `✅ Asistencia de ${registroEditando.nombre_completo} modificada a ${nuevoEstatus} y registrada en auditoría.`,
       });
       setRegistroEditando(null);
-      setJustificacionCambio('');
-      await consultarAsistenciasProyecto();
+      await consultarAsistencias();
     } catch (err: any) {
       setMensajeGlobal({
         tipo: 'error',
-        texto: 'Error guardando modificación: ' + (err?.message || 'Verifique conexión.'),
+        texto: 'Error al guardar modificación: ' + (err?.message || 'Error de conexión.'),
       });
     } finally {
       setGuardandoCambio(false);
     }
   };
-  const exportarOImprimirAsistenciaProyecto = async (modo: 'DESCARGAR' | 'IMPRIMIR') => {
-    if (proyectoFiltro === 'TODOS') {
-      setMensajeGlobal({
-        tipo: 'error',
-        texto: '⚠️ Seleccione un Proyecto específico para generar o imprimir su Asistencia Diaria.',
-      });
-      return;
-    }
-
-    const { data: movsDia } = await supabase
-      .from('movimientos_plantilla')
-      .select('proyecto, tipo_movimiento, cedula, nombre_completo, proyecto_relacionado, observacion')
-      .eq('proyecto', proyectoFiltro)
-      .gte('created_at', `${fechaDesdeAsist}T00:00:00`)
-      .lte('created_at', `${fechaHastaAsist}T23:59:59`);
-
-    await generarPDFAsistenciaDiaria(
-      {
-        proyecto: proyectoFiltro,
-        fecha:
-          fechaDesdeAsist === fechaHastaAsist
-            ? fechaDesdeAsist
-            : `${fechaDesdeAsist} al ${fechaHastaAsist}`,
-        registros: asistenciasProyecto,
-        movimientosDia: movsDia || [],
-        auditoriaModificaciones: auditoriaDia,
-      },
-      modo
-    );
-  };
-
-  const descargarInformeDiarioSoloDirectiva = async () => {
-    if (!esDirectivaOAdmin) return;
-
-    let queryMovs = supabase
-      .from('movimientos_plantilla')
-      .select('proyecto, tipo_movimiento, cedula, nombre_completo, proyecto_relacionado, observacion')
-      .gte('created_at', `${fechaDesdeAsist}T00:00:00`)
-      .lte('created_at', `${fechaHastaAsist}T23:59:59`);
-
-    if (proyectoFiltro !== 'TODOS') {
-      queryMovs = queryMovs.eq('proyecto', proyectoFiltro);
-    }
-
-    const { data: movsDia } = await queryMovs;
-
-    await generarPDFInformeDiarioDirectiva({
-      proyecto: proyectoFiltro === 'TODOS' ? 'TODOS LOS PROYECTOS' : proyectoFiltro,
-      fecha:
-        fechaDesdeAsist === fechaHastaAsist
-          ? fechaDesdeAsist
-          : `${fechaDesdeAsist} al ${fechaHastaAsist}`,
-      registros: asistenciasProyecto,
-      movimientosDia: movsDia || [],
-      auditoriaModificaciones: auditoriaDia,
-    });
-  };
-
-  const consultarExpedientePorCedula = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setErrorBusqueda(null);
-    setEditandoFechaIngresoAnalista(false);
-
-    const cedLimpia = cedulaBusqueda.trim().toUpperCase();
-    if (!cedLimpia) {
-      setErrorBusqueda('Ingrese un número de cédula para consultar el historial.');
-      return;
-    }
-
-    setBuscandoCedula(true);
+  const prepararYGenerarPDF = async (tipo: 'ASISTENCIA' | 'IMPRIMIR' | 'INFORME_DIRECTIVA') => {
     try {
-      const { data: registrosPlantilla, error: errPlant } = await supabase
-        .from('plantilla_proyectos')
-        .select('*')
-        .ilike('cedula', `%${cedLimpia}%`)
-        .order('created_at', { ascending: false });
-
-      if (errPlant) throw errPlant;
-
-      let queryMovs = supabase
+      let qMovs = supabase
         .from('movimientos_plantilla')
         .select('*')
-        .ilike('cedula', `%${cedLimpia}%`)
+        .gte('created_at', `${fechaDesdeAsist}T00:00:00`)
+        .lte('created_at', `${fechaHastaAsist}T23:59:59`);
+
+      if (proyectoFiltro !== 'TODOS') qMovs = qMovs.eq('proyecto', proyectoFiltro);
+      const { data: movsDia } = await qMovs;
+
+      const etiquetaFecha =
+        fechaDesdeAsist === fechaHastaAsist
+          ? fechaDesdeAsist
+          : `${fechaDesdeAsist} al ${fechaHastaAsist}`;
+
+      const datosPDF: DatosInformeDiarioPDF = {
+        proyecto: proyectoFiltro === 'TODOS' ? 'TODOS LOS PROYECTOS' : proyectoFiltro,
+        fecha: etiquetaFecha,
+        registros: asistenciasProyecto,
+        movimientosDia: Array.isArray(movsDia) ? movsDia : [],
+        auditoriaModificaciones: auditoriaDia,
+      };
+
+      if (tipo === 'INFORME_DIRECTIVA') {
+        await generarPDFInformeDiarioDirectiva(datosPDF);
+      } else {
+        await generarPDFAsistenciaDiaria(datosPDF, tipo === 'IMPRIMIR' ? 'IMPRIMIR' : 'DESCARGAR');
+      }
+    } catch (err: any) {
+      setMensajeGlobal({ tipo: 'error', texto: 'Error generando PDF: ' + (err?.message || 'Error.') });
+    }
+  };
+
+  const consultarExpedientePorCedula = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cedulaLimpia = cedulaBusqueda.trim().toUpperCase();
+    if (!cedulaLimpia) return;
+
+    setBuscandoCedula(true);
+    setErrorBusqueda(null);
+    setResultadoCedula(null);
+    setEditandoFechaIngresoAnalista(false);
+
+    try {
+      const { data: fichasPlantilla, error: errPlantilla } = await supabase
+        .from('plantilla_proyectos')
+        .select('*')
+        .ilike('cedula', `%${cedulaLimpia}%`)
         .order('created_at', { ascending: false });
 
-      if (fechaDesdeCedula) queryMovs = queryMovs.gte('created_at', `${fechaDesdeCedula}T00:00:00`);
-      if (fechaHastaCedula) queryMovs = queryMovs.lte('created_at', `${fechaHastaCedula}T23:59:59`);
+      if (errPlantilla) throw errPlantilla;
 
-      const { data: movsData, error: errMovs } = await queryMovs;
+      let qMovs = supabase
+        .from('movimientos_plantilla')
+        .select('*')
+        .ilike('cedula', `%${cedulaLimpia}%`)
+        .order('created_at', { ascending: false });
+
+      if (fechaDesdeCedula) qMovs = qMovs.gte('created_at', `${fechaDesdeCedula}T00:00:00`);
+      if (fechaHastaCedula) qMovs = qMovs.lte('created_at', `${fechaHastaCedula}T23:59:59`);
+      const { data: historialMovs, error: errMovs } = await qMovs;
       if (errMovs) throw errMovs;
 
-      let queryAsist = supabase
+      let qAsist = supabase
         .from('asistencias_diarias_oficiales')
         .select('*')
-        .ilike('cedula', `%${cedLimpia}%`)
+        .ilike('cedula', `%${cedulaLimpia}%`)
         .order('fecha', { ascending: false });
 
-      if (fechaDesdeCedula) queryAsist = queryAsist.gte('fecha', fechaDesdeCedula);
-      if (fechaHastaCedula) queryAsist = queryAsist.lte('fecha', fechaHastaCedula);
-
-      const { data: asistData, error: errAsist } = await queryAsist;
+      if (fechaDesdeCedula) qAsist = qAsist.gte('fecha', fechaDesdeCedula);
+      if (fechaHastaCedula) qAsist = qAsist.lte('fecha', fechaHastaCedula);
+      const { data: historialAsist, error: errAsist } = await qAsist;
       if (errAsist) throw errAsist;
 
-      const listaPlantilla = Array.isArray(registrosPlantilla) ? registrosPlantilla : [];
-      const listaMovs = Array.isArray(movsData) ? movsData : [];
-      const listaAsist = Array.isArray(asistData) ? asistData : [];
+      const fichaActual = fichasPlantilla && fichasPlantilla.length > 0 ? fichasPlantilla.at(0) : null;
+      const nombreDetectado = fichaActual
+        ? `${fichaActual.nombres} ${fichaActual.apellidos}`
+        : historialMovs && historialMovs.length > 0
+        ? historialMovs.at(0).nombre_completo
+        : historialAsist && historialAsist.length > 0
+        ? historialAsist.at(0).nombre_completo
+        : '';
 
-      if (listaPlantilla.length === 0 && listaMovs.length === 0 && listaAsist.length === 0) {
-        setResultadoCedula(null);
-        setErrorBusqueda(`No se encontraron registros asociados a la cédula "${cedLimpia}".`);
+      if (!fichaActual && (!historialMovs || historialMovs.length === 0) && (!historialAsist || historialAsist.length === 0)) {
+        setErrorBusqueda(`No se encontraron registros para la cédula "${cedulaLimpia}".`);
         return;
       }
 
-      const fichaActiva =
-        listaPlantilla.find((r: any) => r.estado === 'ACTIVO') || listaPlantilla.at(0) || null;
-
-      const nombreEncontrado = fichaActiva
-        ? `${fichaActiva.nombres} ${fichaActiva.apellidos}`
-        : listaMovs.at(0)?.nombre_completo || listaAsist.at(0)?.nombre_completo || 'OFICIAL';
-
       setResultadoCedula({
-        cedula: fichaActiva?.cedula || cedLimpia,
-        nombreCompleto: nombreEncontrado,
-        fichaActual: fichaActiva,
-        movimientos: listaMovs,
-        asistencias: listaAsist,
+        cedula: fichaActual?.cedula || cedulaLimpia,
+        nombreCompleto: nombreDetectado,
+        fichaActual,
+        movimientos: historialMovs || [],
+        asistencias: historialAsist || [],
       });
     } catch (err: any) {
-      setErrorBusqueda('Error consultando expediente: ' + (err?.message || 'Verifique conexión.'));
+      setErrorBusqueda('Error al consultar expediente: ' + (err?.message || 'Verifique conexión.'));
     } finally {
       setBuscandoCedula(false);
     }
@@ -398,27 +465,24 @@ export default function AnalistaHome() {
         tipo: 'exito',
         texto: `✅ Fecha de ingreso de ${resultadoCedula.nombreCompleto} actualizada a ${fechaIngresoAnalistaInput}.`,
       });
-      setEditandoFechaIngresoAnalista(false);
-      await consultarExpedientePorCedula();
-    } catch (err: any) {
-      setMensajeGlobal({
-        tipo: 'error',
-        texto: 'Error actualizando fecha de ingreso: ' + (err?.message || 'Error.'),
+      setResultadoCedula({
+        ...resultadoCedula,
+        fichaActual: { ...resultadoCedula.fichaActual, fecha_ingreso: fechaISO },
       });
+      setEditandoFechaIngresoAnalista(false);
+    } catch (err: any) {
+      setMensajeGlobal({ tipo: 'error', texto: 'Error actualizando fecha: ' + (err?.message || 'Error.') });
     } finally {
       setGuardandoCambio(false);
     }
   };
+  const listaOrdenadaAsistencia = ordenarRegistrosAsistencia(asistenciasProyecto);
+
   const totalPresentes = asistenciasProyecto.filter((a) =>
-    [
-      'PRESENTE',
-      'SERVICIO ESPECIAL PROPIO',
-      'SERVICIO ESPECIAL MIXTO',
-      'SERVICIO ESPECIAL DIURNO/NOCTURNO',
-    ].includes(a.estatus)
+    ESTATUS_ASISTENTES.includes(a.estatus)
   ).length;
   const totalApoyos = asistenciasProyecto.filter((a) =>
-    ['APOYO ENVIADO', 'APOYO RECIBIDO', 'SERVICIO ESPECIAL RECIBIDO', 'SERVICIO ESPECIAL ENVIADO'].includes(
+    ['APOYO RECIBIDO', 'APOYO ENVIADO', 'SERVICIO ESPECIAL RECIBIDO', 'SERVICIO ESPECIAL ENVIADO'].includes(
       a.estatus
     )
   ).length;
@@ -429,18 +493,59 @@ export default function AnalistaHome() {
     )
   ).length;
 
+  // Cálculo del Cuadro Ejecutivo cuando se selecciona un proyecto puntual
+  const proyUpper = proyectoFiltro.toUpperCase();
+  const asistentesProyecto = asistenciasProyecto.filter((a) =>
+    ESTATUS_ASISTENTES.includes(String(a.estatus || '').toUpperCase())
+  );
+  const tieneJefeOp = PROYECTOS_CON_JEFE_OP.includes(proyUpper);
+  const tieneDiurno = PROYECTOS_CON_DIURNO.includes(proyUpper);
+  const tieneNocturno = PROYECTOS_CON_NOCTURNO.includes(proyUpper);
+
+  const countLider = liderActivoPorQR ? 1 : 0;
+  const countJefeOp = tieneJefeOp
+    ? asistentesProyecto.filter((a) => String(a.cargo || '').toUpperCase() === 'J. OPERACIONES').length
+    : 0;
+  const countOficialesMixtos = asistentesProyecto.filter(
+    (a) =>
+      String(a.cargo || '').toUpperCase() !== 'LIDER' &&
+      String(a.cargo || '').toUpperCase() !== 'J. OPERACIONES' &&
+      ['MIXTO', '24X24'].includes(String(a.turno || 'MIXTO').toUpperCase())
+  ).length;
+  const countOficialesDiurnos = asistentesProyecto.filter(
+    (a) =>
+      String(a.cargo || '').toUpperCase() !== 'LIDER' &&
+      String(a.cargo || '').toUpperCase() !== 'J. OPERACIONES' &&
+      String(a.turno || '').toUpperCase() === 'DIURNO'
+  ).length;
+  const countOficialesNocturnos = asistentesProyecto.filter(
+    (a) =>
+      String(a.cargo || '').toUpperCase() !== 'LIDER' &&
+      String(a.cargo || '').toUpperCase() !== 'J. OPERACIONES' &&
+      String(a.turno || '').toUpperCase() === 'NOCTURNO'
+  ).length;
+  const totalCuadroEjecutivo =
+    countLider + countJefeOp + countOficialesMixtos + countOficialesDiurnos + countOficialesNocturnos;
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
-      <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border-l-4 border-teal-600">
-        <span className="text-xs font-bold text-teal-600 uppercase tracking-wider">
-          Módulo de Auditoría y Control de Personal
-        </span>
-        <h1 className="text-2xl font-bold text-slate-800 mt-0.5 flex items-center gap-2">
-          <FileSpreadsheet className="text-teal-600" size={26} /> Panel de Auditoría y Control de Asistencia
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Control de guardia diaria por proyecto, edición auditada siempre activa, descarga/impresión de PDFs y expediente por cédula.
-        </p>
+      <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border-l-4 border-teal-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <span className="text-xs font-bold text-teal-600 uppercase tracking-wider">
+            Módulo Analista de Operaciones
+          </span>
+          <h1 className="text-2xl font-bold text-slate-800 mt-0.5 flex items-center gap-2">
+            <ClipboardList className="text-teal-600" size={26} /> Control de Asistencia, Plantilla y Auditoría
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Consulta y edición auditada de asistencia, gestión de plantilla por grupo (A/B/C) y generación de PDFs.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs font-bold px-3.5 py-2 rounded-xl border bg-emerald-50 border-emerald-200 text-emerald-800">
+          <Clock size={16} /> Edición de Asistencia: ACTIVA
+        </div>
       </div>
 
       {mensajeGlobal && (
@@ -460,32 +565,38 @@ export default function AnalistaHome() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
         <button
           type="button"
           onClick={() => setPestana('ASISTENCIAS_PROYECTO')}
           className={`py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            pestana === 'ASISTENCIAS_PROYECTO'
-              ? 'bg-teal-600 text-white shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100'
+            pestana === 'ASISTENCIAS_PROYECTO' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <ClipboardCheck size={18} /> ASISTENCIAS DIARIAS POR PROYECTO
+          <ClipboardList size={18} /> ASISTENCIAS Y PDF
         </button>
 
         <button
           type="button"
-          onClick={() => setPestana('CONSULTA_CEDULA')}
+          onClick={() => setPestana('PLANTILLA_PROYECTO')}
           className={`py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            pestana === 'CONSULTA_CEDULA'
-              ? 'bg-teal-600 text-white shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100'
+            pestana === 'PLANTILLA_PROYECTO' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Search size={18} /> HISTORIAL DE OFICIAL POR CÉDULA
+          <Users size={18} /> PLANTILLA POR PROYECTO
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setPestana('HISTORIAL_CEDULA')}
+          className={`py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            pestana === 'HISTORIAL_CEDULA' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <UserCheck size={18} /> HISTORIAL POR CÉDULA
         </button>
       </div>
-      {pestana === 'ASISTENCIAS_PROYECTO' ? (
+      {pestana === 'ASISTENCIAS_PROYECTO' && (
         <div className="space-y-5">
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -496,12 +607,12 @@ export default function AnalistaHome() {
                 <select
                   value={proyectoFiltro}
                   onChange={(e) => setProyectoFiltro(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-800"
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold"
                 >
                   <option value="TODOS">TODOS LOS PROYECTOS</option>
-                  {listaProyectos.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
+                  {listaProyectos.map((proy) => (
+                    <option key={proy} value={proy}>
+                      {proy}
                     </option>
                   ))}
                 </select>
@@ -532,13 +643,11 @@ export default function AnalistaHome() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
-                  <Clock size={14} /> Horario
-                </label>
+                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Horario</label>
                 <select
                   value={turnoFiltro}
                   onChange={(e) => setTurnoFiltro(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-800"
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold"
                 >
                   <option value="TODOS">TODOS LOS HORARIOS</option>
                   <option value="MIXTO">MIXTO</option>
@@ -549,39 +658,81 @@ export default function AnalistaHome() {
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-xs text-slate-500">
-                {proyectoFiltro === 'TODOS'
-                  ? 'Seleccione un proyecto específico para exportar su Asistencia Diaria por Proyecto.'
-                  : `Planilla lista: ASISTENCIA DE ${proyectoFiltro}`}
-              </p>
-              <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => prepararYGenerarPDF('ASISTENCIA')}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <Download size={15} /> Descargar PDF Asistencia
+              </button>
+
+              <button
+                type="button"
+                onClick={() => prepararYGenerarPDF('IMPRIMIR')}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <Printer size={15} /> Imprimir Asistencia
+              </button>
+
+              {esDirectivaOAdmin && (
                 <button
                   type="button"
-                  onClick={() => exportarOImprimirAsistenciaProyecto('DESCARGAR')}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
+                  onClick={() => prepararYGenerarPDF('INFORME_DIRECTIVA')}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-red-700 text-white hover:bg-red-800 flex items-center gap-1.5 cursor-pointer shadow-sm"
                 >
-                  <Download size={15} /> PDF Asistencia Diaria por Proyecto
+                  <Download size={15} /> Informe Diario Directiva
                 </button>
-                <button
-                  type="button"
-                  onClick={() => exportarOImprimirAsistenciaProyecto('IMPRIMIR')}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-teal-800 bg-teal-50 border border-teal-200 hover:bg-teal-100 flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Printer size={15} /> Imprimir Asistencia
-                </button>
-                {esDirectivaOAdmin && (
-                  <button
-                    type="button"
-                    onClick={descargarInformeDiarioSoloDirectiva}
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-800 hover:bg-red-900 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Download size={15} /> Informe Diario (Directiva)
-                  </button>
+              )}
+            </div>
+          </div>
+
+          {proyectoFiltro !== 'TODOS' && (
+            <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-md space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-700 pb-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-blue-300">
+                  Resumen Numérico de Plantilla Presente — {proyectoFiltro}
+                </span>
+                <span className="text-lg font-black text-emerald-400">
+                  TOTAL: {pad2(totalCuadroEjecutivo)}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
+                <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                  <div className="text-slate-400 font-bold uppercase">Líder de Proyecto</div>
+                  <div className="text-xl font-black text-white mt-0.5">{pad2(countLider)}</div>
+                </div>
+
+                {tieneJefeOp && (
+                  <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                    <div className="text-slate-400 font-bold uppercase">Jefe de Operaciones</div>
+                    <div className="text-xl font-black text-white mt-0.5">{pad2(countJefeOp)}</div>
+                  </div>
+                )}
+
+                <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                  <div className="text-slate-400 font-bold uppercase">Oficiales Mixtos</div>
+                  <div className="text-xl font-black text-blue-300 mt-0.5">{pad2(countOficialesMixtos)}</div>
+                </div>
+
+                {(tieneDiurno || countOficialesDiurnos > 0) && (
+                  <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                    <div className="text-slate-400 font-bold uppercase">Oficiales Diurnos</div>
+                    <div className="text-xl font-black text-amber-300 mt-0.5">{pad2(countOficialesDiurnos)}</div>
+                  </div>
+                )}
+
+                {(tieneNocturno || countOficialesNocturnos > 0) && (
+                  <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                    <div className="text-slate-400 font-bold uppercase">Oficiales Nocturnos</div>
+                    <div className="text-xl font-black text-purple-300 mt-0.5">{pad2(countOficialesNocturnos)}</div>
+                  </div>
                 )}
               </div>
             </div>
-          </div>
+          )}
+
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
               <div className="text-xs font-bold text-emerald-600 uppercase">Presentes / Serv. Esp.</div>
@@ -596,21 +747,20 @@ export default function AnalistaHome() {
               <div className="text-2xl font-black text-slate-800 mt-1">{totalFaltas}</div>
             </div>
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-              <div className="text-xs font-bold text-slate-500 uppercase">Salud / Vac. / F. Just.</div>
+              <div className="text-xs font-bold text-slate-500 uppercase">Salud / Vac. / Novedades</div>
               <div className="text-2xl font-black text-slate-800 mt-1">{totalOtros}</div>
             </div>
           </div>
-
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
             {cargandoAsist ? (
               <p className="text-center text-slate-500 py-8 text-sm">Consultando registros de asistencia...</p>
-            ) : asistenciasProyecto.length === 0 ? (
+            ) : listaOrdenadaAsistencia.length === 0 ? (
               <p className="text-center text-slate-500 py-8 text-sm">
                 No hay asistencias registradas para los filtros seleccionados.
               </p>
             ) : (
               <div className="divide-y divide-slate-100">
-                {asistenciasProyecto.map((reg) => (
+                {listaOrdenadaAsistencia.map((reg) => (
                   <div
                     key={reg.id}
                     className="py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3"
@@ -624,7 +774,9 @@ export default function AnalistaHome() {
                           {reg.cargo || 'OFICIAL'}
                         </span>
                         <span className="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800">
-                          {reg.turno} • GRP {reg.grupo}
+                          {reg.turno === 'DIURNO' || reg.turno === 'NOCTURNO'
+                            ? reg.turno
+                            : `${reg.turno} • GRP ${reg.grupo}`}
                         </span>
                         <span className="text-xs font-mono bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded font-bold">
                           Entrada: {reg.hora_entrada || '--:--'}
@@ -654,12 +806,7 @@ export default function AnalistaHome() {
                     <div className="flex items-center gap-2 self-start md:self-center">
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-bold ${
-                          [
-                            'PRESENTE',
-                            'SERVICIO ESPECIAL PROPIO',
-                            'SERVICIO ESPECIAL MIXTO',
-                            'SERVICIO ESPECIAL DIURNO/NOCTURNO',
-                          ].includes(reg.estatus)
+                          ESTATUS_ASISTENTES.includes(reg.estatus)
                             ? 'bg-emerald-100 text-emerald-800'
                             : reg.estatus.includes('APOYO') || reg.estatus.includes('SERVICIO ESPECIAL')
                             ? 'bg-amber-100 text-amber-800'
@@ -706,7 +853,146 @@ export default function AnalistaHome() {
             </div>
           )}
         </div>
-      ) : (
+      )}
+      {pestana === 'PLANTILLA_PROYECTO' && (
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <h2 className="text-base font-bold text-slate-800">
+                Plantilla Activa por Proyecto ({plantillaProyectoList.length})
+              </h2>
+              <p className="text-xs text-slate-500">
+                Despliegue cada horario y grupo (A / B / C) para verificar personal y editar fechas de ingreso.
+              </p>
+            </div>
+
+            <div className="w-full sm:w-72">
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Proyecto *</label>
+              <select
+                value={proyectoPlantilla}
+                onChange={(e) => setProyectoPlantilla(e.target.value)}
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold bg-slate-50"
+              >
+                {listaProyectos.map((proy) => (
+                  <option key={proy} value={proy}>
+                    {proy}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {(['MIXTO', '24X24', 'DIURNO_NOCTURNO'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => {
+                  setFiltroHorarioPlantilla(tab);
+                  if (tab === '24X24' && grupoDesplegadoAnalista === 'C') {
+                    setGrupoDesplegadoAnalista('A');
+                  }
+                }}
+                className={`px-4 py-2 rounded-xl text-xs font-bold border cursor-pointer ${
+                  filtroHorarioPlantilla === tab
+                    ? 'bg-teal-600 text-white border-teal-600'
+                    : 'bg-slate-50 text-slate-700 border-slate-200'
+                }`}
+              >
+                {tab === 'MIXTO' ? 'MIXTO' : tab === '24X24' ? '24X24' : 'DIURNO / NOCTURNO'}
+              </button>
+            ))}
+          </div>
+
+          {filtroHorarioPlantilla !== 'DIURNO_NOCTURNO' && (
+            <div className="flex flex-wrap gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <span className="text-xs font-bold text-slate-500 self-center mr-1">Grupo:</span>
+              {(filtroHorarioPlantilla === 'MIXTO' ? (['A', 'B', 'C'] as const) : (['A', 'B'] as const)).map(
+                (grp) => (
+                  <button
+                    key={grp}
+                    type="button"
+                    onClick={() => setGrupoDesplegadoAnalista(grp)}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-black cursor-pointer ${
+                      grupoDesplegadoAnalista === grp
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-white text-slate-700 border border-slate-300'
+                    }`}
+                  >
+                    GRUPO {grp}
+                  </button>
+                )
+              )}
+            </div>
+          )}
+
+          {cargandoPlantilla ? (
+            <p className="text-center text-slate-500 py-8 text-sm">Cargando plantilla del proyecto...</p>
+          ) : (
+            (() => {
+              const filtrados = plantillaProyectoList.filter((item) => {
+                const trn = String(item.turno || 'MIXTO').toUpperCase();
+                const grp = String(item.grupo || 'A').toUpperCase();
+                if (filtroHorarioPlantilla === 'MIXTO') {
+                  return trn === 'MIXTO' && grp === grupoDesplegadoAnalista;
+                }
+                if (filtroHorarioPlantilla === '24X24') {
+                  return trn === '24X24' && grp === grupoDesplegadoAnalista;
+                }
+                return trn === 'DIURNO' || trn === 'NOCTURNO';
+              });
+
+              return filtrados.length === 0 ? (
+                <p className="text-center text-slate-400 py-6 text-xs">
+                  No hay personal registrado en este bloque.
+                </p>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {filtrados.map((of) => (
+                    <div key={of.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="px-2 py-0.5 rounded text-xs font-black bg-teal-100 text-teal-800">
+                            {of.cargo || 'OFICIAL'}
+                          </span>
+                          <span className="font-bold text-sm text-slate-800">
+                            {of.apellidos}, {of.nombres}
+                          </span>
+                          <span className="text-xs font-mono text-slate-500">C.I. {of.cedula}</span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Fecha de Ingreso:{' '}
+                          {of.fecha_ingreso ? (
+                            <strong>{new Date(of.fecha_ingreso).toLocaleDateString('es-VE')}</strong>
+                          ) : (
+                            <span className="text-amber-700 font-bold">Sin fecha registrada</span>
+                          )}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOficialEditandoFechaTab(of);
+                          setFechaIngresoTabInput(
+                            of.fecha_ingreso
+                              ? new Date(of.fecha_ingreso).toLocaleDateString('en-CA')
+                              : hoyLocal
+                          );
+                        }}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 self-start sm:self-center cursor-pointer"
+                      >
+                        Editar Fecha de Ingreso
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()
+          )}
+        </div>
+      )}
+      {pestana === 'HISTORIAL_CEDULA' && (
         <div className="space-y-5">
           <form
             onSubmit={consultarExpedientePorCedula}
@@ -779,6 +1065,7 @@ export default function AnalistaHome() {
               <span>{errorBusqueda}</span>
             </div>
           )}
+
           {resultadoCedula && (
             <div className="space-y-5">
               <div className="bg-white p-5 rounded-2xl shadow-sm border-l-4 border-teal-600 space-y-4">
@@ -869,12 +1156,7 @@ export default function AnalistaHome() {
                     <div className="text-xl font-black text-emerald-700">
                       {
                         resultadoCedula.asistencias.filter((a) =>
-                          [
-                            'PRESENTE',
-                            'SERVICIO ESPECIAL PROPIO',
-                            'SERVICIO ESPECIAL MIXTO',
-                            'SERVICIO ESPECIAL DIURNO/NOCTURNO',
-                          ].includes(a.estatus)
+                          ESTATUS_ASISTENTES.includes(a.estatus)
                         ).length
                       }
                     </div>
@@ -989,13 +1271,13 @@ export default function AnalistaHome() {
                   <option value="SERVICIO ESPECIAL ENVIADO">SERVICIO ESPECIAL ENVIADO</option>
                   <option value="APOYO RECIBIDO">APOYO RECIBIDO</option>
                   <option value="APOYO ENVIADO">APOYO ENVIADO</option>
-                  <option value="BAJA POR SALUD">BAJA POR SALUD</option>
                   <option value="VACACIONES">VACACIONES</option>
+                  <option value="REPOSO MEDICO">REPOSO MÉDICO</option>
+                  <option value="BAJA POR SALUD">BAJA POR SALUD</option>
                   <option value="FALTA JUSTIFICADA">FALTA JUSTIFICADA</option>
                   <option value="FALTA INJUSTIFICADA">FALTA INJUSTIFICADA</option>
-                  <option value="REPOSO MEDICO">REPOSO MÉDICO</option>
                   <option value="PERMISO">PERMISO</option>
-                  <option value="DESCANSO">DESCANSO</option>
+                  <option value="DESCANSO">LIBRE / DESCANSO</option>
                 </select>
               </div>
 
@@ -1087,6 +1369,43 @@ export default function AnalistaHome() {
                 className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {guardandoCambio ? 'Guardando...' : 'Guardar Modificación'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {oficialEditandoFechaTab && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <form onSubmit={guardarFechaIngresoDesdePlantilla} className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl">
+            <h3 className="text-base font-bold text-slate-800">Editar Fecha de Ingreso</h3>
+            <p className="text-xs text-slate-600">
+              Personal: <strong>{oficialEditandoFechaTab.nombres} {oficialEditandoFechaTab.apellidos}</strong> ({oficialEditandoFechaTab.cedula})
+            </p>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Fecha de Ingreso *</label>
+              <input
+                type="date"
+                required
+                value={fechaIngresoTabInput}
+                onChange={(e) => setFechaIngresoTabInput(e.target.value)}
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setOficialEditandoFechaTab(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={guardandoCambio}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 cursor-pointer"
+              >
+                {guardandoCambio ? 'Guardando...' : 'Guardar Fecha'}
               </button>
             </div>
           </form>
