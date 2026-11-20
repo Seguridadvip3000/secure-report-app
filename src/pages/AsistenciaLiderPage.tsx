@@ -70,7 +70,10 @@ type TipoOtroMovimiento =
   | 'APOYO ENVIADO'
   | 'TRASLADO ENVIADO'
   | 'VACACIONES'
+  | 'REPOSO MEDICO'
+  | 'BAJA POR SALUD'
   | 'FALTA JUSTIFICADA'
+  | 'PERMISO'
   | 'DESCANSO'
   | 'EGRESO';
 
@@ -106,20 +109,13 @@ const PROYECTOS_CON_NOCTURNO = ['YARIBU', 'DUNCAN LA CALIFORNIA'];
 const obtenerFechaHoraCaracas = () => {
   const ahora = new Date();
   const fechaStr = ahora.toLocaleDateString('en-CA', { timeZone: 'America/Caracas' });
-  const hora24 = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'America/Caracas',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(ahora);
   const hora12 = new Intl.DateTimeFormat('es-VE', {
     timeZone: 'America/Caracas',
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
   }).format(ahora);
-  const [hh, mm] = hora24.split(':').map(Number);
-  return { fechaStr, hora24, hora12, horaNum: hh, minNum: mm };
+  return { fechaStr, hora12 };
 };
 export default function AsistenciaLiderPage() {
   const { currentUser } = useAuth();
@@ -145,7 +141,7 @@ export default function AsistenciaLiderPage() {
   );
   const [listaProyectosGlobales, setListaProyectosGlobales] = useState<string[]>([]);
   const [seccionPrincipal, setSeccionPrincipal] = useState<'ASISTENCIA_GUARDIA' | 'PLANTILLA_GENERAL'>(
-    'ASISTENCIA_GUARDIA'
+    'PLANTILLA_GENERAL'
   );
   const [subMenuPlantilla, setSubMenuPlantilla] = useState<'LISTA_GENERAL' | 'REGISTRAR' | 'HISTORIAL'>(
     'LISTA_GENERAL'
@@ -154,7 +150,6 @@ export default function AsistenciaLiderPage() {
   const [plantillaActiva, setPlantillaActiva] = useState<OficialPlantilla[]>([]);
   const [asistenciasHoyList, setAsistenciasHoyList] = useState<any[]>([]);
   const [asistenciasHoyMap, setAsistenciasHoyMap] = useState<Record<string, any>>({});
-  const [recibidosTemporalesHoy, setRecibidosTemporalesHoy] = useState<any[]>([]);
   const [liderActivoPorQR, setLiderActivoPorQR] = useState<boolean>(false);
   const [movimientos, setMovimientos] = useState<MovimientoPlantilla[]>([]);
   const [cargando, setCargando] = useState(false);
@@ -163,8 +158,8 @@ export default function AsistenciaLiderPage() {
   const [filtroPlantilla, setFiltroPlantilla] = useState<'MIXTO' | '24X24' | 'DIURNO_NOCTURNO'>('MIXTO');
   const [grupoDesplegadoPlantilla, setGrupoDesplegadoPlantilla] = useState<'A' | 'B' | 'C'>(grupoMixtoHoy);
   const [busqueda, setBusqueda] = useState('');
-  const [mostrarFrancosParaServEsp, setMostrarFrancosParaServEsp] = useState(false);
 
+  // Formulario Registrar / Recibir Personal (Nuevo Ingreso, Traslado Recibido, S.E Recibido, Apoyo Recibido)
   const [cedula, setCedula] = useState('');
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
@@ -175,12 +170,14 @@ export default function AsistenciaLiderPage() {
   const [proyectoOrigen, setProyectoOrigen] = useState('');
   const [observacionIngreso, setObservacionIngreso] = useState('');
 
+  // Modal OTRO con TODAS las variables completas
   const [oficialOtro, setOficialOtro] = useState<OficialPlantilla | null>(null);
   const [tipoOtro, setTipoOtro] = useState<TipoOtroMovimiento>('APOYO ENVIADO');
   const [turnoOtro, setTurnoOtro] = useState<HorarioOperativo>('MIXTO');
   const [proyectoDestinoOtro, setProyectoDestinoOtro] = useState('');
   const [observacionOtro, setObservacionOtro] = useState('');
 
+  // Modal Editar Fecha de Ingreso
   const [oficialEditandoFecha, setOficialEditandoFecha] = useState<OficialPlantilla | null>(null);
   const [nuevaFechaIngresoInput, setNuevaFechaIngresoInput] = useState<string>(hoyLocal);
 
@@ -257,22 +254,18 @@ export default function AsistenciaLiderPage() {
         .from('asistencias_diarias_oficiales')
         .select('*')
         .eq('proyecto', proyectoSeleccionado)
-        .eq('fecha', hoyLocal);
+        .eq('fecha', hoyLocal)
+        .order('created_at', { ascending: true });
 
       const listaHoy = Array.isArray(dataAsistHoy) ? dataAsistHoy : [];
       const mapaHoy: Record<string, any> = {};
-      const temporales: any[] = [];
 
       listaHoy.forEach((reg: any) => {
         mapaHoy[String(reg.cedula).toUpperCase()] = reg;
-        if (reg.estatus === 'SERVICIO ESPECIAL RECIBIDO' || reg.estatus === 'APOYO RECIBIDO') {
-          temporales.push(reg);
-        }
       });
 
       setAsistenciasHoyList(listaHoy);
       setAsistenciasHoyMap(mapaHoy);
-      setRecibidosTemporalesHoy(temporales);
 
       await verificarPresenciaLiderPorQR(proyectoSeleccionado);
 
@@ -355,7 +348,7 @@ export default function AsistenciaLiderPage() {
             turno: turnoOf,
             hora_entrada: horaEntrada,
             estatus: nuevoEstatus,
-            observacion: `${nuevoEstatus} activado por ${nombreRegistrador}`,
+            observacion: `${nuevoEstatus} marcado por ${nombreRegistrador}`,
             registrado_por: nombreRegistrador,
             updated_at: new Date().toISOString(),
           },
@@ -386,8 +379,8 @@ export default function AsistenciaLiderPage() {
         tipo: 'exito',
         texto:
           nuevoEstatus === 'FALTA INJUSTIFICADA'
-            ? `❌ ${oficial.apellidos}, ${oficial.nombres} marcado AUSENTE.`
-            : `✅ ${oficial.apellidos}, ${oficial.nombres} registrado como ${nuevoEstatus} (${horaEntrada}).`,
+            ? `❌ ${oficial.apellidos}, ${oficial.nombres} marcado AUSENTE y reflejado en Asistencia de Guardia.`
+            : `✅ ${oficial.apellidos}, ${oficial.nombres} registrado como ${nuevoEstatus} (${horaEntrada}) y reflejado en Asistencia de Guardia.`,
       });
       await cargarDatosProyecto();
     } catch (err: any) {
@@ -437,6 +430,7 @@ export default function AsistenciaLiderPage() {
         observacionIngreso.trim() ||
         `${tipoIngreso}${origenLimpio ? ` desde ${origenLimpio}` : ''}`;
 
+      // Siempre se incluye automáticamente en la asistencia del día
       const { error: errAsistDia } = await supabase
         .from('asistencias_diarias_oficiales')
         .upsert(
@@ -480,7 +474,7 @@ export default function AsistenciaLiderPage() {
 
         setMensaje({
           tipo: 'exito',
-          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta}) registrado como ${tipoIngreso} e incluido en la asistencia de hoy (${momento.hora12}).`,
+          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta}) registrado como ${tipoIngreso} y reflejado en Asistencia de Guardia (${momento.hora12}).`,
         });
       } else {
         const yaExisteActivo = plantillaActiva.some(
@@ -537,7 +531,7 @@ export default function AsistenciaLiderPage() {
 
         setMensaje({
           tipo: 'exito',
-          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta} • ${turnoAlta}) anexado a la plantilla fija e incluido en la asistencia de hoy.`,
+          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta} • ${turnoAlta}) anexado a la plantilla fija y reflejado en Asistencia de Guardia.`,
         });
       }
 
@@ -549,7 +543,7 @@ export default function AsistenciaLiderPage() {
       setTurnoAlta('MIXTO');
       setProyectoOrigen('');
       setObservacionIngreso('');
-      setSubMenuPlantilla('LISTA_GENERAL');
+      setSeccionPrincipal('ASISTENCIA_GUARDIA');
       await cargarDatosProyecto();
     } catch (err: any) {
       setMensaje({ tipo: 'error', texto: 'Error al registrar: ' + (err?.message || 'Error de red.') });
@@ -593,8 +587,12 @@ export default function AsistenciaLiderPage() {
     setMensaje(null);
 
     const requiereDestino = tipoOtro === 'TRASLADO ENVIADO' || tipoOtro === 'APOYO ENVIADO';
+    const requiereMotivoObligatorio =
+      tipoOtro === 'EGRESO' ||
+      tipoOtro === 'FALTA JUSTIFICADA' ||
+      tipoOtro === 'BAJA POR SALUD';
 
-    if ((tipoOtro === 'EGRESO' || tipoOtro === 'FALTA JUSTIFICADA') && !observacionOtro.trim()) {
+    if (requiereMotivoObligatorio && !observacionOtro.trim()) {
       setMensaje({ tipo: 'error', texto: `⚠️ Debe escribir obligatoriamente el motivo de ${tipoOtro}.` });
       return;
     }
@@ -616,13 +614,10 @@ export default function AsistenciaLiderPage() {
       const cargoOficial = oficialOtro.cargo || 'OFICIAL';
       const ced = oficialOtro.cedula.toUpperCase();
 
-      const esNovedadDiariaSinBajaPlantilla =
-        tipoOtro === 'APOYO ENVIADO' ||
-        tipoOtro === 'VACACIONES' ||
-        tipoOtro === 'FALTA JUSTIFICADA' ||
-        tipoOtro === 'DESCANSO';
+      const esBajaDefinitivaPlantilla =
+        tipoOtro === 'EGRESO' || tipoOtro === 'TRASLADO ENVIADO';
 
-      if (esNovedadDiariaSinBajaPlantilla) {
+      if (!esBajaDefinitivaPlantilla) {
         await supabase.from('asistencias_diarias_oficiales').upsert(
           [
             {
@@ -662,7 +657,7 @@ export default function AsistenciaLiderPage() {
 
         setMensaje({
           tipo: 'exito',
-          texto: `✅ ${tipoOtro} registrado para ${oficialOtro.apellidos}, ${oficialOtro.nombres}.`,
+          texto: `✅ ${tipoOtro} registrado para ${oficialOtro.apellidos}, ${oficialOtro.nombres} y reflejado en Asistencia de Guardia.`,
         });
       } else {
         const { error: errUpdate } = await supabase
@@ -804,26 +799,6 @@ export default function AsistenciaLiderPage() {
 
   const pad2 = (n: number) => String(n).padStart(2, '0');
 
-  // En ASISTENCIA DE GUARDIA Hoy se incluye:
-  // 1) El personal al que le corresponde guardia hoy (según rotación)
-  // 2) Cualquier oficial franco al que ya se le haya asignado una variable hoy (S.E MIXTO, S.E DIURNO/NOCTURNO, etc.)
-  const personalOperativoHoy = plantillaActiva.filter((of) => {
-    const ced = of.cedula.toUpperCase();
-    const tieneMarcaHoy = !!asistenciasHoyMap[ced];
-    return leTocaGuardiaHoy(of.grupo, of.turno, hoyLocal) || tieneMarcaHoy;
-  });
-
-  // Personal Franco / Libre Hoy (sin marca hoy o marcados en DESCANSO para DIURNO/NOCTURNO)
-  const personalFrancoHoy = plantillaActiva.filter((of) => {
-    const trn = (of.turno || 'MIXTO').toUpperCase();
-    const ced = of.cedula.toUpperCase();
-    const marca = asistenciasHoyMap[ced];
-    if (trn === 'DIURNO' || trn === 'NOCTURNO') {
-      return marca?.estatus === 'DESCANSO';
-    }
-    return !leTocaGuardiaHoy(of.grupo, of.turno, hoyLocal);
-  });
-
   const proyectosParaTraslado = listaProyectosGlobales.filter((p) => p !== proyectoSeleccionado);
 
   const formatearBadgeHorario = (of: OficialPlantilla) => {
@@ -832,7 +807,8 @@ export default function AsistenciaLiderPage() {
     if (trn === '24X24') return `24X24 • GRP ${of.grupo}`;
     return `MIXTO • GRP ${of.grupo}`;
   };
-  const renderFilaOperativa = (oficial: OficialPlantilla, esFranco: boolean, mostrarFechaIngreso = false) => {
+
+  const renderFilaOperativa = (oficial: OficialPlantilla, esLibreHoy: boolean) => {
     const ced = oficial.cedula.toUpperCase();
     const marcaHoy = asistenciasHoyMap[ced];
     const yaMarcadoPorLider = esLider && !!marcaHoy;
@@ -860,16 +836,14 @@ export default function AsistenciaLiderPage() {
             </span>
           </div>
 
-          {mostrarFechaIngreso && (
-            <div className="text-[11px] text-slate-500 mt-0.5">
-              Fecha de Ingreso:{' '}
-              {oficial.fecha_ingreso ? (
-                <strong>{new Date(oficial.fecha_ingreso).toLocaleDateString('es-VE')}</strong>
-              ) : (
-                <span className="text-amber-700 font-bold">Sin fecha (Pendiente por editar)</span>
-              )}
-            </div>
-          )}
+          <div className="text-[11px] text-slate-500 mt-0.5">
+            Fecha de Ingreso:{' '}
+            {oficial.fecha_ingreso ? (
+              <strong>{new Date(oficial.fecha_ingreso).toLocaleDateString('es-VE')}</strong>
+            ) : (
+              <span className="text-amber-700 font-bold">Sin fecha (Pendiente por editar)</span>
+            )}
+          </div>
 
           {marcaHoy && (
             <div className="mt-1">
@@ -877,7 +851,7 @@ export default function AsistenciaLiderPage() {
                 className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                   estatusAsistentes.includes(marcaHoy.estatus)
                     ? 'bg-emerald-100 text-emerald-800'
-                    : marcaHoy.estatus === 'FALTA INJUSTIFICADA'
+                    : marcaHoy.estatus === 'FALTA INJUSTIFICADA' || marcaHoy.estatus === 'BAJA POR SALUD'
                     ? 'bg-red-100 text-red-800'
                     : 'bg-amber-100 text-amber-800'
                 }`}
@@ -890,7 +864,7 @@ export default function AsistenciaLiderPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {!esFranco && !bloqueadoAsistenciaBase && (
+          {!bloqueadoAsistenciaBase && (
             <>
               <button
                 type="button"
@@ -928,7 +902,7 @@ export default function AsistenciaLiderPage() {
             </>
           )}
 
-          {esFranco && permiteServicioEspecial && (
+          {esLibreHoy && permiteServicioEspecial && (
             <>
               <button
                 type="button"
@@ -950,28 +924,20 @@ export default function AsistenciaLiderPage() {
             </>
           )}
 
-          {esFranco && !permiteServicioEspecial && (
-            <span className="text-[11px] font-semibold text-slate-400 italic">
-              Franco 24X24 (Sin S.E)
-            </span>
-          )}
-
-          {mostrarFechaIngreso && (
-            <button
-              type="button"
-              onClick={() => {
-                setOficialEditandoFecha(oficial);
-                setNuevaFechaIngresoInput(
-                  oficial.fecha_ingreso
-                    ? new Date(oficial.fecha_ingreso).toLocaleDateString('en-CA')
-                    : hoyLocal
-                );
-              }}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 flex items-center gap-1 cursor-pointer"
-            >
-              <Calendar size={12} /> Fecha Ingreso
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              setOficialEditandoFecha(oficial);
+              setNuevaFechaIngresoInput(
+                oficial.fecha_ingreso
+                  ? new Date(oficial.fecha_ingreso).toLocaleDateString('en-CA')
+                  : hoyLocal
+              );
+            }}
+            className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 flex items-center gap-1 cursor-pointer"
+          >
+            <Calendar size={12} /> Fecha Ingreso
+          </button>
         </div>
       </div>
     );
@@ -1077,14 +1043,205 @@ export default function AsistenciaLiderPage() {
       <div className="grid grid-cols-2 gap-3 bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
         <button
           type="button"
+          onClick={() => setSeccionPrincipal('PLANTILLA_GENERAL')}
+          className={`py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            seccionPrincipal === 'PLANTILLA_GENERAL' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Users size={18} /> PLANTILLA GENERAL ({plantillaActiva.length})
+        </button>
+
+        <button
+          type="button"
           onClick={() => setSeccionPrincipal('ASISTENCIA_GUARDIA')}
           className={`py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
             seccionPrincipal === 'ASISTENCIA_GUARDIA' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <ClipboardCheck size={18} /> ASISTENCIA DE GUARDIA ({hoyLocal})
+          <ClipboardCheck size={18} /> ASISTENCIA DE GUARDIA ({asistenciasHoyList.length})
         </button>
+      </div>
 
+      {seccionPrincipal === 'ASISTENCIA_GUARDIA' ? (
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <Shield className="text-blue-600" size={18} /> Personal con Asistencia / Novedad Registrada Hoy ({asistenciasHoyList.length})
+              </h2>
+              <p className="text-xs text-slate-500">
+                Aquí se refleja todo el personal marcado en Plantilla General más los apoyos, traslados y servicios especiales recibidos hoy.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSeccionPrincipal('PLANTILLA_GENERAL');
+                setSubMenuPlantilla('REGISTRAR');
+                setTipoIngreso('APOYO RECIBIDO');
+              }}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5 cursor-pointer self-start shadow-sm"
+            >
+              <UserPlus size={15} /> + Agregar Apoyo / Traslado / S.E Recibido
+            </button>
+          </div>
+
+          {cargando ? (
+            <p className="text-center text-slate-500 py-8 text-sm">Cargando asistencia registrada hoy...</p>
+          ) : asistenciasHoyList.length === 0 ? (
+            <p className="text-center text-slate-500 py-8 text-sm">
+              Aún no se ha marcado ningún oficial hoy. Entre a <strong>PLANTILLA GENERAL</strong> para pasar lista o pulse el botón superior para agregar un recibido.
+            </p>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {asistenciasHoyList.map((reg) => (
+                <div
+                  key={reg.id}
+                  className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                >
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded text-xs font-black bg-blue-100 text-blue-800">
+                        {reg.turno === 'DIURNO' || reg.turno === 'NOCTURNO'
+                          ? reg.turno
+                          : `${reg.turno} • GRP ${reg.grupo}`}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-xs font-black bg-teal-100 text-teal-800">
+                        {reg.cargo || 'OFICIAL'}
+                      </span>
+                      <span className="font-bold text-sm text-slate-800">{reg.nombre_completo}</span>
+                      <span className="text-xs font-mono text-slate-500">C.I. {reg.cedula}</span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      {reg.proyecto_apoyo ? (
+                        <>
+                          Proyecto Origen/Destino: <strong>{reg.proyecto_apoyo}</strong> •{' '}
+                        </>
+                      ) : null}
+                      {reg.observacion || ''}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        estatusAsistentes.includes(reg.estatus)
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : reg.estatus === 'FALTA INJUSTIFICADA' || reg.estatus === 'BAJA POR SALUD'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {reg.estatus}{' '}
+                      {reg.hora_entrada && reg.hora_entrada !== '--:--' ? `(${reg.hora_entrada})` : ''}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+  return (
+    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
+      <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border-l-4 border-blue-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Módulo Operativo</span>
+          <h1 className="text-2xl font-bold text-slate-800 mt-0.5 flex items-center gap-2">
+            <ClipboardCheck className="text-blue-600" size={26} /> Control de Asistencia y Plantilla
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Guardia Hoy ({hoyLocal}): <strong className="text-blue-700">MIXTO Grp {grupoMixtoHoy}</strong> •{' '}
+            <strong className="text-indigo-700">24X24 Grp {grupo24x24Hoy}</strong> •{' '}
+            <strong className="text-slate-700">DIURNO / NOCTURNO</strong>
+          </p>
+        </div>
+
+        <div className="w-full md:w-72">
+          <label className="block text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
+            <Building2 size={14} /> Proyecto Activo
+          </label>
+          <select
+            value={proyectoSeleccionado}
+            onChange={(e) => setProyectoSeleccionado(e.target.value)}
+            className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-800 bg-slate-50"
+          >
+            {proyectosUsuario.map((proy) => (
+              <option key={proy} value={proy}>
+                {proy}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* CUADRO EJECUTIVO DE PLANTILLA DEL DÍA */}
+      <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-md space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-700 pb-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-blue-300">
+            Resumen Numérico de Plantilla Presente Hoy ({hoyLocal})
+          </span>
+          <span className="text-lg font-black text-emerald-400">
+            TOTAL: {pad2(totalPersonalPresenteDia)}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
+          <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+            <div className="text-slate-400 font-bold uppercase">Líder de Proyecto</div>
+            <div className="text-xl font-black text-white mt-0.5">{pad2(countLider)}</div>
+            <div className="text-[10px] text-slate-400">
+              {liderActivoPorQR ? 'Activo por marca QR' : 'Sin entrada QR / Con salida'}
+            </div>
+          </div>
+
+          {tieneJefeOp && (
+            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+              <div className="text-slate-400 font-bold uppercase">Jefe de Operaciones</div>
+              <div className="text-xl font-black text-white mt-0.5">{pad2(countJefeOp)}</div>
+            </div>
+          )}
+
+          <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+            <div className="text-slate-400 font-bold uppercase">Oficiales Mixtos</div>
+            <div className="text-xl font-black text-blue-300 mt-0.5">{pad2(countOficialesMixtos)}</div>
+            <div className="text-[10px] text-slate-400">Incluye MIXTO + 24X24</div>
+          </div>
+
+          {(tieneDiurno || countOficialesDiurnos > 0) && (
+            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+              <div className="text-slate-400 font-bold uppercase">Oficiales Diurnos</div>
+              <div className="text-xl font-black text-amber-300 mt-0.5">{pad2(countOficialesDiurnos)}</div>
+            </div>
+          )}
+
+          {(tieneNocturno || countOficialesNocturnos > 0) && (
+            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+              <div className="text-slate-400 font-bold uppercase">Oficiales Nocturnos</div>
+              <div className="text-xl font-black text-purple-300 mt-0.5">{pad2(countOficialesNocturnos)}</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {mensaje && (
+        <div
+          className={`p-4 rounded-xl text-sm border flex items-start gap-2 ${
+            mensaje.tipo === 'exito'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-red-50 border-red-200 text-red-800'
+          }`}
+        >
+          {mensaje.tipo === 'exito' ? (
+            <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
+          ) : (
+            <AlertCircle size={18} className="shrink-0 mt-0.5" />
+          )}
+          <span>{mensaje.texto}</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
         <button
           type="button"
           onClick={() => setSeccionPrincipal('PLANTILLA_GENERAL')}
@@ -1094,84 +1251,104 @@ export default function AsistenciaLiderPage() {
         >
           <Users size={18} /> PLANTILLA GENERAL ({plantillaActiva.length})
         </button>
+
+        <button
+          type="button"
+          onClick={() => setSeccionPrincipal('ASISTENCIA_GUARDIA')}
+          className={`py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            seccionPrincipal === 'ASISTENCIA_GUARDIA' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <ClipboardCheck size={18} /> ASISTENCIA DEL DÍA ({asistenciasHoyList.length})
+        </button>
       </div>
       {seccionPrincipal === 'ASISTENCIA_GUARDIA' ? (
-        <div className="space-y-5">
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-              <div>
-                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                  <Shield className="text-blue-600" size={18} /> Personal Operativo Hoy + Variables ({personalOperativoHoy.length + recibidosTemporalesHoy.length})
-                </h2>
-                <p className="text-xs text-slate-500">
-                  MIXTO Grp <strong>{grupoMixtoHoy}</strong> • 24X24 Grp <strong>{grupo24x24Hoy}</strong> • DIURNO / NOCTURNO + Servicios Especiales y Apoyos del día.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setSeccionPrincipal('PLANTILLA_GENERAL');
-                  setSubMenuPlantilla('REGISTRAR');
-                  setTipoIngreso('SERVICIO ESPECIAL RECIBIDO');
-                }}
-                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 flex items-center gap-1.5 cursor-pointer self-start"
-              >
-                <UserPlus size={15} /> + Registrar Ingreso / Serv. Especial Recibido
-              </button>
-            </div>
-
-            {cargando ? (
-              <p className="text-center text-slate-500 py-8 text-sm">Cargando guardia del día...</p>
-            ) : personalOperativoHoy.length === 0 && recibidosTemporalesHoy.length === 0 ? (
-              <p className="text-center text-slate-500 py-8 text-sm">
-                No hay personal asignado de guardia hoy en <strong>{proyectoSeleccionado}</strong>.
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <Shield className="text-blue-600" size={18} /> Asistencia y Novedades Registradas Hoy ({asistenciasHoyList.length})
+              </h2>
+              <p className="text-xs text-slate-500">
+                Refleja únicamente el personal al que ya se le asignó asistencia o movimiento hoy desde Plantilla, más los apoyos/traslados/servicios especiales recibidos.
               </p>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {personalOperativoHoy.map((of) => renderFilaOperativa(of, false, false))}
-              </div>
-            )}
-
-            {recibidosTemporalesHoy.length > 0 && (
-              <div className="pt-3 border-t border-indigo-100 bg-indigo-50/50 p-4 rounded-xl space-y-2">
-                <h4 className="text-xs font-bold text-indigo-900 uppercase">
-                  Servicios Especiales / Apoyos Recibidos Hoy (Temporal 24h)
-                </h4>
-                {recibidosTemporalesHoy.map((tmp) => (
-                  <div key={tmp.id} className="text-xs flex justify-between items-center py-1">
-                    <span>
-                      <span className="px-1.5 py-0.5 mr-1.5 rounded bg-teal-100 text-teal-800 font-bold">
-                        {tmp.cargo || 'OFICIAL'}
-                      </span>
-                      <strong>{tmp.nombre_completo}</strong> ({tmp.cedula}) — Origen: <strong>{tmp.proyecto_apoyo}</strong> • Entrada: <strong>{tmp.hora_entrada}</strong>
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-bold">{tmp.estatus}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSeccionPrincipal('PLANTILLA_GENERAL');
+                setSubMenuPlantilla('REGISTRAR');
+                setTipoIngreso('SERVICIO ESPECIAL RECIBIDO');
+              }}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5 cursor-pointer self-start shadow-sm"
+            >
+              <UserPlus size={15} /> + Agregar Apoyo / Traslado / Serv. Esp. Recibido
+            </button>
           </div>
 
-          {personalFrancoHoy.length > 0 && (
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+          {cargando ? (
+            <p className="text-center text-slate-500 py-8 text-sm">Cargando asistencia del día...</p>
+          ) : asistenciasHoyList.length === 0 ? (
+            <div className="text-center py-8 space-y-2">
+              <p className="text-sm text-slate-500">
+                Aún no se ha marcado asistencia desde <strong>PLANTILLA GENERAL</strong> hoy ({hoyLocal}).
+              </p>
               <button
                 type="button"
-                onClick={() => setMostrarFrancosParaServEsp(!mostrarFrancosParaServEsp)}
-                className="w-full flex items-center justify-between text-left font-bold text-sm text-slate-700 cursor-pointer"
+                onClick={() => setSeccionPrincipal('PLANTILLA_GENERAL')}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 cursor-pointer"
               >
-                <span>
-                  🔄 Personal Franco / Libre Hoy ({personalFrancoHoy.length}) — Pulsar para activar S.E MIXTO o S.E DIURNO/NOCTURNO
-                </span>
-                <span className="text-xs text-blue-600 underline">
-                  {mostrarFrancosParaServEsp ? 'Ocultar' : 'Desplegar'}
-                </span>
+                Ir a Plantilla General para pasar lista
               </button>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {asistenciasHoyList.map((reg) => (
+                <div
+                  key={reg.id}
+                  className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                >
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded text-xs font-black bg-blue-100 text-blue-800">
+                        {reg.turno === 'DIURNO' || reg.turno === 'NOCTURNO'
+                          ? reg.turno
+                          : `${reg.turno} • GRP ${reg.grupo}`}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-xs font-black bg-teal-100 text-teal-800">
+                        {reg.cargo || 'OFICIAL'}
+                      </span>
+                      <span className="font-bold text-sm text-slate-800">{reg.nombre_completo}</span>
+                      <span className="text-xs font-mono text-slate-500">C.I. {reg.cedula}</span>
+                      {reg.hora_entrada && reg.hora_entrada !== '--:--' && (
+                        <span className="text-xs font-mono bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded font-bold">
+                          Entrada: {reg.hora_entrada}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1">
+                      {reg.proyecto_apoyo ? (
+                        <>
+                          Proyecto Relacionado: <strong className="text-amber-700">{reg.proyecto_apoyo}</strong> •{' '}
+                        </>
+                      ) : null}
+                      {reg.observacion || ''}
+                    </p>
+                  </div>
 
-              {mostrarFrancosParaServEsp && (
-                <div className="divide-y divide-slate-100 pt-2 border-t border-slate-100">
-                  {personalFrancoHoy.map((of) => renderFilaOperativa(of, true, false))}
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-bold self-start sm:self-center ${
+                      estatusAsistentes.includes(reg.estatus)
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : reg.estatus === 'FALTA INJUSTIFICADA' || reg.estatus === 'BAJA POR SALUD'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {reg.estatus}
+                  </span>
                 </div>
-              )}
+              ))}
             </div>
           )}
         </div>
@@ -1308,7 +1485,7 @@ export default function AsistenciaLiderPage() {
                       <div className="divide-y divide-slate-100">
                         {miembrosDesplegados.map((oficial) => {
                           const esLibreHoy = !leTocaGuardiaHoy(oficial.grupo, oficial.turno, hoyLocal);
-                          return renderFilaOperativa(oficial, esLibreHoy, true);
+                          return renderFilaOperativa(oficial, esLibreHoy);
                         })}
                       </div>
                     )}
@@ -1526,7 +1703,10 @@ export default function AsistenciaLiderPage() {
                   <option value="APOYO ENVIADO">APOYO ENVIADO</option>
                   <option value="TRASLADO ENVIADO">TRASLADO ENVIADO</option>
                   <option value="VACACIONES">VACACIONES</option>
+                  <option value="REPOSO MEDICO">REPOSO MÉDICO</option>
+                  <option value="BAJA POR SALUD">BAJA POR SALUD</option>
                   <option value="FALTA JUSTIFICADA">FALTA JUSTIFICADA</option>
+                  <option value="PERMISO">PERMISO</option>
                   <option value="DESCANSO">LIBRE / DESCANSO</option>
                   <option value="EGRESO">EGRESO</option>
                 </select>
@@ -1571,12 +1751,12 @@ export default function AsistenciaLiderPage() {
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                {tipoOtro === 'EGRESO' || tipoOtro === 'FALTA JUSTIFICADA'
+                {['EGRESO', 'FALTA JUSTIFICADA', 'BAJA POR SALUD'].includes(tipoOtro)
                   ? 'Motivo * (Obligatorio)'
                   : 'Observación (Opcional)'}
               </label>
               <textarea
-                required={tipoOtro === 'EGRESO' || tipoOtro === 'FALTA JUSTIFICADA'}
+                required={['EGRESO', 'FALTA JUSTIFICADA', 'BAJA POR SALUD'].includes(tipoOtro)}
                 rows={2}
                 value={observacionOtro}
                 onChange={(e) => setObservacionOtro(e.target.value)}
