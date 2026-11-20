@@ -1035,5 +1035,3 @@ export default function AsistenciaLiderPage() {
           <span>{mensaje.texto}</span>
         </div>
       )}
-
-      
