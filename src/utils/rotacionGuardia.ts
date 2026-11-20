@@ -7,17 +7,22 @@
 //    - 2026-11-20 => GRUPO A
 //    - 2026-11-21 => GRUPO B
 //    - 2026-11-22 => GRUPO A
-// 3) Horarios DIURNO y NOCTURNO (12h):
+// 3) Horarios DIURNO y NOCTURNO:
 //    - Todos los días como un solo grupo operativo.
 
 const ORDEN_GRUPOS_MIXTO: ('A' | 'B' | 'C')[] = ['A', 'B', 'C'];
 const ORDEN_GRUPOS_24X24: ('A' | 'B')[] = ['A', 'B'];
 
 function calcularDiferenciaDiasDesdeReferencia(fechaYYYYMMDD: string): number {
-  const refUTC = Date.UTC(2026, 10, 20); // 2026-11-20 (mes 10 en base 0)
-  const partes = fechaYYYYMMDD.split('-').map(Number);
-  if (partes.length !== 3 || partes.some(isNaN)) return 0;
-  const targetUTC = Date.UTC(partes, partes - 1, partes);
+  const refUTC = Date.UTC(2026, 10, 20); // 2026-11-20
+  const partes = String(fechaYYYYMMDD || '').split('-').map(Number);
+  if (partes.length !== 3 || partes.some((n) => isNaN(n))) return 0;
+
+  const anio = partes[0];
+  const mes = partes[1];
+  const dia = partes[2];
+
+  const targetUTC = Date.UTC(anio, mes - 1, dia);
   return Math.round((targetUTC - refUTC) / (1000 * 60 * 60 * 24));
 }
 

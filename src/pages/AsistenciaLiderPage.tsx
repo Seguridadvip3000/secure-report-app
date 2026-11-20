@@ -128,7 +128,6 @@ export default function AsistenciaLiderPage() {
   const esLider = rolActual === 'lider';
   const { fechaStr: hoyLocal } = obtenerFechaHoraCaracas();
 
-  // Modo pruebas activo: bloqueo horario desactivado
   const bloqueadoAsistenciaBase = false;
 
   const grupoMixtoHoy = obtenerGrupoMixtoPorFecha(hoyLocal);
@@ -161,11 +160,11 @@ export default function AsistenciaLiderPage() {
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  const [filtroPlantilla, setFiltroPlantilla] = useState<'TODOS' | 'MIXTO' | '24X24' | 'DIURNO_NOCTURNO'>('TODOS');
+  const [filtroPlantilla, setFiltroPlantilla] = useState<'MIXTO' | '24X24' | 'DIURNO_NOCTURNO'>('MIXTO');
+  const [grupoDesplegadoPlantilla, setGrupoDesplegadoPlantilla] = useState<'A' | 'B' | 'C'>(grupoMixtoHoy);
   const [busqueda, setBusqueda] = useState('');
   const [mostrarFrancosParaServEsp, setMostrarFrancosParaServEsp] = useState(false);
 
-  // Formulario Registrar Personal (siempre operativo)
   const [cedula, setCedula] = useState('');
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
@@ -176,14 +175,12 @@ export default function AsistenciaLiderPage() {
   const [proyectoOrigen, setProyectoOrigen] = useState('');
   const [observacionIngreso, setObservacionIngreso] = useState('');
 
-  // Modal OTRO
   const [oficialOtro, setOficialOtro] = useState<OficialPlantilla | null>(null);
   const [tipoOtro, setTipoOtro] = useState<TipoOtroMovimiento>('APOYO ENVIADO');
   const [turnoOtro, setTurnoOtro] = useState<HorarioOperativo>('MIXTO');
   const [proyectoDestinoOtro, setProyectoDestinoOtro] = useState('');
   const [observacionOtro, setObservacionOtro] = useState('');
 
-  // Modal Editar Fecha de Ingreso (para registros cargados por SQL)
   const [oficialEditandoFecha, setOficialEditandoFecha] = useState<OficialPlantilla | null>(null);
   const [nuevaFechaIngresoInput, setNuevaFechaIngresoInput] = useState<string>(hoyLocal);
 
@@ -226,7 +223,6 @@ export default function AsistenciaLiderPage() {
         return;
       }
 
-      // Buscar el último evento QR del día (ENTRADA deja 01, SALIDA deja 00)
       const ultimoLog = listaLogs.at(-1);
       const tipoEvento = String(
         ultimoLog?.type || ultimoLog?.event_type || ultimoLog?.action || ultimoLog?.tipo || ''
@@ -403,8 +399,6 @@ export default function AsistenciaLiderPage() {
       setGuardando(false);
     }
   };
-  // Registrar Personal en Plantilla / Recibido 24h (SIEMPRE OPERATIVO, SIN LÍMITE DE HORA)
-  // Además lo incluye automáticamente en la asistencia del día con sus observaciones
   const manejarRegistrarAlta = async (e: React.FormEvent) => {
     e.preventDefault();
     setMensaje(null);
@@ -443,7 +437,6 @@ export default function AsistenciaLiderPage() {
         observacionIngreso.trim() ||
         `${tipoIngreso}${origenLimpio ? ` desde ${origenLimpio}` : ''}`;
 
-      // 1. Siempre se incluye automáticamente en la asistencia del día
       const { error: errAsistDia } = await supabase
         .from('asistencias_diarias_oficiales')
         .upsert(
@@ -470,8 +463,6 @@ export default function AsistenciaLiderPage() {
       if (errAsistDia) throw errAsistDia;
 
       if (esTemporal24h) {
-        // Servicio Especial Recibido o Apoyo Recibido:
-        // Se mantiene reflejado en asistencia del día e histórico del oficial, pero NO ingresa a plantilla fija
         await supabase.from('movimientos_plantilla').insert([
           {
             proyecto: proyectoSeleccionado,
@@ -489,11 +480,9 @@ export default function AsistenciaLiderPage() {
 
         setMensaje({
           tipo: 'exito',
-          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta}) registrado como ${tipoIngreso} e incluido en la asistencia de hoy (${momento.hora12}). No quedará fijo en la plantilla.`,
+          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta}) registrado como ${tipoIngreso} e incluido en la asistencia de hoy (${momento.hora12}).`,
         });
       } else {
-        // Nuevo Ingreso o Traslado Recibido:
-        // Se anexa a la plantilla fija con fecha/hora actual por defecto + historial + asistencia del día
         const yaExisteActivo = plantillaActiva.some(
           (p) => p.cedula.trim().toUpperCase() === cedulaLimpia && p.estado === 'ACTIVO'
         );
@@ -548,7 +537,7 @@ export default function AsistenciaLiderPage() {
 
         setMensaje({
           tipo: 'exito',
-          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta} • ${turnoAlta}) anexado a la plantilla fija e incluido en la asistencia de hoy (${momento.hora12}).`,
+          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta} • ${turnoAlta}) anexado a la plantilla fija e incluido en la asistencia de hoy.`,
         });
       }
 
@@ -765,7 +754,6 @@ export default function AsistenciaLiderPage() {
       setGuardando(false);
     }
   };
-  // Cálculo del Cuadro Ejecutivo de Plantilla del Día
   const estatusAsistentes = [
     'PRESENTE',
     'SERVICIO ESPECIAL PROPIO',
@@ -816,13 +804,16 @@ export default function AsistenciaLiderPage() {
 
   const pad2 = (n: number) => String(n).padStart(2, '0');
 
-  // Personal de Guardia Hoy (siempre visible incluso si cierra la hora)
-  const personalDeGuardiaHoy = plantillaActiva.filter((of) =>
-    leTocaGuardiaHoy(of.grupo, of.turno, hoyLocal)
-  );
+  // En ASISTENCIA DE GUARDIA Hoy se incluye:
+  // 1) El personal al que le corresponde guardia hoy (según rotación)
+  // 2) Cualquier oficial franco al que ya se le haya asignado una variable hoy (S.E MIXTO, S.E DIURNO/NOCTURNO, etc.)
+  const personalOperativoHoy = plantillaActiva.filter((of) => {
+    const ced = of.cedula.toUpperCase();
+    const tieneMarcaHoy = !!asistenciasHoyMap[ced];
+    return leTocaGuardiaHoy(of.grupo, of.turno, hoyLocal) || tieneMarcaHoy;
+  });
 
-  // Personal Franco / Libre Hoy:
-  // Incluye los grupos mixtos francos, los 24x24 francos (sin botón S.E) y los diurnos/nocturnos marcados como DESCANSO
+  // Personal Franco / Libre Hoy (sin marca hoy o marcados en DESCANSO para DIURNO/NOCTURNO)
   const personalFrancoHoy = plantillaActiva.filter((of) => {
     const trn = (of.turno || 'MIXTO').toUpperCase();
     const ced = of.cedula.toUpperCase();
@@ -841,7 +832,7 @@ export default function AsistenciaLiderPage() {
     if (trn === '24X24') return `24X24 • GRP ${of.grupo}`;
     return `MIXTO • GRP ${of.grupo}`;
   };
-  const renderFilaOperativa = (oficial: OficialPlantilla, esFranco: boolean) => {
+  const renderFilaOperativa = (oficial: OficialPlantilla, esFranco: boolean, mostrarFechaIngreso = false) => {
     const ced = oficial.cedula.toUpperCase();
     const marcaHoy = asistenciasHoyMap[ced];
     const yaMarcadoPorLider = esLider && !!marcaHoy;
@@ -868,6 +859,17 @@ export default function AsistenciaLiderPage() {
               C.I. {oficial.cedula}
             </span>
           </div>
+
+          {mostrarFechaIngreso && (
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              Fecha de Ingreso:{' '}
+              {oficial.fecha_ingreso ? (
+                <strong>{new Date(oficial.fecha_ingreso).toLocaleDateString('es-VE')}</strong>
+              ) : (
+                <span className="text-amber-700 font-bold">Sin fecha (Pendiente por editar)</span>
+              )}
+            </div>
+          )}
 
           {marcaHoy && (
             <div className="mt-1">
@@ -926,7 +928,6 @@ export default function AsistenciaLiderPage() {
             </>
           )}
 
-          {/* Botones S.E MIXTO y S.E DIURNO/NOCTURNO: sin límite de hora, solo para MIXTO, DIURNO o NOCTURNO (nunca 24X24) */}
           {esFranco && permiteServicioEspecial && (
             <>
               <button
@@ -953,6 +954,23 @@ export default function AsistenciaLiderPage() {
             <span className="text-[11px] font-semibold text-slate-400 italic">
               Franco 24X24 (Sin S.E)
             </span>
+          )}
+
+          {mostrarFechaIngreso && (
+            <button
+              type="button"
+              onClick={() => {
+                setOficialEditandoFecha(oficial);
+                setNuevaFechaIngresoInput(
+                  oficial.fecha_ingreso
+                    ? new Date(oficial.fecha_ingreso).toLocaleDateString('en-CA')
+                    : hoyLocal
+                );
+              }}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 flex items-center gap-1 cursor-pointer"
+            >
+              <Calendar size={12} /> Fecha Ingreso
+            </button>
           )}
         </div>
       </div>
@@ -991,7 +1009,6 @@ export default function AsistenciaLiderPage() {
         </div>
       </div>
 
-      {/* CUADRO EJECUTIVO DE PLANTILLA DEL DÍA */}
       <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-md space-y-3">
         <div className="flex items-center justify-between border-b border-slate-700 pb-2">
           <span className="text-xs font-bold uppercase tracking-wider text-blue-300">
@@ -1084,10 +1101,10 @@ export default function AsistenciaLiderPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
               <div>
                 <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                  <Shield className="text-blue-600" size={18} /> Personal de Guardia Hoy ({personalDeGuardiaHoy.length})
+                  <Shield className="text-blue-600" size={18} /> Personal Operativo Hoy + Variables ({personalOperativoHoy.length + recibidosTemporalesHoy.length})
                 </h2>
                 <p className="text-xs text-slate-500">
-                  MIXTO Grp <strong>{grupoMixtoHoy}</strong> • 24X24 Grp <strong>{grupo24x24Hoy}</strong> • DIURNO / NOCTURNO
+                  MIXTO Grp <strong>{grupoMixtoHoy}</strong> • 24X24 Grp <strong>{grupo24x24Hoy}</strong> • DIURNO / NOCTURNO + Servicios Especiales y Apoyos del día.
                 </p>
               </div>
               <button
@@ -1105,13 +1122,13 @@ export default function AsistenciaLiderPage() {
 
             {cargando ? (
               <p className="text-center text-slate-500 py-8 text-sm">Cargando guardia del día...</p>
-            ) : personalDeGuardiaHoy.length === 0 ? (
+            ) : personalOperativoHoy.length === 0 && recibidosTemporalesHoy.length === 0 ? (
               <p className="text-center text-slate-500 py-8 text-sm">
                 No hay personal asignado de guardia hoy en <strong>{proyectoSeleccionado}</strong>.
               </p>
             ) : (
               <div className="divide-y divide-slate-100">
-                {personalDeGuardiaHoy.map((of) => renderFilaOperativa(of, false))}
+                {personalOperativoHoy.map((of) => renderFilaOperativa(of, false, false))}
               </div>
             )}
 
@@ -1152,7 +1169,7 @@ export default function AsistenciaLiderPage() {
 
               {mostrarFrancosParaServEsp && (
                 <div className="divide-y divide-slate-100 pt-2 border-t border-slate-100">
-                  {personalFrancoHoy.map((of) => renderFilaOperativa(of, true))}
+                  {personalFrancoHoy.map((of) => renderFilaOperativa(of, true, false))}
                 </div>
               )}
             </div>
@@ -1197,30 +1214,58 @@ export default function AsistenciaLiderPage() {
               <History size={16} /> Historial ({movimientos.length})
             </button>
           </div>
+
           {subMenuPlantilla === 'LISTA_GENERAL' && (
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-5">
               <div className="flex flex-wrap gap-2">
-                {(['TODOS', 'MIXTO', '24X24', 'DIURNO_NOCTURNO'] as const).map((tab) => (
+                {(['MIXTO', '24X24', 'DIURNO_NOCTURNO'] as const).map((tab) => (
                   <button
                     key={tab}
                     type="button"
-                    onClick={() => setFiltroPlantilla(tab)}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold border cursor-pointer ${
+                    onClick={() => {
+                      setFiltroPlantilla(tab);
+                      if (tab === '24X24' && grupoDesplegadoPlantilla === 'C') {
+                        setGrupoDesplegadoPlantilla('A');
+                      }
+                    }}
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer ${
                       filtroPlantilla === tab
                         ? 'bg-blue-600 text-white border-blue-600'
                         : 'bg-slate-50 text-slate-700 border-slate-200'
                     }`}
                   >
-                    {tab === 'TODOS'
-                      ? `Todos (${plantillaActiva.length})`
-                      : tab === 'MIXTO'
-                      ? 'MIXTO (A / B / C)'
+                    {tab === 'MIXTO'
+                      ? 'MIXTO'
                       : tab === '24X24'
-                      ? '24X24 (A / B)'
+                      ? '24X24'
                       : 'DIURNO / NOCTURNO'}
                   </button>
                 ))}
               </div>
+
+              {filtroPlantilla !== 'DIURNO_NOCTURNO' && (
+                <div className="flex flex-wrap gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <span className="text-xs font-bold text-slate-500 self-center mr-1">
+                    Seleccione Grupo:
+                  </span>
+                  {(filtroPlantilla === 'MIXTO' ? (['A', 'B', 'C'] as const) : (['A', 'B'] as const)).map(
+                    (grp) => (
+                      <button
+                        key={grp}
+                        type="button"
+                        onClick={() => setGrupoDesplegadoPlantilla(grp)}
+                        className={`px-4 py-2 rounded-lg text-xs font-black cursor-pointer ${
+                          grupoDesplegadoPlantilla === grp
+                            ? 'bg-slate-900 text-white shadow-sm'
+                            : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+                        }`}
+                      >
+                        GRUPO {grp}
+                      </button>
+                    )
+                  )}
+                </div>
+              )}
 
               <div className="relative">
                 <Search size={18} className="absolute left-3.5 top-3 text-slate-400" />
@@ -1228,128 +1273,48 @@ export default function AsistenciaLiderPage() {
                   type="text"
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
-                  placeholder="Buscar en plantilla general por cédula, nombre o cargo..."
+                  placeholder="Buscar por cédula, nombre o cargo..."
                   className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm"
                 />
               </div>
 
-              {(['MIXTO', '24X24', 'DIURNO_NOCTURNO'] as const)
-                .filter((sec) => filtroPlantilla === 'TODOS' || filtroPlantilla === sec)
-                .map((seccionHorario) => {
-                  const listaSeccion = plantillaActiva.filter((item) => {
-                    const trn = (item.turno || 'MIXTO').toUpperCase();
-                    const texto = `${item.cedula} ${item.nombres} ${item.apellidos} ${item.cargo || ''}`.toLowerCase();
-                    if (!texto.includes(busqueda.toLowerCase().trim())) return false;
-                    if (seccionHorario === 'MIXTO') return trn === 'MIXTO';
-                    if (seccionHorario === '24X24') return trn === '24X24';
-                    return trn === 'DIURNO' || trn === 'NOCTURNO';
-                  });
+              {(() => {
+                const miembrosDesplegados = plantillaActiva.filter((item) => {
+                  const trn = (item.turno || 'MIXTO').toUpperCase();
+                  const grp = (item.grupo || 'A').toUpperCase();
+                  const texto = `${item.cedula} ${item.nombres} ${item.apellidos} ${item.cargo || ''}`.toLowerCase();
+                  if (!texto.includes(busqueda.toLowerCase().trim())) return false;
+                  if (filtroPlantilla === 'MIXTO') {
+                    return trn === 'MIXTO' && grp === grupoDesplegadoPlantilla;
+                  }
+                  if (filtroPlantilla === '24X24') {
+                    return trn === '24X24' && grp === grupoDesplegadoPlantilla;
+                  }
+                  return trn === 'DIURNO' || trn === 'NOCTURNO';
+                });
 
-                  const subgrupos =
-                    seccionHorario === 'MIXTO'
-                      ? ['A', 'B', 'C']
-                      : seccionHorario === '24X24'
-                      ? ['A', 'B']
-                      : ['UNICO'];
-                  return (
-                    <div key={seccionHorario} className="border border-slate-200 rounded-xl p-4 space-y-3">
-                      <h3 className="text-sm font-black text-slate-800 uppercase border-b border-slate-100 pb-2">
-                        {seccionHorario === 'MIXTO'
-                          ? `HORARIO MIXTO (${listaSeccion.length})`
-                          : seccionHorario === '24X24'
-                          ? `HORARIO 24X24 (${listaSeccion.length})`
-                          : `HORARIO DIURNO / NOCTURNO (${listaSeccion.length})`}
-                      </h3>
-
-                      {subgrupos.map((subGrp) => {
-                        const miembrosSub =
-                          subGrp === 'UNICO'
-                            ? listaSeccion
-                            : listaSeccion.filter((m) => (m.grupo || 'A').toUpperCase() === subGrp);
-
-                        return (
-                          <div key={subGrp} className="space-y-1.5">
-                            {subGrp !== 'UNICO' && (
-                              <div className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md inline-block">
-                                GRUPO {subGrp} ({miembrosSub.length})
-                              </div>
-                            )}
-                            {miembrosSub.length === 0 ? (
-                              <p className="text-xs text-slate-400 pl-2">Sin personal registrado en este grupo.</p>
-                            ) : (
-                              <div className="divide-y divide-slate-100">
-                                {miembrosSub.map((oficial) => (
-                                  <div
-                                    key={oficial.id}
-                                    className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                                  >
-                                    <div>
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="px-2 py-0.5 rounded text-xs font-black bg-teal-100 text-teal-800">
-                                          {oficial.cargo || 'OFICIAL'}
-                                        </span>
-                                        <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700">
-                                          {oficial.turno}
-                                        </span>
-                                        <span className="font-bold text-sm text-slate-800">
-                                          {oficial.apellidos}, {oficial.nombres}
-                                        </span>
-                                        <span className="text-xs font-mono text-slate-500">C.I. {oficial.cedula}</span>
-                                      </div>
-                                      <div className="text-[11px] text-slate-500 mt-0.5">
-                                        Fecha de Ingreso:{' '}
-                                        {oficial.fecha_ingreso ? (
-                                          <strong>
-                                            {new Date(oficial.fecha_ingreso).toLocaleDateString('es-VE')}
-                                          </strong>
-                                        ) : (
-                                          <span className="text-amber-700 font-bold">
-                                            Sin fecha (Pendiente por editar)
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setOficialEditandoFecha(oficial);
-                                          setNuevaFechaIngresoInput(
-                                            oficial.fecha_ingreso
-                                              ? new Date(oficial.fecha_ingreso).toLocaleDateString('en-CA')
-                                              : hoyLocal
-                                          );
-                                        }}
-                                        className="px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 flex items-center gap-1 cursor-pointer"
-                                      >
-                                        <Calendar size={12} /> Fecha Ingreso
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setOficialOtro(oficial);
-                                          setTipoOtro('TRASLADO ENVIADO');
-                                          setTurnoOtro(oficial.turno || 'MIXTO');
-                                          setProyectoDestinoOtro('');
-                                          setObservacionOtro('');
-                                        }}
-                                        className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer"
-                                      >
-                                        Traslado / Egreso
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
+                return (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-black text-slate-800 uppercase border-b border-slate-100 pb-2">
+                      {filtroPlantilla === 'DIURNO_NOCTURNO'
+                        ? `PLANTILLA DIURNO / NOCTURNO (${miembrosDesplegados.length})`
+                        : `PLANTILLA ${filtroPlantilla} — GRUPO ${grupoDesplegadoPlantilla} (${miembrosDesplegados.length})`}
+                    </h3>
+                    {miembrosDesplegados.length === 0 ? (
+                      <p className="text-xs text-slate-400 py-4 text-center">
+                        No hay personal registrado en este grupo.
+                      </p>
+                    ) : (
+                      <div className="divide-y divide-slate-100">
+                        {miembrosDesplegados.map((oficial) => {
+                          const esLibreHoy = !leTocaGuardiaHoy(oficial.grupo, oficial.turno, hoyLocal);
+                          return renderFilaOperativa(oficial, esLibreHoy, true);
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
           {subMenuPlantilla === 'REGISTRAR' && (
