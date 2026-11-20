@@ -938,6 +938,33 @@ export default function AsistenciaLiderPage() {
       </div>
     );
   };
+  const obtenerPrioridadOrden = (estatus: string): number => {
+    const est = String(estatus || '').toUpperCase();
+    if (est === 'PRESENTE') return 1;
+    if (est === 'APOYO RECIBIDO') return 2;
+    if (
+      [
+        'SERVICIO ESPECIAL PROPIO',
+        'SERVICIO ESPECIAL MIXTO',
+        'SERVICIO ESPECIAL DIURNO/NOCTURNO',
+        'SERVICIO ESPECIAL RECIBIDO',
+      ].includes(est)
+    ) {
+      return 3;
+    }
+    return 4;
+  };
+
+  const listaOrdenadaAsistencia = [...asistenciasHoyList].sort((a, b) => {
+    const prioA = obtenerPrioridadOrden(a.estatus);
+    const prioB = obtenerPrioridadOrden(b.estatus);
+    if (prioA !== prioB) return prioA - prioB;
+
+    const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return tA - tB;
+  });
+
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
       <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border-l-4 border-blue-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1035,3 +1062,586 @@ export default function AsistenciaLiderPage() {
           <span>{mensaje.texto}</span>
         </div>
       )}
+      <div className="grid grid-cols-2 gap-3 bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
+        <button
+          type="button"
+          onClick={() => setSeccionPrincipal('PLANTILLA_GENERAL')}
+          className={`py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            seccionPrincipal === 'PLANTILLA_GENERAL' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Users size={18} /> PLANTILLA GENERAL ({plantillaActiva.length})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSeccionPrincipal('ASISTENCIA_GUARDIA')}
+          className={`py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            seccionPrincipal === 'ASISTENCIA_GUARDIA' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <ClipboardCheck size={18} /> ASISTENCIA DEL DÍA
+        </button>
+      </div>
+
+      {seccionPrincipal === 'ASISTENCIA_GUARDIA' ? (
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <Shield className="text-blue-600" size={18} /> Asistencia y Novedades Registradas Hoy
+              </h2>
+              <p className="text-xs text-slate-500">
+                Ordenado por hora de llegada: Plantilla Presente, Apoyos Recibidos, Servicios Especiales y Variables del día.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSeccionPrincipal('PLANTILLA_GENERAL');
+                setSubMenuPlantilla('REGISTRAR');
+                setTipoIngreso('SERVICIO ESPECIAL RECIBIDO');
+              }}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5 cursor-pointer self-start shadow-sm"
+            >
+              <UserPlus size={15} /> + Agregar Apoyo / Traslado / Serv. Esp. Recibido
+            </button>
+          </div>
+
+          {cargando ? (
+            <p className="text-center text-slate-500 py-8 text-sm">Cargando asistencia del día...</p>
+          ) : listaOrdenadaAsistencia.length === 0 ? (
+            <div className="text-center py-8 space-y-2">
+              <p className="text-sm text-slate-500">
+                Aún no se ha marcado asistencia desde <strong>PLANTILLA GENERAL</strong> hoy ({hoyLocal}).
+              </p>
+              <button
+                type="button"
+                onClick={() => setSeccionPrincipal('PLANTILLA_GENERAL')}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 cursor-pointer"
+              >
+                Ir a Plantilla General para pasar lista
+              </button>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {listaOrdenadaAsistencia.map((reg) => (
+                <div
+                  key={reg.id}
+                  className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                >
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded text-xs font-black bg-blue-100 text-blue-800">
+                        {reg.turno === 'DIURNO' || reg.turno === 'NOCTURNO'
+                          ? reg.turno
+                          : `${reg.turno} • GRP ${reg.grupo}`}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-xs font-black bg-teal-100 text-teal-800">
+                        {reg.cargo || 'OFICIAL'}
+                      </span>
+                      <span className="font-bold text-sm text-slate-800">{reg.nombre_completo}</span>
+                      <span className="text-xs font-mono text-slate-500">C.I. {reg.cedula}</span>
+                      {reg.hora_entrada && reg.hora_entrada !== '--:--' && (
+                        <span className="text-xs font-mono bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded font-bold">
+                          Entrada: {reg.hora_entrada}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1">
+                      {reg.proyecto_apoyo ? (
+                        <>
+                          Proyecto Relacionado: <strong className="text-amber-700">{reg.proyecto_apoyo}</strong> •{' '}
+                        </>
+                      ) : null}
+                      {reg.observacion || ''}
+                    </p>
+                  </div>
+
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-bold self-start sm:self-center ${
+                      estatusAsistentes.includes(reg.estatus)
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : reg.estatus === 'FALTA INJUSTIFICADA' || reg.estatus === 'BAJA POR SALUD'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {reg.estatus}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-5">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setSubMenuPlantilla('LISTA_GENERAL')}
+              className={`px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer ${
+                subMenuPlantilla === 'LISTA_GENERAL'
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'bg-white text-slate-700 border border-slate-200'
+              }`}
+            >
+              <Users size={16} /> Plantilla General ({plantillaActiva.length})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSubMenuPlantilla('REGISTRAR')}
+              className={`px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer ${
+                subMenuPlantilla === 'REGISTRAR'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-white text-emerald-700 border border-emerald-200'
+              }`}
+            >
+              <UserPlus size={16} /> Registrar Ingreso / Recibido 24h
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSubMenuPlantilla('HISTORIAL')}
+              className={`px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer ${
+                subMenuPlantilla === 'HISTORIAL'
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'bg-white text-slate-700 border border-slate-200'
+              }`}
+            >
+              <History size={16} /> Historial ({movimientos.length})
+            </button>
+          </div>
+
+          {subMenuPlantilla === 'LISTA_GENERAL' && (
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-5">
+              <div className="flex flex-wrap gap-2">
+                {(['MIXTO', '24X24', 'DIURNO_NOCTURNO'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => {
+                      setFiltroPlantilla(tab);
+                      if (tab === '24X24' && grupoDesplegadoPlantilla === 'C') {
+                        setGrupoDesplegadoPlantilla('A');
+                      }
+                    }}
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold border cursor-pointer ${
+                      filtroPlantilla === tab
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-slate-50 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    {tab === 'MIXTO'
+                      ? 'MIXTO'
+                      : tab === '24X24'
+                      ? '24X24'
+                      : 'DIURNO / NOCTURNO'}
+                  </button>
+                ))}
+              </div>
+
+              {filtroPlantilla !== 'DIURNO_NOCTURNO' && (
+                <div className="flex flex-wrap gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <span className="text-xs font-bold text-slate-500 self-center mr-1">
+                    Seleccione Grupo:
+                  </span>
+                  {(filtroPlantilla === 'MIXTO' ? (['A', 'B', 'C'] as const) : (['A', 'B'] as const)).map(
+                    (grp) => (
+                      <button
+                        key={grp}
+                        type="button"
+                        onClick={() => setGrupoDesplegadoPlantilla(grp)}
+                        className={`px-4 py-2 rounded-lg text-xs font-black cursor-pointer ${
+                          grupoDesplegadoPlantilla === grp
+                            ? 'bg-slate-900 text-white shadow-sm'
+                            : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+                        }`}
+                      >
+                        GRUPO {grp}
+                      </button>
+                    )
+                  )}
+                </div>
+              )}
+
+              <div className="relative">
+                <Search size={18} className="absolute left-3.5 top-3 text-slate-400" />
+                <input
+                  type="text"
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  placeholder="Buscar por cédula, nombre o cargo..."
+                  className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm"
+                />
+              </div>
+
+              {(() => {
+                const miembrosDesplegados = plantillaActiva.filter((item) => {
+                  const trn = (item.turno || 'MIXTO').toUpperCase();
+                  const grp = (item.grupo || 'A').toUpperCase();
+                  const texto = `${item.cedula} ${item.nombres} ${item.apellidos} ${item.cargo || ''}`.toLowerCase();
+                  if (!texto.includes(busqueda.toLowerCase().trim())) return false;
+                  if (filtroPlantilla === 'MIXTO') {
+                    return trn === 'MIXTO' && grp === grupoDesplegadoPlantilla;
+                  }
+                  if (filtroPlantilla === '24X24') {
+                    return trn === '24X24' && grp === grupoDesplegadoPlantilla;
+                  }
+                  return trn === 'DIURNO' || trn === 'NOCTURNO';
+                });
+
+                return (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-black text-slate-800 uppercase border-b border-slate-100 pb-2">
+                      {filtroPlantilla === 'DIURNO_NOCTURNO'
+                        ? `PLANTILLA DIURNO / NOCTURNO (${miembrosDesplegados.length})`
+                        : `PLANTILLA ${filtroPlantilla} — GRUPO ${grupoDesplegadoPlantilla} (${miembrosDesplegados.length})`}
+                    </h3>
+                    {miembrosDesplegados.length === 0 ? (
+                      <p className="text-xs text-slate-400 py-4 text-center">
+                        No hay personal registrado en este grupo.
+                      </p>
+                    ) : (
+                      <div className="divide-y divide-slate-100">
+                        {miembrosDesplegados.map((oficial) => {
+                          const esLibreHoy = !leTocaGuardiaHoy(oficial.grupo, oficial.turno, hoyLocal);
+                          return renderFilaOperativa(oficial, esLibreHoy);
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+          {subMenuPlantilla === 'REGISTRAR' && (
+            <form
+              onSubmit={manejarRegistrarAlta}
+              className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-5"
+            >
+              <h2 className="text-lg font-bold text-slate-800">Registrar Personal en Plantilla / Recibido 24h</h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Cédula *</label>
+                  <input
+                    type="text"
+                    required
+                    value={cedula}
+                    onChange={(e) => setCedula(e.target.value)}
+                    placeholder="Ej: V-20123456"
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-teal-800 uppercase mb-1">Cargo * (Obligatorio)</label>
+                  <select
+                    required
+                    value={cargoAlta}
+                    onChange={(e) => setCargoAlta(e.target.value as CargoOperativo)}
+                    className="w-full border border-teal-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-teal-900 bg-teal-50/40"
+                  >
+                    {LISTA_CARGOS_OPERATIVOS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Nombres *</label>
+                  <input
+                    type="text"
+                    required
+                    value={nombres}
+                    onChange={(e) => setNombres(e.target.value)}
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Apellidos *</label>
+                  <input
+                    type="text"
+                    required
+                    value={apellidos}
+                    onChange={(e) => setApellidos(e.target.value)}
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-blue-800 uppercase mb-1">Horario Asignado *</label>
+                  <select
+                    required
+                    value={turnoAlta}
+                    onChange={(e) => {
+                      const val = e.target.value as HorarioOperativo;
+                      setTurnoAlta(val);
+                      if (val === '24X24' && grupo === 'C') setGrupo('A');
+                    }}
+                    className="w-full border border-blue-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-blue-900 bg-blue-50/40"
+                  >
+                    <option value="MIXTO">MIXTO</option>
+                    <option value="24X24">24X24</option>
+                    <option value="DIURNO">DIURNO</option>
+                    <option value="NOCTURNO">NOCTURNO</option>
+                  </select>
+                </div>
+
+                {(turnoAlta === 'MIXTO' || turnoAlta === '24X24') && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                      {turnoAlta === '24X24' ? 'Grupo 24X24 (A o B) *' : 'Grupo MIXTO (A, B o C) *'}
+                    </label>
+                    <select
+                      value={grupo}
+                      onChange={(e) => setGrupo(e.target.value as 'A' | 'B' | 'C')}
+                      className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800"
+                    >
+                      <option value="A">GRUPO A</option>
+                      <option value="B">GRUPO B</option>
+                      {turnoAlta === 'MIXTO' && <option value="C">GRUPO C</option>}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Tipo de Registro *</label>
+                  <select
+                    value={tipoIngreso}
+                    onChange={(e) => {
+                      setTipoIngreso(e.target.value as TipoAltaPlantilla);
+                      setProyectoOrigen('');
+                    }}
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-emerald-700 bg-emerald-50/50"
+                  >
+                    <option value="NUEVO INGRESO">NUEVO INGRESO (Plantilla Fija)</option>
+                    <option value="TRASLADO RECIBIDO">TRASLADO RECIBIDO (Plantilla Fija)</option>
+                    <option value="SERVICIO ESPECIAL RECIBIDO">SERVICIO ESPECIAL RECIBIDO (Solo 24h)</option>
+                    <option value="APOYO RECIBIDO">APOYO RECIBIDO (Solo 24h)</option>
+                  </select>
+                </div>
+
+                {tipoIngreso !== 'NUEVO INGRESO' && (
+                  <div>
+                    <label className="block text-xs font-bold text-emerald-800 uppercase mb-1">
+                      Proyecto de Origen *
+                    </label>
+                    <select
+                      required
+                      value={proyectoOrigen}
+                      onChange={(e) => setProyectoOrigen(e.target.value)}
+                      className="w-full border border-emerald-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold"
+                    >
+                      <option value="">-- Seleccione Proyecto Origen --</option>
+                      {proyectosParaTraslado.map((proy) => (
+                        <option key={proy} value={proy}>
+                          {proy}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Observación</label>
+                  <input
+                    type="text"
+                    value={observacionIngreso}
+                    onChange={(e) => setObservacionIngreso(e.target.value)}
+                    placeholder="Detalle adicional (se reflejará en la asistencia del día)..."
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSubMenuPlantilla('LISTA_GENERAL')}
+                  className="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={guardando || (tipoIngreso !== 'NUEVO INGRESO' && !proyectoOrigen.trim())}
+                  className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer disabled:opacity-40"
+                >
+                  {guardando ? 'Guardando...' : 'Guardar Registro'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {subMenuPlantilla === 'HISTORIAL' && (
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+              <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3">
+                Historial de Movimientos ({movimientos.length})
+              </h2>
+              <div className="divide-y divide-slate-100">
+                {movimientos.map((mov) => (
+                  <div key={mov.id} className="py-2.5 text-xs flex justify-between gap-2">
+                    <div>
+                      <strong>[{mov.tipo_movimiento}]</strong> ({mov.cargo || 'OFICIAL'}) {mov.nombre_completo} ({mov.cedula})
+                      {mov.proyecto_relacionado ? ` ↔ ${mov.proyecto_relacionado}` : ''}
+                      {mov.observacion ? ` • ${mov.observacion}` : ''}
+                    </div>
+                    <span className="text-slate-400">{new Date(mov.created_at).toLocaleString('es-VE')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {oficialOtro && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <form onSubmit={confirmarMovimientoOtro} className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <h3 className="text-lg font-bold text-slate-800">Registrar Novedad / Movimiento (OTRO)</h3>
+            <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              Personal: <strong>{oficialOtro.nombres} {oficialOtro.apellidos}</strong> ({oficialOtro.cargo || 'OFICIAL'})
+              <br />
+              Cédula: <strong>{oficialOtro.cedula}</strong>
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Seleccione Opción *</label>
+                <select
+                  value={tipoOtro}
+                  onChange={(e) => {
+                    setTipoOtro(e.target.value as TipoOtroMovimiento);
+                    setProyectoDestinoOtro('');
+                    setObservacionOtro('');
+                  }}
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-bold text-amber-800 bg-amber-50/50"
+                >
+                  <option value="APOYO ENVIADO">APOYO ENVIADO</option>
+                  <option value="TRASLADO ENVIADO">TRASLADO ENVIADO</option>
+                  <option value="VACACIONES">VACACIONES</option>
+                  <option value="REPOSO MEDICO">REPOSO MÉDICO</option>
+                  <option value="BAJA POR SALUD">BAJA POR SALUD</option>
+                  <option value="FALTA JUSTIFICADA">FALTA JUSTIFICADA</option>
+                  <option value="PERMISO">PERMISO</option>
+                  <option value="DESCANSO">LIBRE / DESCANSO</option>
+                  <option value="EGRESO">EGRESO</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Horario *</label>
+                <select
+                  required
+                  value={turnoOtro}
+                  onChange={(e) => setTurnoOtro(e.target.value as HorarioOperativo)}
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-bold text-blue-800 bg-blue-50/40"
+                >
+                  <option value="MIXTO">MIXTO</option>
+                  <option value="24X24">24X24</option>
+                  <option value="DIURNO">DIURNO</option>
+                  <option value="NOCTURNO">NOCTURNO</option>
+                </select>
+              </div>
+            </div>
+
+            {(tipoOtro === 'TRASLADO ENVIADO' || tipoOtro === 'APOYO ENVIADO') && (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Proyecto Destino *
+                </label>
+                <select
+                  required
+                  value={proyectoDestinoOtro}
+                  onChange={(e) => setProyectoDestinoOtro(e.target.value)}
+                  className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-semibold"
+                >
+                  <option value="">-- Seleccione Proyecto Destino --</option>
+                  {proyectosParaTraslado.map((proy) => (
+                    <option key={proy} value={proy}>
+                      {proy}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                {['EGRESO', 'FALTA JUSTIFICADA', 'BAJA POR SALUD'].includes(tipoOtro)
+                  ? 'Motivo * (Obligatorio)'
+                  : 'Observación (Opcional)'}
+              </label>
+              <textarea
+                required={['EGRESO', 'FALTA JUSTIFICADA', 'BAJA POR SALUD'].includes(tipoOtro)}
+                rows={2}
+                value={observacionOtro}
+                onChange={(e) => setObservacionOtro(e.target.value)}
+                placeholder="Detalle o motivo..."
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setOficialOtro(null)}
+                className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={guardando}
+                className="px-5 py-2 rounded-xl text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 cursor-pointer disabled:opacity-40"
+              >
+                {guardando ? 'Guardando...' : `Confirmar ${tipoOtro}`}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+      {oficialEditandoFecha && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <form onSubmit={guardarFechaIngresoManual} className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl">
+            <h3 className="text-base font-bold text-slate-800">Editar Fecha de Ingreso</h3>
+            <p className="text-xs text-slate-600">
+              Personal: <strong>{oficialEditandoFecha.nombres} {oficialEditandoFecha.apellidos}</strong> ({oficialEditandoFecha.cedula})
+            </p>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Fecha de Ingreso *</label>
+              <input
+                type="date"
+                required
+                value={nuevaFechaIngresoInput}
+                onChange={(e) => setNuevaFechaIngresoInput(e.target.value)}
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setOficialEditandoFecha(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={guardando}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 cursor-pointer"
+              >
+                {guardando ? 'Guardando...' : 'Guardar Fecha'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
