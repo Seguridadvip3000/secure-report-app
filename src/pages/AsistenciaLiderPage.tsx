@@ -159,7 +159,6 @@ export default function AsistenciaLiderPage() {
   const [grupoDesplegadoPlantilla, setGrupoDesplegadoPlantilla] = useState<'A' | 'B' | 'C'>(grupoMixtoHoy);
   const [busqueda, setBusqueda] = useState('');
 
-  // Formulario Registrar / Recibir Personal (Nuevo Ingreso, Traslado Recibido, S.E Recibido, Apoyo Recibido)
   const [cedula, setCedula] = useState('');
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
@@ -170,14 +169,12 @@ export default function AsistenciaLiderPage() {
   const [proyectoOrigen, setProyectoOrigen] = useState('');
   const [observacionIngreso, setObservacionIngreso] = useState('');
 
-  // Modal OTRO con TODAS las variables completas
   const [oficialOtro, setOficialOtro] = useState<OficialPlantilla | null>(null);
   const [tipoOtro, setTipoOtro] = useState<TipoOtroMovimiento>('APOYO ENVIADO');
   const [turnoOtro, setTurnoOtro] = useState<HorarioOperativo>('MIXTO');
   const [proyectoDestinoOtro, setProyectoDestinoOtro] = useState('');
   const [observacionOtro, setObservacionOtro] = useState('');
 
-  // Modal Editar Fecha de Ingreso
   const [oficialEditandoFecha, setOficialEditandoFecha] = useState<OficialPlantilla | null>(null);
   const [nuevaFechaIngresoInput, setNuevaFechaIngresoInput] = useState<string>(hoyLocal);
 
@@ -379,8 +376,8 @@ export default function AsistenciaLiderPage() {
         tipo: 'exito',
         texto:
           nuevoEstatus === 'FALTA INJUSTIFICADA'
-            ? `❌ ${oficial.apellidos}, ${oficial.nombres} marcado AUSENTE y reflejado en Asistencia de Guardia.`
-            : `✅ ${oficial.apellidos}, ${oficial.nombres} registrado como ${nuevoEstatus} (${horaEntrada}) y reflejado en Asistencia de Guardia.`,
+            ? `❌ ${oficial.apellidos}, ${oficial.nombres} marcado AUSENTE y reflejado en Asistencia del Día.`
+            : `✅ ${oficial.apellidos}, ${oficial.nombres} registrado como ${nuevoEstatus} (${horaEntrada}) y reflejado en Asistencia del Día.`,
       });
       await cargarDatosProyecto();
     } catch (err: any) {
@@ -430,7 +427,6 @@ export default function AsistenciaLiderPage() {
         observacionIngreso.trim() ||
         `${tipoIngreso}${origenLimpio ? ` desde ${origenLimpio}` : ''}`;
 
-      // Siempre se incluye automáticamente en la asistencia del día
       const { error: errAsistDia } = await supabase
         .from('asistencias_diarias_oficiales')
         .upsert(
@@ -474,7 +470,7 @@ export default function AsistenciaLiderPage() {
 
         setMensaje({
           tipo: 'exito',
-          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta}) registrado como ${tipoIngreso} y reflejado en Asistencia de Guardia (${momento.hora12}).`,
+          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta}) registrado como ${tipoIngreso} y reflejado en Asistencia del Día (${momento.hora12}).`,
         });
       } else {
         const yaExisteActivo = plantillaActiva.some(
@@ -531,7 +527,7 @@ export default function AsistenciaLiderPage() {
 
         setMensaje({
           tipo: 'exito',
-          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta} • ${turnoAlta}) anexado a la plantilla fija y reflejado en Asistencia de Guardia.`,
+          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta} • ${turnoAlta}) anexado a la plantilla fija y reflejado en Asistencia del Día.`,
         });
       }
 
@@ -657,7 +653,7 @@ export default function AsistenciaLiderPage() {
 
         setMensaje({
           tipo: 'exito',
-          texto: `✅ ${tipoOtro} registrado para ${oficialOtro.apellidos}, ${oficialOtro.nombres} y reflejado en Asistencia de Guardia.`,
+          texto: `✅ ${tipoOtro} registrado para ${oficialOtro.apellidos}, ${oficialOtro.nombres} y reflejado en Asistencia del Día.`,
         });
       } else {
         const { error: errUpdate } = await supabase
@@ -975,207 +971,6 @@ export default function AsistenciaLiderPage() {
         </div>
       </div>
 
-      <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-md space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-700 pb-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-blue-300">
-            Resumen Numérico de Plantilla Presente Hoy ({hoyLocal})
-          </span>
-          <span className="text-lg font-black text-emerald-400">
-            TOTAL: {pad2(totalPersonalPresenteDia)}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
-          <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-            <div className="text-slate-400 font-bold uppercase">Líder de Proyecto</div>
-            <div className="text-xl font-black text-white mt-0.5">{pad2(countLider)}</div>
-            <div className="text-[10px] text-slate-400">
-              {liderActivoPorQR ? 'Activo por marca QR' : 'Sin entrada QR / Con salida'}
-            </div>
-          </div>
-
-          {tieneJefeOp && (
-            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-              <div className="text-slate-400 font-bold uppercase">Jefe de Operaciones</div>
-              <div className="text-xl font-black text-white mt-0.5">{pad2(countJefeOp)}</div>
-            </div>
-          )}
-
-          <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-            <div className="text-slate-400 font-bold uppercase">Oficiales Mixtos</div>
-            <div className="text-xl font-black text-blue-300 mt-0.5">{pad2(countOficialesMixtos)}</div>
-            <div className="text-[10px] text-slate-400">Incluye MIXTO + 24X24</div>
-          </div>
-
-          {(tieneDiurno || countOficialesDiurnos > 0) && (
-            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-              <div className="text-slate-400 font-bold uppercase">Oficiales Diurnos</div>
-              <div className="text-xl font-black text-amber-300 mt-0.5">{pad2(countOficialesDiurnos)}</div>
-            </div>
-          )}
-
-          {(tieneNocturno || countOficialesNocturnos > 0) && (
-            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-              <div className="text-slate-400 font-bold uppercase">Oficiales Nocturnos</div>
-              <div className="text-xl font-black text-purple-300 mt-0.5">{pad2(countOficialesNocturnos)}</div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {mensaje && (
-        <div
-          className={`p-4 rounded-xl text-sm border flex items-start gap-2 ${
-            mensaje.tipo === 'exito'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-              : 'bg-red-50 border-red-200 text-red-800'
-          }`}
-        >
-          {mensaje.tipo === 'exito' ? (
-            <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
-          ) : (
-            <AlertCircle size={18} className="shrink-0 mt-0.5" />
-          )}
-          <span>{mensaje.texto}</span>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3 bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
-        <button
-          type="button"
-          onClick={() => setSeccionPrincipal('PLANTILLA_GENERAL')}
-          className={`py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            seccionPrincipal === 'PLANTILLA_GENERAL' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Users size={18} /> PLANTILLA GENERAL ({plantillaActiva.length})
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setSeccionPrincipal('ASISTENCIA_GUARDIA')}
-          className={`py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            seccionPrincipal === 'ASISTENCIA_GUARDIA' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <ClipboardCheck size={18} /> ASISTENCIA DE GUARDIA ({asistenciasHoyList.length})
-        </button>
-      </div>
-
-      {seccionPrincipal === 'ASISTENCIA_GUARDIA' ? (
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-            <div>
-              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                <Shield className="text-blue-600" size={18} /> Personal con Asistencia / Novedad Registrada Hoy ({asistenciasHoyList.length})
-              </h2>
-              <p className="text-xs text-slate-500">
-                Aquí se refleja todo el personal marcado en Plantilla General más los apoyos, traslados y servicios especiales recibidos hoy.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setSeccionPrincipal('PLANTILLA_GENERAL');
-                setSubMenuPlantilla('REGISTRAR');
-                setTipoIngreso('APOYO RECIBIDO');
-              }}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5 cursor-pointer self-start shadow-sm"
-            >
-              <UserPlus size={15} /> + Agregar Apoyo / Traslado / S.E Recibido
-            </button>
-          </div>
-
-          {cargando ? (
-            <p className="text-center text-slate-500 py-8 text-sm">Cargando asistencia registrada hoy...</p>
-          ) : asistenciasHoyList.length === 0 ? (
-            <p className="text-center text-slate-500 py-8 text-sm">
-              Aún no se ha marcado ningún oficial hoy. Entre a <strong>PLANTILLA GENERAL</strong> para pasar lista o pulse el botón superior para agregar un recibido.
-            </p>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {asistenciasHoyList.map((reg) => (
-                <div
-                  key={reg.id}
-                  className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                >
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2 py-0.5 rounded text-xs font-black bg-blue-100 text-blue-800">
-                        {reg.turno === 'DIURNO' || reg.turno === 'NOCTURNO'
-                          ? reg.turno
-                          : `${reg.turno} • GRP ${reg.grupo}`}
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-xs font-black bg-teal-100 text-teal-800">
-                        {reg.cargo || 'OFICIAL'}
-                      </span>
-                      <span className="font-bold text-sm text-slate-800">{reg.nombre_completo}</span>
-                      <span className="text-xs font-mono text-slate-500">C.I. {reg.cedula}</span>
-                    </div>
-                    <p className="text-xs text-slate-600 mt-0.5">
-                      {reg.proyecto_apoyo ? (
-                        <>
-                          Proyecto Origen/Destino: <strong>{reg.proyecto_apoyo}</strong> •{' '}
-                        </>
-                      ) : null}
-                      {reg.observacion || ''}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        estatusAsistentes.includes(reg.estatus)
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : reg.estatus === 'FALTA INJUSTIFICADA' || reg.estatus === 'BAJA POR SALUD'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      {reg.estatus}{' '}
-                      {reg.hora_entrada && reg.hora_entrada !== '--:--' ? `(${reg.hora_entrada})` : ''}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
-  return (
-    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
-      <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border-l-4 border-blue-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Módulo Operativo</span>
-          <h1 className="text-2xl font-bold text-slate-800 mt-0.5 flex items-center gap-2">
-            <ClipboardCheck className="text-blue-600" size={26} /> Control de Asistencia y Plantilla
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Guardia Hoy ({hoyLocal}): <strong className="text-blue-700">MIXTO Grp {grupoMixtoHoy}</strong> •{' '}
-            <strong className="text-indigo-700">24X24 Grp {grupo24x24Hoy}</strong> •{' '}
-            <strong className="text-slate-700">DIURNO / NOCTURNO</strong>
-          </p>
-        </div>
-
-        <div className="w-full md:w-72">
-          <label className="block text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
-            <Building2 size={14} /> Proyecto Activo
-          </label>
-          <select
-            value={proyectoSeleccionado}
-            onChange={(e) => setProyectoSeleccionado(e.target.value)}
-            className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-800 bg-slate-50"
-          >
-            {proyectosUsuario.map((proy) => (
-              <option key={proy} value={proy}>
-                {proy}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* CUADRO EJECUTIVO DE PLANTILLA DEL DÍA */}
       <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-md space-y-3">
         <div className="flex items-center justify-between border-b border-slate-700 pb-2">
           <span className="text-xs font-bold uppercase tracking-wider text-blue-300">
