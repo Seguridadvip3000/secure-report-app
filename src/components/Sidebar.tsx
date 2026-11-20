@@ -31,6 +31,7 @@ export default function Sidebar() {
   const puedeVerAsistenciaLider = rol === 'lider';
   const puedeVerMonitorAsistencia = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom'].includes(rol);
   const puedeVerPanelAnalista = ['administrador', 'admin', 'directiva', 'operaciones', 'analista'].includes(rol);
+  const puedeVerVerificacionSE = ['administrador', 'admin', 'directiva', 'operaciones', 'analista'].includes(rol);
   const puedeVerListaReportes = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom', 'cliente'].includes(rol);
   const puedeVerAprobacionesUsuarios = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
   const puedeVerAsistenciasYSupervisiones = ['administrador', 'admin', 'directiva'].includes(rol);
@@ -150,6 +151,18 @@ export default function Sidebar() {
                 }`}
               >
                 <Search size={18} /> Control Analista
+              </Link>
+            )}
+
+            {puedeVerVerificacionSE && (
+              <Link
+                to="/verificacion-servicios-especiales"
+                onClick={cerrarMenu}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === '/verificacion-servicios-especiales' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-900'
+                }`}
+              >
+                <ShieldCheck size={18} /> Verificación Serv. Esp.
               </Link>
             )}
 

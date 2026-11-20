@@ -25,6 +25,7 @@ const SupervisionesPage = lazy(() => import('./pages/SupervisionesPage'));
 const AsistenciaLiderPage = lazy(() => import('./pages/AsistenciaLiderPage'));
 const AnalistaHome = lazy(() => import('./pages/AnalistaHome'));
 const MonitorAsistenciaOperativa = lazy(() => import('./components/MonitorAsistenciaOperativa'));
+const VerificacionServiciosEspecialesPage = lazy(() => import('./pages/VerificacionServiciosEspecialesPage'));
 
 function LoadingScreen() {
   return (
@@ -139,7 +140,13 @@ export default function App() {
                   </RoleRoute>
                 } />
 
-		  <Route path="lista-reportes" element={
+		<Route path="verificacion-servicios-especiales" element={
+                  <RoleRoute roles={['operaciones', 'analista', 'directiva', 'administrador', 'admin']}>
+                    <VerificacionServiciosEspecialesPage />
+                  </RoleRoute>
+                } />
+
+                <Route path="lista-reportes" element={
                   <RoleRoute roles={['operaciones', 'cecom', 'directiva', 'administrador', 'admin', 'cliente']}>
                     <ReportList />
                   </RoleRoute>
