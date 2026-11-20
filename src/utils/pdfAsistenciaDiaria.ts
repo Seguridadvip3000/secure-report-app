@@ -4,6 +4,7 @@ export interface RegistroAsistenciaPDF {
   proyecto?: string;
   cedula: string;
   nombre_completo: string;
+  cargo?: string;
   grupo: string;
   turno: string;
   hora_entrada?: string | null;
@@ -81,6 +82,9 @@ const dibujarBloqueVariablesYMotivos = (
   const nuevosIngresos = datos.movimientosDia.filter((m) => m.tipo_movimiento === 'NUEVO INGRESO').length;
   const egresos = datos.movimientosDia.filter((m) => m.tipo_movimiento === 'EGRESO').length;
   const bajasPorSalud = datos.registros.filter((r) => r.estatus === 'BAJA POR SALUD').length;
+  const vacacionesYFaltasJust = datos.registros.filter(
+    (r) => r.estatus === 'VACACIONES' || r.estatus === 'FALTA JUSTIFICADA'
+  ).length;
 
   const servEspPropio =
     datos.registros.filter((r) => r.estatus === 'SERVICIO ESPECIAL PROPIO').length +
@@ -100,7 +104,7 @@ const dibujarBloqueVariablesYMotivos = (
   const apoyosEnviados = datos.registros.filter((r) => r.estatus === 'APOYO ENVIADO').length;
   const faltasDelDia = datos.registros.filter((r) => r.estatus === 'FALTA INJUSTIFICADA').length;
 
-  if (y > pageHeight - 62) {
+  if (y > pageHeight - 66) {
     doc.addPage();
     dibujarEncabezado();
     y = 40;
@@ -110,7 +114,7 @@ const dibujarBloqueVariablesYMotivos = (
 
   doc.setFillColor(241, 245, 249);
   doc.setDrawColor(148, 163, 184);
-  doc.rect(margin, y, pageWidth - margin * 2, 36, 'FD');
+  doc.rect(margin, y, pageWidth - margin * 2, 41, 'FD');
 
   doc.setTextColor(15, 23, 42);
   doc.setFont('helvetica', 'bold');
@@ -118,7 +122,7 @@ const dibujarBloqueVariablesYMotivos = (
   doc.text('RESUMEN DE VARIABLES OPERATIVAS DEL DÍA', margin + 3, y + 6);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.2);
+  doc.setFontSize(8.1);
 
   const col1 = margin + 4;
   const col2 = margin + 68;
@@ -127,6 +131,7 @@ const dibujarBloqueVariablesYMotivos = (
   doc.text(`• Nuevos Ingresos: ${nuevosIngresos}`, col1, y + 13);
   doc.text(`• Servicio Especial Efectivo: ${servEspEfectivo}`, col1, y + 20);
   doc.text(`  (Propio: ${servEspPropio} | Recibido: ${servEspRecibido})`, col1, y + 26.5);
+  doc.text(`• Vacaciones / F. Just.: ${vacacionesYFaltasJust}`, col1, y + 33.5);
 
   doc.text(`• Apoyos Recibidos: ${apoyosRecibidos}`, col2, y + 13);
   doc.text(`• Servicio Especial Enviado: ${servEspEnviado}`, col2, y + 20);
@@ -139,7 +144,7 @@ const dibujarBloqueVariablesYMotivos = (
   doc.setTextColor(15, 23, 42);
   doc.text(`• Egresos: ${egresos}`, col3, y + 26.5);
 
-  y += 42;
+  y += 47;
 
   const novedadesConMotivo: string[] = [];
 
@@ -259,7 +264,7 @@ export async function generarPDFAsistenciaDiaria(
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9.5);
     doc.setTextColor(203, 213, 225);
-    doc.text(`Fecha: ${datos.fecha}   •   Seguridad VIP 3000 C.A.`, xTexto, 27);
+    doc.text(`Fecha de Guardia: ${datos.fecha}   •   Seguridad VIP 3000 C.A.`, xTexto, 27);
   };
 
   const dibujarCabeceraTabla = (yPos: number) => {
@@ -267,13 +272,14 @@ export async function generarPDFAsistenciaDiaria(
     doc.rect(margin, yPos, pageWidth - margin * 2, 7.5, 'F');
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
+    doc.setFontSize(7.6);
 
     doc.text('CÉDULA', margin + 2, yPos + 5);
-    doc.text('NOMBRES Y APELLIDOS', margin + 28, yPos + 5);
-    doc.text('GRP / TURNO', margin + 96, yPos + 5);
-    doc.text('ENTRADA', margin + 123, yPos + 5);
-    doc.text('ESTATUS / DETALLE', margin + 144, yPos + 5);
+    doc.text('CARGO', margin + 25, yPos + 5);
+    doc.text('NOMBRES Y APELLIDOS', margin + 49, yPos + 5);
+    doc.text('HORARIO / GRP', margin + 104, yPos + 5);
+    doc.text('ENTRADA', margin + 131, yPos + 5);
+    doc.text('ESTATUS / DETALLE', margin + 149, yPos + 5);
   };
 
   dibujarEncabezado();
@@ -282,11 +288,11 @@ export async function generarPDFAsistenciaDiaria(
   y += 9;
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
+  doc.setFontSize(7.6);
 
   if (datos.registros.length === 0) {
     doc.setTextColor(100, 116, 139);
-    doc.text('No se encontraron registros operativos para esta fecha y proyecto.', margin + 2, y + 4);
+    doc.text('No se encontraron registros de guardia para esta fecha y proyecto.', margin + 2, y + 4);
     y += 10;
   } else {
     datos.registros.forEach((reg, idx) => {
@@ -305,16 +311,21 @@ export async function generarPDFAsistenciaDiaria(
 
       doc.setTextColor(15, 23, 42);
       doc.setFont('helvetica', 'bold');
-      doc.text(String(reg.cedula || '').slice(0, 14), margin + 2, y + 1);
+      doc.text(String(reg.cedula || '').slice(0, 13), margin + 2, y + 1);
 
       doc.setFont('helvetica', 'normal');
-      doc.text(String(reg.nombre_completo || '').slice(0, 34), margin + 28, y + 1);
+      doc.text(String(reg.cargo || 'OFICIAL').slice(0, 13), margin + 25, y + 1);
+      doc.text(String(reg.nombre_completo || '').slice(0, 29), margin + 49, y + 1);
 
-      doc.text(`G-${reg.grupo} / ${reg.turno}`, margin + 96, y + 1);
-      doc.text(reg.hora_entrada || '--:--', margin + 123, y + 1);
+      const etiqHorario =
+        reg.turno === 'DIURNO' || reg.turno === 'NOCTURNO'
+          ? `12H-${reg.turno.slice(0, 4)}`
+          : `${reg.turno}-G${reg.grupo}`;
+      doc.text(etiqHorario, margin + 104, y + 1);
+      doc.text(reg.hora_entrada || '--:--', margin + 131, y + 1);
 
       const etiquetaEstatus = reg.proyecto_apoyo
-        ? `${reg.estatus} (${reg.proyecto_apoyo.slice(0, 14)})`
+        ? `${reg.estatus} (${reg.proyecto_apoyo.slice(0, 11)})`
         : reg.estatus;
 
       if (reg.estatus === 'FALTA INJUSTIFICADA' || reg.estatus === 'BAJA POR SALUD') {
@@ -328,7 +339,7 @@ export async function generarPDFAsistenciaDiaria(
         doc.setFont('helvetica', 'normal');
       }
 
-      doc.text(etiquetaEstatus.slice(0, 26), margin + 144, y + 1);
+      doc.text(etiquetaEstatus.slice(0, 24), margin + 149, y + 1);
 
       doc.setDrawColor(226, 232, 240);
       doc.line(margin, y + 3.2, pageWidth - margin, y + 3.2);
@@ -440,3 +451,4 @@ export async function generarPDFInformeDiarioDirectiva(datos: DatosInformeDiario
 
   doc.save(`Informe_Diario_Directiva_${datos.fecha}.pdf`);
 }
+
