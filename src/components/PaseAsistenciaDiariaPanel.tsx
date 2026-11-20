@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { CargoOperativo, LISTA_CARGOS_OPERATIVOS } from '../pages/AsistenciaLiderPage';
 import {
   CheckCircle2,
   AlertCircle,
@@ -20,6 +21,7 @@ interface OficialPlantilla {
   cedula: string;
   nombres: string;
   apellidos: string;
+  cargo?: CargoOperativo;
   grupo: 'A' | 'B' | 'C';
   turno?: 'MIXTO' | 'DIURNO' | 'NOCTURNO';
 }
@@ -37,6 +39,7 @@ export type EstatusAsistenciaOficial =
 interface RegistroFila {
   cedula: string;
   nombre_completo: string;
+  cargo: CargoOperativo;
   grupo: 'A' | 'B' | 'C';
   hora_entrada: string;
   estatus: EstatusAsistenciaOficial;
@@ -69,7 +72,6 @@ const obtenerFechaHoraCaracas = () => {
   const [hh, mm] = hora24.split(':').map(Number);
   return { fechaStr, hora24, hora12, horaNum: hh, minNum: mm };
 };
-
 export default function PaseAsistenciaDiariaPanel({
   proyectoSeleccionado,
   plantillaActiva,
@@ -94,6 +96,7 @@ export default function PaseAsistenciaDiariaPanel({
 
   const [mostrarFormExterno, setMostrarFormExterno] = useState(false);
   const [tipoExterno, setTipoExterno] = useState<'APOYO RECIBIDO' | 'SERVICIO ESPECIAL RECIBIDO'>('APOYO RECIBIDO');
+  const [cargoExt, setCargoExt] = useState<CargoOperativo>('OFICIAL');
   const [cedulaExt, setCedulaExt] = useState('');
   const [nombreExt, setNombreExt] = useState('');
   const [origenExt, setOrigenExt] = useState('');
@@ -108,7 +111,6 @@ export default function PaseAsistenciaDiariaPanel({
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
 
-  // Actualizar reloj automático en vivo si el usuario no está editando manualmente
   useEffect(() => {
     const timer = setInterval(() => {
       const actual = obtenerFechaHoraCaracas();
@@ -184,6 +186,7 @@ export default function PaseAsistenciaDiariaPanel({
               proyecto_apoyo: null,
               cedula: ced,
               nombre_completo: `${of.apellidos}, ${of.nombres}`,
+              cargo: of.cargo || 'OFICIAL',
               grupo: of.grupo,
               turno,
               hora_entrada: '--:--',
@@ -213,6 +216,7 @@ export default function PaseAsistenciaDiariaPanel({
         nuevasFilas[ced] = {
           cedula: ced,
           nombre_completo: `${of.apellidos}, ${of.nombres}`,
+          cargo: (prev?.cargo || of.cargo || 'OFICIAL') as CargoOperativo,
           grupo: of.grupo,
           hora_entrada: prev?.hora_entrada || actual.hora12,
           estatus: prev?.estatus || (pasoHoraLimite ? 'FALTA INJUSTIFICADA' : 'PRESENTE'),
@@ -266,7 +270,7 @@ export default function PaseAsistenciaDiariaPanel({
     if (listaFilas.length === 0) {
       setMensaje({
         tipo: 'error',
-        texto: `No hay oficiales activos en el Grupo ${grupoSeleccionado} para pasar asistencia.`,
+        texto: `No hay personal activo en el Grupo ${grupoSeleccionado} para pasar asistencia.`,
       });
       return;
     }
@@ -306,6 +310,7 @@ export default function PaseAsistenciaDiariaPanel({
               : null,
           cedula: f.cedula,
           nombre_completo: f.nombre_completo,
+          cargo: f.cargo || 'OFICIAL',
           grupo: f.grupo,
           turno,
           hora_entrada: horaFinal,
@@ -410,6 +415,7 @@ export default function PaseAsistenciaDiariaPanel({
             proyecto_apoyo: origenExt.trim(),
             cedula: cedLimpia,
             nombre_completo: nomLimpio,
+            cargo: cargoExt,
             grupo: grupoSeleccionado,
             turno,
             hora_entrada: horaFinal,
@@ -428,10 +434,11 @@ export default function PaseAsistenciaDiariaPanel({
       setNombreExt('');
       setOrigenExt('');
       setObsExt('');
+      setCargoExt('OFICIAL');
       setMostrarFormExterno(false);
       setMensaje({
         tipo: 'exito',
-        texto: `✅ ${tipoExterno} de ${nomLimpio} (${cedLimpia}) registrado automáticamente a las ${horaFinal}.`,
+        texto: `✅ ${tipoExterno} de ${nomLimpio} (${cargoExt} - ${cedLimpia}) registrado automáticamente a las ${horaFinal}.`,
       });
       await cargarAsistenciaExistente();
     } catch (err: any) {
@@ -474,7 +481,7 @@ export default function PaseAsistenciaDiariaPanel({
                   : `Horario Cerrado (Hora actual: ${horaTexto} — Límite: 09:00 AM)`}
               </h4>
               <p className="text-xs text-amber-800 mt-1">
-                Después de las <strong>09:00 AM</strong> o tras guardar la asistencia, cualquier oficial sin movimiento queda marcado como falta y solo la{' '}
+                Después de las <strong>09:00 AM</strong> o tras guardar la asistencia, cualquier personal sin movimiento queda marcado como falta y solo la{' '}
                 <strong>Analista</strong> puede modificarla. Envíe un correo explicando el ajuste requerido:
               </p>
             </div>
@@ -580,7 +587,7 @@ export default function PaseAsistenciaDiariaPanel({
           <p className="text-center text-slate-500 py-8 text-sm">Cargando lista del grupo...</p>
         ) : oficialesDelGrupo.length === 0 ? (
           <p className="text-center text-slate-500 py-8 text-sm">
-            No hay oficiales activos asignados al <strong>Grupo {grupoSeleccionado}</strong> en{' '}
+            No hay personal activo asignado al <strong>Grupo {grupoSeleccionado}</strong> en{' '}
             <strong>{proyectoSeleccionado}</strong>.
           </p>
         ) : (
@@ -590,6 +597,7 @@ export default function PaseAsistenciaDiariaPanel({
               const fila = filas[ced] || {
                 cedula: ced,
                 nombre_completo: `${of.apellidos}, ${of.nombres}`,
+                cargo: (of.cargo || 'OFICIAL') as CargoOperativo,
                 grupo: of.grupo,
                 hora_entrada: horaAutomatica,
                 estatus: 'PRESENTE',
@@ -600,22 +608,19 @@ export default function PaseAsistenciaDiariaPanel({
               const requiereDestino =
                 fila.estatus === 'APOYO ENVIADO' || fila.estatus === 'SERVICIO ESPECIAL ENVIADO';
               const sinMarcaHorario = fila.estatus === 'FALTA INJUSTIFICADA' || fila.estatus === 'DESCANSO';
-
               return (
                 <div key={of.id} className="py-3.5 space-y-2.5">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                     <div>
+                      <span className="px-2 py-0.5 mr-2 rounded text-[11px] font-black bg-teal-100 text-teal-800">
+                        {fila.cargo}
+                      </span>
                       <span className="font-bold text-sm text-slate-800">
                         {of.apellidos}, {of.nombres}
                       </span>
                       <span className="ml-2 text-xs font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
                         C.I. {ced}
                       </span>
-                      {of.turno && (
-                        <span className="ml-2 text-xs font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
-                          {of.turno}
-                        </span>
-                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
@@ -664,6 +669,7 @@ export default function PaseAsistenciaDiariaPanel({
                       </select>
                     </div>
                   </div>
+
                   {requiereDestino && (
                     <div className="bg-amber-50/60 p-3 rounded-xl border border-amber-200">
                       <label className="block text-xs font-bold text-amber-900 uppercase mb-1 flex items-center gap-1">
@@ -713,7 +719,6 @@ export default function PaseAsistenciaDiariaPanel({
           </div>
         )}
       </form>
-
       {mostrarFormExterno && !bloqueadoParaLider && (
         <form
           onSubmit={registrarExternoRecibido}
@@ -730,6 +735,17 @@ export default function PaseAsistenciaDiariaPanel({
             >
               <option value="APOYO RECIBIDO">APOYO RECIBIDO</option>
               <option value="SERVICIO ESPECIAL RECIBIDO">SERVICIO ESPECIAL RECIBIDO</option>
+            </select>
+            <select
+              value={cargoExt}
+              onChange={(e) => setCargoExt(e.target.value as CargoOperativo)}
+              className="border border-indigo-200 rounded-xl px-3 py-2 text-xs font-bold text-teal-900 bg-white"
+            >
+              {LISTA_CARGOS_OPERATIVOS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
             </select>
             <input
               type="text"
@@ -760,19 +776,6 @@ export default function PaseAsistenciaDiariaPanel({
                 </option>
               ))}
             </select>
-            {puedeEditarFechaYHora ? (
-              <input
-                type="text"
-                required
-                value={horaEntradaExt}
-                onChange={(e) => setHoraEntradaExt(e.target.value)}
-                className="border border-indigo-200 rounded-xl px-3 py-2 text-sm bg-white font-bold"
-              />
-            ) : (
-              <div className="border border-indigo-200 rounded-xl px-3 py-2 text-xs bg-indigo-100/60 font-bold text-indigo-900 flex items-center justify-center">
-                Hora Auto: {horaAutomatica}
-              </div>
-            )}
           </div>
           <div className="flex justify-end gap-2">
             <button
@@ -802,6 +805,9 @@ export default function PaseAsistenciaDiariaPanel({
             {externosRecibidosHoy.map((ap) => (
               <div key={ap.id} className="py-2 text-xs flex justify-between items-center">
                 <span>
+                  <span className="px-1.5 py-0.5 mr-1.5 rounded bg-teal-100 text-teal-800 font-bold">
+                    {ap.cargo || 'OFICIAL'}
+                  </span>
                   <strong>{ap.nombre_completo}</strong> (C.I. {ap.cedula}) • Entrada: <strong>{ap.hora_entrada}</strong> — Origen:{' '}
                   <strong>{ap.proyecto_apoyo}</strong>
                 </span>

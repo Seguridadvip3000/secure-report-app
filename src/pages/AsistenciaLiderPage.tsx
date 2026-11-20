@@ -18,12 +18,30 @@ import {
   Mail,
 } from 'lucide-react';
 
+export type CargoOperativo =
+  | 'OFICIAL'
+  | 'J. GRUPO'
+  | 'OPERADOR'
+  | 'J. OPERACIONES'
+  | 'J. SALA'
+  | 'LIDER';
+
+export const LISTA_CARGOS_OPERATIVOS: CargoOperativo[] = [
+  'OFICIAL',
+  'J. GRUPO',
+  'OPERADOR',
+  'J. OPERACIONES',
+  'J. SALA',
+  'LIDER',
+];
+
 interface OficialPlantilla {
   id: string;
   proyecto: string;
   cedula: string;
   nombres: string;
   apellidos: string;
+  cargo: CargoOperativo;
   grupo: 'A' | 'B' | 'C';
   turno: 'MIXTO' | 'DIURNO' | 'NOCTURNO';
   estado: 'ACTIVO' | 'INACTIVO';
@@ -51,6 +69,7 @@ interface MovimientoPlantilla {
   proyecto: string;
   cedula: string;
   nombre_completo: string;
+  cargo?: string;
   grupo: string;
   turno?: string;
   tipo_movimiento: TipoAltaPlantilla | TipoBajaPlantilla;
@@ -70,7 +89,6 @@ const obtenerHoraCaracas = () => {
   const [hh, mm] = partes.split(':').map(Number);
   return { hora: hh, minuto: mm, texto: partes };
 };
-
 export default function AsistenciaLiderPage() {
   const { currentUser } = useAuth();
 
@@ -86,7 +104,7 @@ export default function AsistenciaLiderPage() {
       ? [currentUser.proyecto_id]
       : ['SIN PROYECTO ASIGNADO'];
 
-  const [proyectoSeleccionado, setProyectoSeleccionado] = useState<string>(proyectosUsuario);
+  const [proyectoSeleccionado, setProyectoSeleccionado] = useState<string>(proyectosUsuario.at(0) || 'SIN PROYECTO ASIGNADO');
   const [listaProyectosGlobales, setListaProyectosGlobales] = useState<string[]>([]);
   const [seccionPrincipal, setSeccionPrincipal] = useState<'PLANTILLA' | 'PASE_ASISTENCIA'>('PLANTILLA');
   const [subMenuPlantilla, setSubMenuPlantilla] = useState<'ACTIVA' | 'REGISTRAR' | 'HISTORIAL'>('ACTIVA');
@@ -102,6 +120,7 @@ export default function AsistenciaLiderPage() {
   const [cedula, setCedula] = useState('');
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
+  const [cargoAlta, setCargoAlta] = useState<CargoOperativo>('OFICIAL');
   const [grupo, setGrupo] = useState<'A' | 'B' | 'C'>('A');
   const [turnoAlta, setTurnoAlta] = useState<'MIXTO' | 'DIURNO' | 'NOCTURNO'>('MIXTO');
   const [tipoIngreso, setTipoIngreso] = useState<TipoAltaPlantilla>('NUEVO INGRESO');
@@ -257,6 +276,7 @@ export default function AsistenciaLiderPage() {
             cedula: cedulaLimpia,
             nombres: nombresLimpios,
             apellidos: apellidosLimpios,
+            cargo: cargoAlta,
             grupo,
             turno: turnoAlta,
             estado: 'ACTIVO',
@@ -278,6 +298,7 @@ export default function AsistenciaLiderPage() {
           proyecto: proyectoSeleccionado,
           cedula: cedulaLimpia,
           nombre_completo: `${nombresLimpios} ${apellidosLimpios}`,
+          cargo: cargoAlta,
           grupo,
           turno: turnoAlta,
           tipo_movimiento: tipoIngreso,
@@ -290,6 +311,7 @@ export default function AsistenciaLiderPage() {
       setCedula('');
       setNombres('');
       setApellidos('');
+      setCargoAlta('OFICIAL');
       setGrupo('A');
       setTurnoAlta('MIXTO');
       setProyectoOrigen('');
@@ -297,7 +319,7 @@ export default function AsistenciaLiderPage() {
       setSubMenuPlantilla('ACTIVA');
       setMensaje({
         tipo: 'exito',
-        texto: `✅ ${nombresLimpios} ${apellidosLimpios} anexado (${tipoIngreso} • Grupo ${grupo} • Turno ${turnoAlta}).`,
+        texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta}) anexado (${tipoIngreso} • Grupo ${grupo} • Turno ${turnoAlta}).`,
       });
       await cargarDatosProyecto();
     } catch (err: any) {
@@ -337,6 +359,7 @@ export default function AsistenciaLiderPage() {
       const ahora = new Date().toISOString();
       const destinoLimpio = requiereDestino ? proyectoDestino.trim() : null;
       const motivoLimpio = observacionBaja.trim() || null;
+      const cargoOficial = oficialParaBaja.cargo || 'OFICIAL';
 
       const { error: errUpdate } = await supabase
         .from('plantilla_proyectos')
@@ -359,6 +382,7 @@ export default function AsistenciaLiderPage() {
           proyecto: proyectoSeleccionado,
           cedula: oficialParaBaja.cedula,
           nombre_completo: `${oficialParaBaja.nombres} ${oficialParaBaja.apellidos}`,
+          cargo: cargoOficial,
           grupo: oficialParaBaja.grupo,
           turno: turnoBaja,
           tipo_movimiento: tipoBaja,
@@ -380,6 +404,7 @@ export default function AsistenciaLiderPage() {
               cedula: oficialParaBaja.cedula,
               nombres: oficialParaBaja.nombres,
               apellidos: oficialParaBaja.apellidos,
+              cargo: cargoOficial,
               grupo: oficialParaBaja.grupo,
               turno: turnoBaja,
               estado: 'ACTIVO',
@@ -400,6 +425,7 @@ export default function AsistenciaLiderPage() {
               proyecto: destinoLimpio,
               cedula: oficialParaBaja.cedula,
               nombre_completo: `${oficialParaBaja.nombres} ${oficialParaBaja.apellidos}`,
+              cargo: cargoOficial,
               grupo: oficialParaBaja.grupo,
               turno: turnoBaja,
               tipo_movimiento: tipoContraparte,
@@ -413,7 +439,7 @@ export default function AsistenciaLiderPage() {
 
       setMensaje({
         tipo: 'exito',
-        texto: `✅ Movimiento ${tipoBaja} de ${oficialParaBaja.nombres} ${oficialParaBaja.apellidos} (Turno ${turnoBaja}) procesado correctamente.`,
+        texto: `✅ Movimiento ${tipoBaja} de ${oficialParaBaja.nombres} ${oficialParaBaja.apellidos} (${cargoOficial} • Turno ${turnoBaja}) procesado.`,
       });
       setOficialParaBaja(null);
       setTipoBaja('EGRESO');
@@ -426,7 +452,6 @@ export default function AsistenciaLiderPage() {
       setGuardando(false);
     }
   };
-
   const enviarCorreoPlantillaAnalista = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!motivoCorreoPlantilla.trim()) return;
@@ -449,9 +474,10 @@ export default function AsistenciaLiderPage() {
     setMotivoCorreoPlantilla('');
     setMensaje({ tipo: 'exito', texto: '✅ Correo preparado para la Analista.' });
   };
+
   const plantillaFiltrada = plantillaActiva.filter((item) => {
     const coincideGrupo = filtroGrupo === 'TODOS' || item.grupo === filtroGrupo;
-    const texto = `${item.cedula} ${item.nombres} ${item.apellidos}`.toLowerCase();
+    const texto = `${item.cedula} ${item.nombres} ${item.apellidos} ${item.cargo || ''}`.toLowerCase();
     return coincideGrupo && texto.includes(busqueda.toLowerCase().trim());
   });
 
@@ -653,7 +679,7 @@ export default function AsistenciaLiderPage() {
                   type="text"
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
-                  placeholder="Buscar por cédula, nombres o apellidos..."
+                  placeholder="Buscar por cédula, nombres, apellidos o cargo..."
                   className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -677,6 +703,9 @@ export default function AsistenciaLiderPage() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="px-2.5 py-0.5 rounded-md text-xs font-black bg-blue-100 text-blue-800">
                             GRUPO {oficial.grupo}
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-md text-xs font-black bg-teal-100 text-teal-800">
+                            {oficial.cargo || 'OFICIAL'}
                           </span>
                           <span className="px-2.5 py-0.5 rounded-md text-xs font-black bg-slate-800 text-white">
                             {oficial.turno || 'MIXTO'}
@@ -761,6 +790,46 @@ export default function AsistenciaLiderPage() {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-xs font-bold text-teal-800 uppercase mb-1">Cargo * (Obligatorio)</label>
+                  <select
+                    required
+                    value={cargoAlta}
+                    onChange={(e) => setCargoAlta(e.target.value as CargoOperativo)}
+                    className="w-full border border-teal-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-teal-900 bg-teal-50/40"
+                  >
+                    {LISTA_CARGOS_OPERATIVOS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Nombres *</label>
+                  <input
+                    type="text"
+                    required
+                    value={nombres}
+                    onChange={(e) => setNombres(e.target.value)}
+                    placeholder="Ej: JUAN CARLOS"
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Apellidos *</label>
+                  <input
+                    type="text"
+                    required
+                    value={apellidos}
+                    onChange={(e) => setApellidos(e.target.value)}
+                    placeholder="Ej: PÉREZ GÓMEZ"
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm"
+                  />
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Grupo *</label>
@@ -791,30 +860,6 @@ export default function AsistenciaLiderPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Nombres *</label>
-                  <input
-                    type="text"
-                    required
-                    value={nombres}
-                    onChange={(e) => setNombres(e.target.value)}
-                    placeholder="Ej: JUAN CARLOS"
-                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Apellidos *</label>
-                  <input
-                    type="text"
-                    required
-                    value={apellidos}
-                    onChange={(e) => setApellidos(e.target.value)}
-                    placeholder="Ej: PÉREZ GÓMEZ"
-                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm"
-                  />
-                </div>
-
-                <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Tipo de Alta *</label>
                   <select
                     value={tipoIngreso}
@@ -832,7 +877,7 @@ export default function AsistenciaLiderPage() {
                 </div>
 
                 {(tipoIngreso === 'TRASLADO RECIBIDO' || tipoIngreso === 'SERVICIO ESPECIAL RECIBIDO') && (
-                  <div>
+                  <div className="md:col-span-2">
                     <label className="block text-xs font-bold text-emerald-800 uppercase mb-1">
                       Proyecto de Origen * (Obligatorio)
                     </label>
@@ -912,6 +957,11 @@ export default function AsistenciaLiderPage() {
                             >
                               {mov.tipo_movimiento}
                             </span>
+                            {mov.cargo && (
+                              <span className="px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-800">
+                                {mov.cargo}
+                              </span>
+                            )}
                             {mov.turno && (
                               <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-800 text-white">
                                 {mov.turno}
@@ -959,7 +1009,7 @@ export default function AsistenciaLiderPage() {
           <form onSubmit={confirmarBajaPlantilla} className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
             <h3 className="text-lg font-bold text-slate-800">Registrar Salida / Traslado de Plantilla</h3>
             <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
-              Oficial: <strong>{oficialParaBaja.nombres} {oficialParaBaja.apellidos}</strong>
+              Oficial: <strong>{oficialParaBaja.nombres} {oficialParaBaja.apellidos}</strong> ({oficialParaBaja.cargo || 'OFICIAL'})
               <br />
               Cédula: <strong>{oficialParaBaja.cedula}</strong> • Grupo: <strong>{oficialParaBaja.grupo}</strong>
             </p>
