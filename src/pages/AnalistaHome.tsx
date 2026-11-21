@@ -8,6 +8,7 @@ import {
   ordenarRegistrosAsistencia,
   DatosInformeDiarioPDF,
 } from '../utils/pdfAsistenciaDiaria';
+import { generarExcelRolQuincenal } from '../utils/excelRolQuincenal';
 import {
   Search,
   ClipboardList,
@@ -23,6 +24,7 @@ import {
   History,
   Clock,
   Users,
+  Lock,
 } from 'lucide-react';
 
 const PROYECTOS_CON_JEFE_OP = ['ESTACIONAMIENTO CCCT', 'COMERCIO CCCT'];
@@ -55,6 +57,7 @@ export default function AnalistaHome() {
   const rolActual = (currentUser?.role || '').toLowerCase();
   const esDirectivaOAdmin = ['directiva', 'admin', 'directivo'].includes(rolActual);
   const puedeEditarHoraDirectiva = ['directiva', 'admin', 'directivo'].includes(rolActual);
+  const puedeCerrarAsistencia = ['analista', 'rrhh', 'recursos_humanos'].includes(rolActual);
   const nombreAnalista = currentUser?.nombre_completo || currentUser?.username || 'Analista';
 
   const [pestana, setPestana] = useState<'ASISTENCIAS_PROYECTO' | 'PLANTILLA_PROYECTO' | 'HISTORIAL_CEDULA'>(
@@ -69,9 +72,10 @@ export default function AnalistaHome() {
   const [asistenciasProyecto, setAsistenciasProyecto] = useState<any[]>([]);
   const [auditoriaDia, setAuditoriaDia] = useState<any[]>([]);
   const [liderActivoPorQR, setLiderActivoPorQR] = useState<boolean>(false);
+  const [diaCerradoActual, setDiaCerradoActual] = useState<any | null>(null);
+  const [cerrandoDia, setCerrandoDia] = useState<boolean>(false);
   const [cargandoAsist, setCargandoAsist] = useState(false);
 
-  // Pestaña Plantilla por Proyecto (A / B / C)
   const [proyectoPlantilla, setProyectoPlantilla] = useState<string>('');
   const [plantillaProyectoList, setPlantillaProyectoList] = useState<any[]>([]);
   const [filtroHorarioPlantilla, setFiltroHorarioPlantilla] = useState<'MIXTO' | '24X24' | 'DIURNO_NOCTURNO'>('MIXTO');
@@ -80,7 +84,6 @@ export default function AnalistaHome() {
   const [fechaIngresoTabInput, setFechaIngresoTabInput] = useState<string>(hoyLocal);
   const [cargandoPlantilla, setCargandoPlantilla] = useState(false);
 
-  // Modal Modificar Asistencia
   const [registroEditando, setRegistroEditando] = useState<any | null>(null);
   const [nuevoEstatus, setNuevoEstatus] = useState<string>('PRESENTE');
   const [nuevoTurno, setNuevoTurno] = useState<string>('MIXTO');
@@ -89,7 +92,6 @@ export default function AnalistaHome() {
   const [justificacionCambio, setJustificacionCambio] = useState<string>('');
   const [guardandoCambio, setGuardandoCambio] = useState(false);
 
-  // Pestaña Historial por Cédula
   const [cedulaBusqueda, setCedulaBusqueda] = useState('');
   const [fechaDesdeCedula, setFechaDesdeCedula] = useState('');
   const [fechaHastaCedula, setFechaHastaCedula] = useState('');
@@ -174,6 +176,18 @@ export default function AnalistaHome() {
 
       await verificarLiderPorQR(proyectoFiltro, fechaDesdeAsist);
 
+      if (proyectoFiltro !== 'TODOS' && fechaDesdeAsist === fechaHastaAsist) {
+        const { data: cierreData } = await supabase
+          .from('cierres_asistencia_diaria')
+          .select('*')
+          .eq('proyecto', proyectoFiltro)
+          .eq('fecha', fechaDesdeAsist)
+          .maybeSingle();
+        setDiaCerradoActual(cierreData || null);
+      } else {
+        setDiaCerradoActual(null);
+      }
+
       let qAud = supabase
         .from('auditoria_modificaciones_asistencia')
         .select('*')
@@ -222,6 +236,54 @@ export default function AnalistaHome() {
       consultarPlantillaProyecto(proyectoPlantilla);
     }
   }, [proyectoPlantilla, pestana]);
+  const manejarCerrarAsistenciaDia = async () => {
+    if (!puedeCerrarAsistencia || proyectoFiltro === 'TODOS') return;
+    if (fechaDesdeAsist >= hoyLocal) {
+      setMensajeGlobal({
+        tipo: 'error',
+        texto: '⚠️ No puede cerrar la asistencia del día en curso. Debe cerrarse a partir del día siguiente una vez cumplidas las 24 horas.',
+      });
+      return;
+    }
+    if (
+      !window.confirm(
+        `¿Confirma CERRAR LA ASISTENCIA de ${proyectoFiltro} del día ${fechaDesdeAsist}? Una vez cerrada se plasmará en el Rol de Guardia.`
+      )
+    ) {
+      return;
+    }
+
+    setCerrandoDia(true);
+    try {
+      const { error } = await supabase.from('cierres_asistencia_diaria').upsert(
+        [
+          {
+            proyecto: proyectoFiltro,
+            fecha: fechaDesdeAsist,
+            cerrado: true,
+            cerrado_por: nombreAnalista,
+            cerrado_at: new Date().toISOString(),
+          },
+        ],
+        { onConflict: 'proyecto,fecha' }
+      );
+      if (error) throw error;
+
+      setMensajeGlobal({
+        tipo: 'exito',
+        texto: `🔒 Asistencia de ${proyectoFiltro} (${fechaDesdeAsist}) CERRADA por ${nombreAnalista} y enviada al Rol de Guardia.`,
+      });
+      await consultarAsistencias();
+    } catch (err: any) {
+      setMensajeGlobal({
+        tipo: 'error',
+        texto: 'Error al cerrar asistencia: ' + (err?.message || 'Verifique conexión.'),
+      });
+    } finally {
+      setCerrandoDia(false);
+    }
+  };
+
   const guardarFechaIngresoDesdePlantilla = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!oficialEditandoFechaTab || !fechaIngresoTabInput) return;
@@ -476,6 +538,7 @@ export default function AnalistaHome() {
       setGuardandoCambio(false);
     }
   };
+
   const listaOrdenadaAsistencia = ordenarRegistrosAsistencia(asistenciasProyecto);
 
   const totalPresentes = asistenciasProyecto.filter((a) =>
@@ -493,7 +556,6 @@ export default function AnalistaHome() {
     )
   ).length;
 
-  // Cálculo del Cuadro Ejecutivo cuando se selecciona un proyecto puntual
   const proyUpper = proyectoFiltro.toUpperCase();
   const asistentesProyecto = asistenciasProyecto.filter((a) =>
     ESTATUS_ASISTENTES.includes(String(a.estatus || '').toUpperCase())
@@ -527,19 +589,18 @@ export default function AnalistaHome() {
   const totalCuadroEjecutivo =
     countLider + countJefeOp + countOficialesMixtos + countOficialesDiurnos + countOficialesNocturnos;
   const pad2 = (n: number) => String(n).padStart(2, '0');
-
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
       <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border-l-4 border-teal-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <span className="text-xs font-bold text-teal-600 uppercase tracking-wider">
-            Módulo Analista de Operaciones
+            Módulo Analista / RRHH
           </span>
           <h1 className="text-2xl font-bold text-slate-800 mt-0.5 flex items-center gap-2">
-            <ClipboardList className="text-teal-600" size={26} /> Control de Asistencia, Plantilla y Auditoría
+            <ClipboardList className="text-teal-600" size={26} /> Control de Asistencia, Cierre Diario y Rol de Guardia
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Consulta y edición auditada de asistencia, gestión de plantilla por grupo (A/B/C) y generación de PDFs.
+            Audite la asistencia del día anterior, cierre el parte diario (24h cumplidas) y descargue el Rol Quincenal en Excel.
           </p>
         </div>
 
@@ -573,7 +634,7 @@ export default function AnalistaHome() {
             pestana === 'ASISTENCIAS_PROYECTO' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <ClipboardList size={18} /> ASISTENCIAS Y PDF
+          <ClipboardList size={18} /> ASISTENCIAS, CIERRE Y ROL
         </button>
 
         <button
@@ -596,6 +657,7 @@ export default function AnalistaHome() {
           <UserCheck size={18} /> HISTORIAL POR CÉDULA
         </button>
       </div>
+
       {pestana === 'ASISTENCIAS_PROYECTO' && (
         <div className="space-y-5">
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
@@ -658,7 +720,55 @@ export default function AnalistaHome() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+              {proyectoFiltro !== 'TODOS' && fechaDesdeAsist === fechaHastaAsist && (
+                diaCerradoActual ? (
+                  <span className="px-4 py-2.5 rounded-xl text-xs font-black bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-1.5">
+                    <Lock size={14} /> ASISTENCIA CERRADA ({diaCerradoActual.cerrado_por})
+                  </span>
+                ) : puedeCerrarAsistencia ? (
+                  <button
+                    type="button"
+                    disabled={cerrandoDia || fechaDesdeAsist >= hoyLocal}
+                    onClick={manejarCerrarAsistenciaDia}
+                    title={
+                      fechaDesdeAsist >= hoyLocal
+                        ? 'Solo se puede cerrar a partir del día siguiente (24h cumplidas)'
+                        : 'Cerrar asistencia del día y plasmar en Rol de Guardia'
+                    }
+                    className="px-4 py-2.5 rounded-xl text-xs font-black bg-amber-600 text-white hover:bg-amber-700 flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Lock size={14} />
+                    {fechaDesdeAsist >= hoyLocal
+                      ? 'CERRAR ASISTENCIA (Disponible mañana)'
+                      : cerrandoDia
+                      ? 'Cerrando...'
+                      : 'CERRAR ASISTENCIA'}
+                  </button>
+                ) : null
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  const [yStr, mStr, dStr] = fechaDesdeAsist.split('-');
+                  const quincenaDetectada = Number(dStr) <= 15 ? '1ERA' : '2DA';
+                  generarExcelRolQuincenal({
+                    proyecto: proyectoFiltro,
+                    proyectosLista: listaProyectos,
+                    anio: Number(yStr),
+                    mes: Number(mStr),
+                    quincena: quincenaDetectada,
+                  });
+                }}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <Download size={15} />
+                {proyectoFiltro === 'TODOS'
+                  ? 'Roles Quincenales Excel (Por Proyecto)'
+                  : 'Rol Quincenal Excel (.xlsx)'}
+              </button>
+
               <button
                 type="button"
                 onClick={() => prepararYGenerarPDF('ASISTENCIA')}
@@ -686,7 +796,6 @@ export default function AnalistaHome() {
               )}
             </div>
           </div>
-
           {proyectoFiltro !== 'TODOS' && (
             <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-md space-y-3">
               <div className="flex items-center justify-between border-b border-slate-700 pb-2">
@@ -751,6 +860,7 @@ export default function AnalistaHome() {
               <div className="text-2xl font-black text-slate-800 mt-1">{totalOtros}</div>
             </div>
           </div>
+
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
             {cargandoAsist ? (
               <p className="text-center text-slate-500 py-8 text-sm">Consultando registros de asistencia...</p>
@@ -1065,7 +1175,6 @@ export default function AnalistaHome() {
               <span>{errorBusqueda}</span>
             </div>
           )}
-
           {resultadoCedula && (
             <div className="space-y-5">
               <div className="bg-white p-5 rounded-2xl shadow-sm border-l-4 border-teal-600 space-y-4">
