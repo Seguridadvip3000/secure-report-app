@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { supabase } from '../lib/supabase';
 import { leTocaGuardiaHoy } from './rotacionGuardia';
 
@@ -40,12 +40,47 @@ const esDomingo = (fechaISO: string) => {
   const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
   return dt.getUTCDay() === 0;
 };
-async function construirHojaPorProyecto(
+
+const colLetra = (indiceUno: number): string => {
+  let n = indiceUno;
+  let letra = '';
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    letra = String.fromCharCode(65 + rem) + letra;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letra;
+};
+
+const cargarLogoArrayBuffer = async (): Promise<ArrayBuffer | null> => {
+  try {
+    const resp = await fetch('/logo-vip3000.jpg');
+    if (!resp.ok) return null;
+    return await resp.arrayBuffer();
+  } catch {
+    return null;
+  }
+};
+
+const BORDE_FINO: Partial<ExcelJS.Borders> = {
+  top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+  bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+  left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+  right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+};
+async function construirHojaExcelJS(
+  wb: ExcelJS.Workbook,
+  nombreHoja: string,
   proyecto: string,
   anio: number,
   mes: number,
-  quincena: '1ERA' | '2DA'
+  quincena: '1ERA' | '2DA',
+  logoId: number | null
 ) {
+  const ws = wb.addWorksheet(nombreHoja, {
+    views: [{ state: 'frozen', xSplit: 5, ySplit: 5 }],
+  });
+
   const ultimoDiaMes = new Date(anio, mes, 0).getDate();
   const diaInicio = quincena === '1ERA' ? 1 : 16;
   const diaFin = quincena === '1ERA' ? 15 : ultimoDiaMes;
@@ -96,6 +131,7 @@ async function construirHojaPorProyecto(
     .lte('created_at', `${fechaHasta}T23:59:59`);
 
   const movimientos = Array.isArray(movsData) ? movsData : [];
+
   const cedulasActivas = new Set<string>();
   const activos = plantillaAll.filter((p) => {
     if (p.estado === 'ACTIVO') {
@@ -147,9 +183,7 @@ async function construirHojaPorProyecto(
     fechaISO: string,
     esApoyoExterno = false
   ): string => {
-    if (!diasCerradosSet.has(fechaISO)) {
-      return '';
-    }
+    if (!diasCerradosSet.has(fechaISO)) return '';
 
     const ced = cedula.toUpperCase();
     const marcasDia = asistencias.filter(
@@ -176,9 +210,7 @@ async function construirHojaPorProyecto(
       const est = String(marcasDia.at(0)?.estatus || '').toUpperCase();
       const trn = String(marcasDia.at(0)?.turno || turnoBase || 'MIXTO').toUpperCase();
 
-      if (est === 'SERVICIO ESPECIAL MIXTO') {
-        return 'RR';
-      }
+      if (est === 'SERVICIO ESPECIAL MIXTO') return 'RR';
       if (
         [
           'SERVICIO ESPECIAL DIURNO/NOCTURNO',
@@ -209,68 +241,6 @@ async function construirHojaPorProyecto(
     if (trnNorm === 'NOCTURNO') return 'N';
     return 'M';
   };
-  const construirFilaPersona = (
-    idx: number,
-    persona: any,
-    nacionalidadForzada?: string,
-    esApoyoExterno = false
-  ) => {
-    const { nac, num } = extraerNacionalidadYCedula(persona.cedula);
-    const codigosDias: string[] = [];
-
-    let noches = 0;
-    let domingos = 0;
-    let faltas = 0;
-    let justificativos = 0;
-    let diasLaborados = 0;
-    let redobles = 0;
-    let diasLibres = 0;
-
-    diasQuincena.forEach((dia) => {
-      const fechaISO = `${anio}-${pad2(mes)}-${pad2(dia)}`;
-      const cod = obtenerCodigoDia(
-        persona.cedula,
-        persona.turno || 'MIXTO',
-        (persona.grupo || 'A') as 'A' | 'B' | 'C',
-        fechaISO,
-        esApoyoExterno
-      );
-      codigosDias.push(cod);
-
-      const esTrabajado = ['M', 'D', 'N', 'RR', 'R'].includes(cod);
-      if (esTrabajado) {
-        diasLaborados += 1;
-        if (esDomingo(fechaISO)) domingos += 1;
-      }
-      if (cod === 'N' || cod === 'M' || cod === 'RR') noches += 1;
-      if (cod === 'RR') redobles += 2;
-      if (cod === 'R') redobles += 1;
-      if (cod === 'I') faltas += 1;
-      if (cod === 'J' || cod === 'RM') justificativos += 1;
-      if (cod === 'L' || cod === 'V') diasLibres += 1;
-    });
-
-    return {
-      fila: [
-        idx + 1,
-        persona.nombres || '',
-        persona.apellidos || '',
-        nacionalidadForzada || nac,
-        num,
-        ...codigosDias,
-        noches,
-        domingos,
-        faltas,
-        justificativos,
-        diasLaborados,
-        redobles,
-        diasLibres,
-        persona.cargo || 'OFICIAL',
-      ],
-      codigosDias,
-    };
-  };
-
   const encabezadosTabla = [
     'Nro.',
     'NOMBRES',
@@ -288,40 +258,212 @@ async function construirHojaPorProyecto(
     'CARGOS',
   ];
 
-  const hojaRows: any[][] = [
-    [`${quincena} QUINCENA DE ${nombreMes} ${anio}`],
-    [proyecto.toUpperCase()],
-    [],
-    encabezadosTabla,
+  const totalCols = encabezadosTabla.length;
+
+  // Anchos de columnas
+  ws.columns = [
+    { width: 8 },
+    { width: 22 },
+    { width: 22 },
+    { width: 13 },
+    { width: 13 },
+    ...diasQuincena.map(() => ({ width: 5.5 })),
+    { width: 9 },
+    { width: 10 },
+    { width: 8 },
+    { width: 14 },
+    { width: 15 },
+    { width: 10 },
+    { width: 12 },
+    { width: 22 },
   ];
 
-  const conteoOperativoPorDia = new Array(diasQuincena.length).fill(0);
+  // Encabezado corporativo con Logo de Seguridad VIP 3000 C.A. (Filas 1 a 3)
+  ws.getRow(1).height = 24;
+  ws.getRow(2).height = 22;
+  ws.getRow(3).height = 18;
 
-  activos.forEach((p, i) => {
-    const { fila, codigosDias } = construirFilaPersona(i, p);
-    hojaRows.push(fila);
-    codigosDias.forEach((c, idxDia) => {
-      if (['M', 'D', 'N', 'RR', 'R'].includes(c)) conteoOperativoPorDia[idxDia] += 1;
+  for (let r = 1; r <= 3; r++) {
+    for (let c = 1; c <= totalCols; c++) {
+      ws.getCell(r, c).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF0F172A' },
+      };
+    }
+  }
+
+  if (logoId !== null) {
+    ws.addImage(logoId, {
+      tl: { col: 0.15, row: 0.15 },
+      ext: { width: 68, height: 68 },
     });
-  });
+  }
 
-  hojaRows.push([]);
-  hojaRows.push(['APOYOS']);
-  hojaRows.push(encabezadosTabla);
-  apoyosList.forEach((ap, i) => {
-    const { fila, codigosDias } = construirFilaPersona(i, ap, 'SI', true);
-    hojaRows.push(fila);
-    codigosDias.forEach((c, idxDia) => {
-      if (['M', 'D', 'N', 'RR', 'R'].includes(c)) conteoOperativoPorDia[idxDia] += 1;
+  ws.getCell(1, 3).value = `ROL DE GUARDIA — ${quincena} QUINCENA DE ${nombreMes} ${anio}`;
+  ws.getCell(1, 3).font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
+
+  ws.getCell(2, 3).value = `PROYECTO: ${proyecto.toUpperCase()}   •   SEGURIDAD VIP 3000 C.A.`;
+  ws.getCell(2, 3).font = { bold: true, size: 10.5, color: { argb: 'FF93C5FD' } };
+
+  let filaActual = 5;
+
+  const escribirCabecera = () => {
+    const row = ws.getRow(filaActual);
+    row.height = 24;
+    encabezadosTabla.forEach((h, i) => {
+      const cell = row.getCell(i + 1);
+      cell.value = h;
+      cell.font = { bold: true, size: 9, color: { argb: 'FF0F172A' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+      cell.alignment = { horizontal: 'center', vertical: 'center', wrapText: true };
+      cell.border = BORDE_FINO;
     });
-  });
+    filaActual++;
+  };
 
-  hojaRows.push([]);
-  hojaRows.push(['TRASLADOS']);
-  hojaRows.push(encabezadosTabla);
+  const escribirBannerSeccion = (titulo: string) => {
+    filaActual++;
+    const row = ws.getRow(filaActual);
+    row.height = 21;
+    for (let c = 1; c <= totalCols; c++) {
+      const cell = row.getCell(c);
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+    }
+    row.getCell(1).value = titulo;
+    row.getCell(1).font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+    filaActual++;
+    escribirCabecera();
+  };
+
+  const aplicarColorCodigo = (cell: ExcelJS.Cell, cod: string, esDom: boolean) => {
+    let bg = esDom ? 'FFFEF9C3' : 'FFFFFFFF';
+    let fg = 'FF0F172A';
+
+    if (['M', 'D', 'N'].includes(cod)) {
+      bg = 'FFDCFCE7';
+      fg = 'FF166534';
+    } else if (['RR', 'R'].includes(cod)) {
+      bg = 'FFDBEAFE';
+      fg = 'FF1E40AF';
+    } else if (cod === 'L') {
+      bg = 'FFF8FAFC';
+      fg = 'FF64748B';
+    } else if (['I', 'E'].includes(cod)) {
+      bg = 'FFFEE2E2';
+      fg = 'FF991B1B';
+    } else if (['J', 'RM', 'V', 'T'].includes(cod)) {
+      bg = 'FFFEF3C7';
+      fg = 'FF92400E';
+    }
+
+    cell.font = { bold: true, size: 9.5, color: { argb: fg } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
+    cell.alignment = { horizontal: 'center', vertical: 'center' };
+    cell.border = BORDE_FINO;
+  };
+
+  const colPrimerDia = colLetra(6);
+  const colUltimoDia = colLetra(6 + diasQuincena.length - 1);
+
+  const escribirPersona = (
+    idx: number,
+    persona: any,
+    nacionalidadForzada?: string,
+    esApoyoExterno = false
+  ) => {
+    const r = filaActual;
+    const row = ws.getRow(r);
+    row.height = 19;
+    const { nac, num } = extraerNacionalidadYCedula(persona.cedula);
+
+    const setTexto = (col: number, val: any, centrar = false) => {
+      const cell = row.getCell(col);
+      cell.value = val;
+      cell.font = { size: 9, bold: centrar };
+      cell.alignment = { horizontal: centrar ? 'center' : 'left', vertical: 'center' };
+      cell.border = BORDE_FINO;
+    };
+
+    setTexto(1, idx + 1, true);
+    setTexto(2, persona.nombres || '');
+    setTexto(3, persona.apellidos || '');
+    setTexto(4, nacionalidadForzada || nac, true);
+    setTexto(5, num, true);
+
+    let noches = 0;
+    let domingos = 0;
+    let faltas = 0;
+    let justificativos = 0;
+    let diasLaborados = 0;
+    let redobles = 0;
+    let diasLibres = 0;
+
+    diasQuincena.forEach((dia, iDia) => {
+      const fechaISO = `${anio}-${pad2(mes)}-${pad2(dia)}`;
+      const esDom = esDomingo(fechaISO);
+      const cod = obtenerCodigoDia(
+        persona.cedula,
+        persona.turno || 'MIXTO',
+        (persona.grupo || 'A') as 'A' | 'B' | 'C',
+        fechaISO,
+        esApoyoExterno
+      );
+      const cell = row.getCell(6 + iDia);
+      cell.value = cod;
+      aplicarColorCodigo(cell, cod, esDom);
+
+      if (['M', 'D', 'N', 'RR', 'R'].includes(cod)) {
+        diasLaborados++;
+        if (esDom) domingos++;
+      }
+      if (['M', 'N', 'RR'].includes(cod)) noches++;
+      if (cod === 'RR') redobles += 2;
+      if (cod === 'R') redobles += 1;
+      if (cod === 'I') faltas++;
+      if (['J', 'RM'].includes(cod)) justificativos++;
+      if (['L', 'V'].includes(cod)) diasLibres++;
+    });
+
+    const cBase = 6 + diasQuincena.length;
+    const rango = `${colPrimerDia}${r}:${colUltimoDia}${r}`;
+
+    const setFormula = (col: number, formula: string, result: number) => {
+      const cell = row.getCell(col);
+      cell.value = { formula, result };
+      cell.font = { size: 9, bold: true };
+      cell.alignment = { horizontal: 'center', vertical: 'center' };
+      cell.border = BORDE_FINO;
+    };
+
+    setFormula(cBase, `COUNTIF(${rango},"M")+COUNTIF(${rango},"N")+COUNTIF(${rango},"RR")`, noches);
+    setTexto(cBase + 1, domingos, true);
+    setFormula(cBase + 2, `COUNTIF(${rango},"I")`, faltas);
+    setFormula(cBase + 3, `COUNTIF(${rango},"J")+COUNTIF(${rango},"RM")`, justificativos);
+    setFormula(
+      cBase + 4,
+      `COUNTIF(${rango},"M")+COUNTIF(${rango},"D")+COUNTIF(${rango},"N")+COUNTIF(${rango},"RR")+COUNTIF(${rango},"R")`,
+      diasLaborados
+    );
+    setFormula(cBase + 5, `(COUNTIF(${rango},"RR")*2)+COUNTIF(${rango},"R")`, redobles);
+    setFormula(cBase + 6, `COUNTIF(${rango},"L")+COUNTIF(${rango},"V")`, diasLibres);
+    setTexto(cBase + 7, persona.cargo || 'OFICIAL');
+
+    filaActual++;
+  };
+
+  escribirCabecera();
+  const filasActivosInicio = filaActual;
+  activos.forEach((p, i) => escribirPersona(i, p));
+  const filasActivosFin = Math.max(filasActivosInicio, filaActual - 1);
+
+  escribirBannerSeccion('APOYOS RECIBIDOS');
+  apoyosList.forEach((ap, i) => escribirPersona(i, ap, 'SI', true));
+
+  escribirBannerSeccion('TRASLADOS');
   trasladadosQuincena.forEach((tr, i) => {
     const partes = String(tr.nombre_completo || '').split(' ');
-    const { fila } = construirFilaPersona(
+    escribirPersona(
       i,
       {
         cedula: tr.cedula,
@@ -334,21 +476,32 @@ async function construirHojaPorProyecto(
       'SI',
       true
     );
-    hojaRows.push(fila);
   });
 
-  hojaRows.push([]);
-  hojaRows.push(['EGRESOS']);
-  hojaRows.push(encabezadosTabla);
-  egresadosQuincena.forEach((eg, i) => {
-    const { fila } = construirFilaPersona(i, eg, 'E', false);
-    hojaRows.push(fila);
+  escribirBannerSeccion('EGRESOS');
+  egresadosQuincena.forEach((eg, i) => escribirPersona(i, eg, 'E', false));
+
+  // Fila Total Operativo por Día
+  filaActual++;
+  const rowTotal = ws.getRow(filaActual);
+  rowTotal.height = 22;
+  for (let c = 1; c <= totalCols; c++) {
+    const cell = rowTotal.getCell(c);
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    cell.font = { bold: true, size: 9.5, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'center' };
+    cell.border = BORDE_FINO;
+  }
+  rowTotal.getCell(2).value = 'TOTAL OPERATIVO POR DÍA';
+
+  diasQuincena.forEach((_, iDia) => {
+    const letraCol = colLetra(6 + iDia);
+    const rng = `${letraCol}${filasActivosInicio}:${letraCol}${filasActivosFin}`;
+    rowTotal.getCell(6 + iDia).value = {
+      formula: `COUNTIF(${rng},"M")+COUNTIF(${rng},"D")+COUNTIF(${rng},"N")+COUNTIF(${rng},"RR")+COUNTIF(${rng},"R")`,
+      result: 0,
+    };
   });
-
-  hojaRows.push([]);
-  hojaRows.push(['', 'TOTAL OPERATIVO POR DÍA', '', '', '', ...conteoOperativoPorDia]);
-
-  return XLSX.utils.aoa_to_sheet(hojaRows);
 }
 
 export async function generarExcelRolQuincenal({
@@ -359,20 +512,33 @@ export async function generarExcelRolQuincenal({
   quincena,
 }: ParametrosRolQuincenal) {
   const nombreMes = NOMBRES_MESES[mes - 1] || '';
-  const wb = XLSX.utils.book_new();
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Seguridad VIP 3000 C.A.';
+  wb.created = new Date();
+
+  const logoBuffer = await cargarLogoArrayBuffer();
+  const logoId = logoBuffer ? wb.addImage({ buffer: logoBuffer, extension: 'jpeg' }) : null;
 
   if (proyecto === 'TODOS' && proyectosLista.length > 0) {
     for (const proy of proyectosLista) {
-      const ws = await construirHojaPorProyecto(proy, anio, mes, quincena);
       const nombrePestana = proy.replace(/[:\\/?*\[\]]/g, '').slice(0, 30) || 'PROYECTO';
-      XLSX.utils.book_append_sheet(wb, ws, nombrePestana);
+      await construirHojaExcelJS(wb, nombrePestana, proy, anio, mes, quincena, logoId);
     }
-    XLSX.writeFile(wb, `Roles_Guardia_Por_Proyecto_${quincena}_Quincena_${nombreMes}_${anio}.xlsx`);
-    return;
+  } else {
+    await construirHojaExcelJS(wb, `${quincena}_QUINCENA`, proyecto, anio, mes, quincena, logoId);
   }
 
-  const ws = await construirHojaPorProyecto(proyecto, anio, mes, quincena);
-  XLSX.utils.book_append_sheet(wb, ws, `${quincena}_QUINCENA`);
-  const nombreArchivo = `Rol_Guardia_${proyecto.replace(/\s+/g, '_')}_${quincena}_Quincena_${nombreMes}_${anio}.xlsx`;
-  XLSX.writeFile(wb, nombreArchivo);
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download =
+    proyecto === 'TODOS'
+      ? `Roles_Guardia_Por_Proyecto_${quincena}_Quincena_${nombreMes}_${anio}.xlsx`
+      : `Rol_Guardia_${proyecto.replace(/\s+/g, '_')}_${quincena}_Quincena_${nombreMes}_${anio}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
