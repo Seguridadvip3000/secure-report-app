@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { PROYECTOS } from '../data/constants';
+import { generarPDFVerificacionRedobles } from '../utils/pdfVerificacionRedobles';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -13,6 +14,9 @@ import {
   AlertCircle,
   Image as ImageIcon,
   RefreshCw,
+  RotateCcw,
+  Download,
+  Printer,
 } from 'lucide-react';
 
 const ESTATUS_SERVICIOS_ESPECIALES = [
@@ -46,24 +50,28 @@ export default function VerificacionServiciosEspecialesPage() {
 
   const [listaProyectos, setListaProyectos] = useState<string[]>([]);
   const [proyectoFiltro, setProyectoFiltro] = useState<string>('TODOS');
-  const [fechaFiltro, setFechaFiltro] = useState<string>(hoyLocal);
+  const [fechaDesde, setFechaDesde] = useState<string>(hoyLocal);
+  const [fechaHasta, setFechaHasta] = useState<string>(hoyLocal);
   const [filtroEstadoVerif, setFiltroEstadoVerif] = useState<'TODOS' | 'PENDIENTES' | 'VERIFICADOS'>('TODOS');
 
   const [serviciosList, setServiciosList] = useState<any[]>([]);
   const [cargando, setCargando] = useState<boolean>(false);
 
-  // Modal de Verificación
+  // Modal de Verificación con Cámara en Vivo Obligatoria (Cero Galería)
   const [registroVerificando, setRegistroVerificando] = useState<any | null>(null);
   const [fechaAutoVerif, setFechaAutoVerif] = useState<string>('');
   const [horaAutoVerif, setHoraAutoVerif] = useState<string>('');
-  const [fotoArchivo, setFotoArchivo] = useState<File | null>(null);
+  const [camaraActiva, setCamaraActiva] = useState<boolean>(false);
+  const [errorCamara, setErrorCamara] = useState<string | null>(null);
+  const [fotoBlob, setFotoBlob] = useState<Blob | null>(null);
   const [fotoPreviewUrl, setFotoPreviewUrl] = useState<string | null>(null);
   const [obsVerificacion, setObsVerificacion] = useState<string>('');
   const [guardandoVerif, setGuardandoVerif] = useState<boolean>(false);
 
-  // Modal para ver foto ampliada de un servicio ya verificado
-  const [fotoModalUrl, setFotoModalUrl] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
+  const [fotoModalUrl, setFotoModalUrl] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<{ tipo: 'exito' | 'error'; texto: string } | null>(null);
   useEffect(() => {
     const cargarProyectos = async () => {
@@ -86,15 +94,17 @@ export default function VerificacionServiciosEspecialesPage() {
       let query = supabase
         .from('asistencias_diarias_oficiales')
         .select('*')
-        .eq('fecha', fechaFiltro)
+        .gte('fecha', fechaDesde)
+        .lte('fecha', fechaHasta)
         .in('estatus', ESTATUS_SERVICIOS_ESPECIALES)
+        .order('fecha', { ascending: true })
         .order('created_at', { ascending: true });
 
       if (proyectoFiltro !== 'TODOS') {
         query = query.eq('proyecto', proyectoFiltro);
       }
 
-      const { data, error } = await query.limit(500);
+      const { data, error } = await query.limit(1000);
       if (error) throw error;
       setServiciosList(Array.isArray(data) ? data : []);
     } catch (err: any) {
@@ -109,7 +119,71 @@ export default function VerificacionServiciosEspecialesPage() {
 
   useEffect(() => {
     consultarServiciosEspeciales();
-  }, [fechaFiltro, proyectoFiltro]);
+  }, [fechaDesde, fechaHasta, proyectoFiltro]);
+
+  const detenerCamara = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setCamaraActiva(false);
+  };
+
+  const iniciarCamaraEnVivo = async () => {
+    setErrorCamara(null);
+    setFotoBlob(null);
+    setFotoPreviewUrl(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setCamaraActiva(true);
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      }, 100);
+    } catch {
+      setErrorCamara(
+        'No se pudo acceder a la cámara. Verifique los permisos de cámara de su navegador/aplicación.'
+      );
+      setCamaraActiva(false);
+    }
+  };
+
+  const capturarFotogramaCamara = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          setFotoBlob(blob);
+          setFotoPreviewUrl(URL.createObjectURL(blob));
+          detenerCamara();
+        }
+      },
+      'image/jpeg',
+      0.88
+    );
+  };
+
+  const cerrarModalVerificacion = () => {
+    detenerCamara();
+    setRegistroVerificando(null);
+    setFotoBlob(null);
+    setFotoPreviewUrl(null);
+    setErrorCamara(null);
+  };
 
   const abrirModalVerificar = (reg: any) => {
     if (!puedeVerificar || esAnalistaSoloLectura) return;
@@ -118,30 +192,18 @@ export default function VerificacionServiciosEspecialesPage() {
     setRegistroVerificando(reg);
     setFechaAutoVerif(momento.fechaStr);
     setHoraAutoVerif(momento.hora12);
-    setFotoArchivo(null);
-    setFotoPreviewUrl(null);
     setObsVerificacion('');
-  };
-
-  const manejarSeleccionFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    setFotoArchivo(file);
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setFotoPreviewUrl(url);
-    } else {
-      setFotoPreviewUrl(null);
-    }
+    iniciarCamaraEnVivo();
   };
 
   const confirmarVerificacionEnPuesto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!registroVerificando || !puedeVerificar || esAnalistaSoloLectura) return;
 
-    if (!fotoArchivo) {
+    if (!fotoBlob) {
       setMensaje({
         tipo: 'error',
-        texto: '⚠️ Debe tomar o subir obligatoriamente la FOTO del oficial en el puesto de servicio para guardar.',
+        texto: '⚠️ Debe capturar obligatoriamente la FOTO en vivo con la cámara en el puesto de servicio.',
       });
       return;
     }
@@ -149,12 +211,11 @@ export default function VerificacionServiciosEspecialesPage() {
     setGuardandoVerif(true);
     try {
       const momentoExacto = obtenerFechaHoraCaracas();
-      const extension = fotoArchivo.name.split('.').pop() || 'jpg';
-      const rutaArchivo = `${momentoExacto.fechaStr}/${registroVerificando.cedula}_${Date.now()}.${extension}`;
+      const rutaArchivo = `${momentoExacto.fechaStr}/${registroVerificando.cedula}_${Date.now()}.jpg`;
 
       const { error: errUpload } = await supabase.storage
         .from('verificaciones-servicios')
-        .upload(rutaArchivo, fotoArchivo, { upsert: true });
+        .upload(rutaArchivo, fotoBlob, { contentType: 'image/jpeg', upsert: true });
 
       if (errUpload) throw errUpload;
 
@@ -183,9 +244,7 @@ export default function VerificacionServiciosEspecialesPage() {
         tipo: 'exito',
         texto: `✅ Servicio Especial de ${registroVerificando.nombre_completo} VERIFICADO en puesto (${momentoExacto.hora12}).`,
       });
-      setRegistroVerificando(null);
-      setFotoArchivo(null);
-      setFotoPreviewUrl(null);
+      cerrarModalVerificacion();
       await consultarServiciosEspeciales();
     } catch (err: any) {
       setMensaje({
@@ -218,32 +277,59 @@ export default function VerificacionServiciosEspecialesPage() {
     return true;
   });
 
+  const manejarExportarPDFRedobles = async (modo: 'DESCARGAR' | 'IMPRIMIR') => {
+    await generarPDFVerificacionRedobles(
+      {
+        proyecto: proyectoFiltro === 'TODOS' ? 'TODOS LOS PROYECTOS' : proyectoFiltro,
+        fechaDesde,
+        fechaHasta,
+        registros: listaFiltrada.map((reg) => ({
+          fecha: reg.fecha,
+          cedula: reg.cedula,
+          nombre_completo: reg.nombre_completo,
+          turno: reg.turno,
+          proyecto: reg.proyecto,
+          proyecto_origen: obtenerProyectoOrigen(reg),
+          verificado_se: Boolean(reg.verificado_se),
+          verificado_se_por: reg.verificado_se_por,
+          verificado_se_fecha: reg.verificado_se_fecha,
+          verificado_se_hora: reg.verificado_se_hora,
+          verificado_se_observacion: reg.verificado_se_observacion,
+        })),
+      },
+      modo
+    );
+  };
+
   const totalPendientes = serviciosList.filter((i) => !i.verificado_se).length;
   const totalVerificados = serviciosList.filter((i) => Boolean(i.verificado_se)).length;
+  const totalMixtos = listaFiltrada.filter((i) => formatearHorarioLimpio(i.turno) === 'MIXTO').length;
+  const totalDiurnos = listaFiltrada.filter((i) => formatearHorarioLimpio(i.turno) === 'DIURNO').length;
+  const totalNocturnos = listaFiltrada.filter((i) => formatearHorarioLimpio(i.turno) === 'NOCTURNO').length;
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
       <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border-l-4 border-indigo-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">
-            Control de Campo y Auditoría
+            Control de Campo y Auditoría de Redobles
           </span>
           <h1 className="text-2xl font-bold text-slate-800 mt-0.5 flex items-center gap-2">
             <ShieldCheck className="text-indigo-600" size={26} /> Verificación de Servicios Especiales
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             {esAnalistaSoloLectura
-              ? 'Vista de consulta y auditoría (Solo lectura para Analista).'
-              : 'Verifique en campo cada Servicio Especial reportado adjuntando fotografía obligatoria en el puesto.'}
+              ? 'Vista de consulta e impresión de PDF (Solo lectura para Analista).'
+              : 'Verifique en campo con cámara en vivo obligatoria en el puesto y genere el PDF Verificación de Redobles.'}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="bg-red-50 border border-red-200 px-3.5 py-2 rounded-xl text-center">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="bg-red-50 border border-red-200 px-3 py-2 rounded-xl text-center">
             <div className="text-[10px] font-bold text-red-700 uppercase">Pendientes</div>
             <div className="text-lg font-black text-red-700">{totalPendientes}</div>
           </div>
-          <div className="bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-xl text-center">
+          <div className="bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl text-center">
             <div className="text-[10px] font-bold text-emerald-700 uppercase">Verificados</div>
             <div className="text-lg font-black text-emerald-700">{totalVerificados}</div>
           </div>
@@ -267,59 +353,108 @@ export default function VerificacionServiciosEspecialesPage() {
         </div>
       )}
 
-      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap items-end gap-4">
-        <div className="w-full sm:w-64">
-          <label className="block text-xs font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
-            <Building2 size={14} /> Proyecto Efectivo
-          </label>
-          <select
-            value={proyectoFiltro}
-            onChange={(e) => setProyectoFiltro(e.target.value)}
-            className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold"
-          >
-            <option value="TODOS">TODOS LOS PROYECTOS</option>
-            {listaProyectos.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
-            <Calendar size={14} /> Fecha
-          </label>
-          <input
-            type="date"
-            value={fechaFiltro}
-            onChange={(e) => setFechaFiltro(e.target.value)}
-            className="border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold"
-          />
-        </div>
-
-        <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl">
-          {(['TODOS', 'PENDIENTES', 'VERIFICADOS'] as const).map((est) => (
-            <button
-              key={est}
-              type="button"
-              onClick={() => setFiltroEstadoVerif(est)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${
-                filtroEstadoVerif === est ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-white'
-              }`}
+      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-xs font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
+              <Building2 size={14} /> Proyecto Efectivo
+            </label>
+            <select
+              value={proyectoFiltro}
+              onChange={(e) => setProyectoFiltro(e.target.value)}
+              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold"
             >
-              {est}
-            </button>
-          ))}
+              <option value="TODOS">TODOS LOS PROYECTOS</option>
+              {listaProyectos.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
+              <Calendar size={14} /> Desde
+            </label>
+            <input
+              type="date"
+              value={fechaDesde}
+              onChange={(e) => setFechaDesde(e.target.value)}
+              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
+              <Calendar size={14} /> Hasta
+            </label>
+            <input
+              type="date"
+              value={fechaHasta}
+              onChange={(e) => setFechaHasta(e.target.value)}
+              className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Estado</label>
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+              {(['TODOS', 'PENDIENTES', 'VERIFICADOS'] as const).map((est) => (
+                <button
+                  key={est}
+                  type="button"
+                  onClick={() => setFiltroEstadoVerif(est)}
+                  className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer ${
+                    filtroEstadoVerif === est ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-white'
+                  }`}
+                >
+                  {est}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        <button
-          type="button"
-          onClick={consultarServiciosEspeciales}
-          className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
-        >
-          <RefreshCw size={14} /> Actualizar
-        </button>
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+          <div className="flex flex-wrap gap-2 text-xs font-bold">
+            <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 border border-blue-200">
+              Mixtos: {totalMixtos}
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200">
+              Diurnos: {totalDiurnos}
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-800 border border-purple-200">
+              Nocturnos: {totalNocturnos}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={consultarServiciosEspeciales}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-1.5 cursor-pointer"
+            >
+              <RefreshCw size={14} /> Actualizar
+            </button>
+
+            <button
+              type="button"
+              onClick={() => manejarExportarPDFRedobles('DESCARGAR')}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer shadow-sm"
+            >
+              <Download size={14} /> PDF Verificación de Redobles
+            </button>
+
+            <button
+              type="button"
+              onClick={() => manejarExportarPDFRedobles('IMPRIMIR')}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5 cursor-pointer shadow-sm"
+            >
+              <Printer size={14} /> Imprimir PDF
+            </button>
+          </div>
+        </div>
       </div>
       {cargando ? (
         <p className="text-center text-slate-500 py-10 text-sm">Cargando servicios especiales...</p>
@@ -353,6 +488,10 @@ export default function VerificacionServiciosEspecialesPage() {
                     >
                       {verificado ? <ShieldCheck size={14} /> : <ShieldAlert size={14} />}
                       {verificado ? 'VERIFICADO' : 'PENDIENTE POR VERIFICAR'}
+                    </span>
+
+                    <span className="px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-white/90 text-slate-700 border border-slate-300">
+                      {reg.fecha}
                     </span>
 
                     <span className="px-2.5 py-0.5 rounded-md text-xs font-black bg-blue-100 text-blue-900">
@@ -416,13 +555,13 @@ export default function VerificacionServiciosEspecialesPage() {
         </div>
       )}
       {registroVerificando && (
-        <div className="fixed inset-0 bg-black/65 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4 overflow-y-auto">
           <form
             onSubmit={confirmarVerificacionEnPuesto}
-            className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl"
+            className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl my-auto"
           >
             <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              <Camera className="text-indigo-600" size={20} /> Verificar Servicio Especial en Puesto
+              <Camera className="text-indigo-600" size={20} /> Verificar Servicio Especial (Cámara en Vivo)
             </h3>
 
             <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs space-y-1">
@@ -443,28 +582,57 @@ export default function VerificacionServiciosEspecialesPage() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-red-700 uppercase mb-1.5">
-                FOTO del Oficial en el Puesto de Servicio * (Obligatoria)
-              </label>
-              <label className="w-full border-2 border-dashed border-indigo-300 bg-indigo-50/50 hover:bg-indigo-50 rounded-xl p-4 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-center">
-                <Camera size={24} className="text-indigo-600" />
-                <span className="text-xs font-bold text-indigo-900">
-                  {fotoArchivo ? fotoArchivo.name : 'Pulsar aquí para tomar o subir FOTO'}
-                </span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  required
-                  onChange={manejarSeleccionFoto}
-                  className="hidden"
-                />
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-red-700 uppercase">
+                Cámara en Vivo en Puesto de Servicio * (No se permite galería)
               </label>
 
+              {errorCamara && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 space-y-2">
+                  <p>{errorCamara}</p>
+                  <button
+                    type="button"
+                    onClick={iniciarCamaraEnVivo}
+                    className="px-3 py-1.5 rounded-lg bg-red-600 text-white font-bold cursor-pointer"
+                  >
+                    Reintentar Activar Cámara
+                  </button>
+                </div>
+              )}
+
+              {camaraActiva && !fotoPreviewUrl && (
+                <div className="space-y-2">
+                  <div className="rounded-xl overflow-hidden bg-black border-2 border-indigo-500 aspect-video flex items-center justify-center">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={capturarFotogramaCamara}
+                    className="w-full py-2.5 rounded-xl text-xs font-black bg-indigo-600 text-white hover:bg-indigo-700 flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                  >
+                    <Camera size={16} /> TOMAR FOTO AHORA
+                  </button>
+                </div>
+              )}
+
               {fotoPreviewUrl && (
-                <div className="mt-2.5 rounded-xl overflow-hidden border border-slate-300 max-h-48 flex justify-center bg-slate-900">
-                  <img src={fotoPreviewUrl} alt="Vista previa puesto" className="object-contain max-h-48" />
+                <div className="space-y-2">
+                  <div className="rounded-xl overflow-hidden border-2 border-emerald-500 max-h-52 flex justify-center bg-slate-950">
+                    <img src={fotoPreviewUrl} alt="Captura en puesto" className="object-contain max-h-52" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={iniciarCamaraEnVivo}
+                    className="w-full py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <RotateCcw size={14} /> Repetir Foto con Cámara
+                  </button>
                 </div>
               )}
             </div>
@@ -485,17 +653,17 @@ export default function VerificacionServiciosEspecialesPage() {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setRegistroVerificando(null)}
+                onClick={cerrarModalVerificacion}
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                disabled={guardandoVerif || !fotoArchivo}
+                disabled={guardandoVerif || !fotoBlob}
                 className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {guardandoVerif ? 'Subiendo Foto y Verificando...' : 'Guardar Verificación'}
+                {guardandoVerif ? 'Guardando...' : 'Guardar Verificación'}
               </button>
             </div>
           </form>
