@@ -62,7 +62,7 @@ const cargarLogoBase64 = (): Promise<string | null> => {
       }
     };
     img.onerror = () => resolve(null);
-    img.src = '/logo-vip.jpg';
+    img.src = '/logo-vip3000.jpg';
   });
 };
 

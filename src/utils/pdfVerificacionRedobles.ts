@@ -33,13 +33,13 @@ const cargarLogoBase64 = (): Promise<string | null> => {
         const ctx = canvas.getContext('2d');
         if (!ctx) return resolve(null);
         ctx.drawImage(img, 0, 0);
-        resolve(canvas.toDataURL('image/jpeg', 0.9));
+        resolve(canvas.toDataURL('image/jpeg', 0.92));
       } catch {
         resolve(null);
       }
     };
     img.onerror = () => resolve(null);
-    img.src = '/logo-vip.jpg';
+    img.src = '/logo-vip3000.jpg';
   });
 };
 
@@ -98,21 +98,20 @@ export async function generarPDFVerificacionRedobles(
     doc.rect(margin, yPos, pageWidth - margin * 2, 7.5, 'F');
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
+    doc.setFontSize(7.4);
 
     doc.text('FECHA', margin + 2, yPos + 5);
-    doc.text('CÉDULA', margin + 23, yPos + 5);
-    doc.text('NOMBRES Y APELLIDOS', margin + 45, yPos + 5);
-    doc.text('HORARIO', margin + 98, yPos + 5);
-    doc.text('PROYECTO ORIGEN', margin + 118, yPos + 5);
-    doc.text('PROYECTO EFECTIVO', margin + 157, yPos + 5);
-    doc.text('ESTATUS / VALIDACIÓN (FECHA, HORA Y USUARIO)', margin + 197, yPos + 5);
+    doc.text('CÉDULA', margin + 22, yPos + 5);
+    doc.text('NOMBRES Y APELLIDOS', margin + 43, yPos + 5);
+    doc.text('HORARIO', margin + 93, yPos + 5);
+    doc.text('PROYECTO ORIGEN', margin + 112, yPos + 5);
+    doc.text('PROYECTO EFECTIVO', margin + 150, yPos + 5);
+    doc.text('ESTATUS / VALIDACIÓN', margin + 188, yPos + 5);
   };
 
   dibujarEncabezado();
   let y = 36;
 
-  // Cuadro resumen de totales (Mixtos, Diurnos, Nocturnos y Total General)
   doc.setFillColor(241, 245, 249);
   doc.rect(margin, y, pageWidth - margin * 2, 10, 'F');
   doc.setDrawColor(203, 213, 225);
@@ -132,7 +131,7 @@ export async function generarPDFVerificacionRedobles(
   y += 9;
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.4);
+  doc.setFontSize(7.2);
 
   if (datos.registros.length === 0) {
     doc.setTextColor(100, 116, 139);
@@ -159,26 +158,28 @@ export async function generarPDFVerificacionRedobles(
       doc.setFont('helvetica', 'normal');
       doc.text(String(reg.fecha || ''), margin + 2, y + 1);
       doc.setFont('helvetica', 'bold');
-      doc.text(String(reg.cedula || '').slice(0, 12), margin + 23, y + 1);
+      doc.text(String(reg.cedula || '').slice(0, 12), margin + 22, y + 1);
       doc.setFont('helvetica', 'normal');
-      doc.text(String(reg.nombre_completo || '').slice(0, 27), margin + 45, y + 1);
+      doc.text(String(reg.nombre_completo || '').slice(0, 25), margin + 43, y + 1);
       doc.setFont('helvetica', 'bold');
-      doc.text(horario, margin + 98, y + 1);
+      doc.text(horario, margin + 93, y + 1);
       doc.setFont('helvetica', 'normal');
-      doc.text(String(origen || '').slice(0, 20), margin + 118, y + 1);
-      doc.text(String(reg.proyecto || '').slice(0, 20), margin + 157, y + 1);
+      doc.text(String(origen || '').slice(0, 19), margin + 112, y + 1);
+      doc.text(String(reg.proyecto || '').slice(0, 19), margin + 150, y + 1);
 
       if (reg.verificado_se) {
         doc.setTextColor(21, 128, 61);
         doc.setFont('helvetica', 'bold');
-        const textoVal = `VERIFICADO (${reg.verificado_se_fecha || reg.fecha} ${reg.verificado_se_hora || ''}) - Por: ${
-          reg.verificado_se_por || 'N/A'
+        const textoVal = `VERIFICADO (${reg.verificado_se_fecha || reg.fecha} ${reg.verificado_se_hora || ''}) • ${
+          reg.verificado_se_por || ''
         }`;
-        doc.text(textoVal.slice(0, 38), margin + 197, y + 1);
+        const anchoMaxCol = pageWidth - margin - (margin + 188) - 2;
+        const lineaAjustada = doc.splitTextToSize(textoVal, anchoMaxCol).at(0) || textoVal;
+        doc.text(lineaAjustada, margin + 188, y + 1);
       } else {
         doc.setTextColor(185, 28, 28);
         doc.setFont('helvetica', 'bold');
-        doc.text('PENDIENTE POR VERIFICAR', margin + 197, y + 1);
+        doc.text('PENDIENTE POR VERIFICAR', margin + 188, y + 1);
       }
 
       doc.setDrawColor(226, 232, 240);
