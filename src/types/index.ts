@@ -6,6 +6,8 @@ export type UserRole =
   | 'operaciones'
   | 'directiva'
   | 'analista'
+  | 'reclutamiento'
+  | 'rrhh'
   | 'administrador';
 
 export type UserStatus = 'pendiente' | 'aprobado' | 'rechazado';
@@ -68,6 +70,8 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   operaciones: 'Operaciones',
   directiva: 'Directiva',
   analista: 'Analista',
+  reclutamiento: 'Reclutamiento y Selección',
+  rrhh: 'Gerente de Recursos Humanos (RRHH)',
   administrador: 'Administrador',
 };
 
@@ -79,5 +83,7 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   operaciones: 'bg-purple-100 text-purple-800 border-purple-200',
   directiva: 'bg-red-100 text-red-700 border-red-200',
   analista: 'bg-teal-100 text-teal-800 border-teal-200',
+  reclutamiento: 'bg-violet-100 text-violet-800 border-violet-200',
+  rrhh: 'bg-emerald-100 text-emerald-800 border-emerald-200',
   administrador: 'bg-orange-100 text-orange-800 border-orange-200',
 };
