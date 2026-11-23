@@ -1355,7 +1355,6 @@ export default function AsistenciaLiderPage() {
         </div>
        )}
 
-
       {oficialOtro && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <form onSubmit={confirmarMovimientoOtro} className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
