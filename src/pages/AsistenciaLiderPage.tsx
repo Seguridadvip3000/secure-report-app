@@ -1353,8 +1353,7 @@ export default function AsistenciaLiderPage() {
             </div>
           )}
         </div>
-      </div>
-      )}
+       )}
 
 
       {oficialOtro && (
