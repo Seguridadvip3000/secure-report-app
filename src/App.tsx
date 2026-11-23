@@ -26,6 +26,9 @@ const AsistenciaLiderPage = lazy(() => import('./pages/AsistenciaLiderPage'));
 const AnalistaHome = lazy(() => import('./pages/AnalistaHome'));
 const MonitorAsistenciaOperativa = lazy(() => import('./components/MonitorAsistenciaOperativa'));
 const VerificacionServiciosEspecialesPage = lazy(() => import('./pages/VerificacionServiciosEspecialesPage'));
+const ReclutamientoHome = lazy(() => import('./pages/ReclutamientoHome'));
+const EgresadosPage = lazy(() => import('./pages/EgresadosPage'));
+const ConsultaFichaTecnicaPage = lazy(() => import('./pages/ConsultaFichaTecnicaPage'));
 
 function LoadingScreen() {
   return (
@@ -69,7 +72,11 @@ function RootRedirect() {
     case 'operaciones':
       return <Navigate to="/home-operaciones" replace />;
     case 'analista':
+    case 'rrhh':
+    case 'recursos_humanos':
       return <Navigate to="/home-analista" replace />;
+    case 'reclutamiento':
+      return <Navigate to="/home-reclutamiento" replace />;
     case 'cecom':
       return <Navigate to="/home-cecom" replace />;
     case 'supervisor':
@@ -81,6 +88,7 @@ function RootRedirect() {
       return <LiderHome />;
   }
 }
+
 function MonitorPorRolRoute() {
   const { currentUser } = useAuth();
   const rol = (currentUser?.role || '').toLowerCase();
@@ -129,8 +137,26 @@ export default function App() {
                 } />
 
                 <Route path="home-analista" element={
-                  <RoleRoute roles={['analista', 'operaciones', 'directiva', 'administrador', 'admin']}>
+                  <RoleRoute roles={['analista', 'rrhh', 'recursos_humanos', 'operaciones', 'directiva', 'administrador', 'admin']}>
                     <AnalistaHome />
+                  </RoleRoute>
+                } />
+
+                <Route path="home-reclutamiento" element={
+                  <RoleRoute roles={['reclutamiento', 'rrhh', 'recursos_humanos', 'directiva', 'administrador', 'admin']}>
+                    <ReclutamientoHome />
+                  </RoleRoute>
+                } />
+
+                <Route path="ficha-tecnica" element={
+                  <RoleRoute roles={['reclutamiento', 'rrhh', 'recursos_humanos', 'operaciones', 'directiva', 'administrador', 'admin']}>
+                    <ConsultaFichaTecnicaPage />
+                  </RoleRoute>
+                } />
+
+                <Route path="egresados" element={
+                  <RoleRoute roles={['reclutamiento', 'rrhh', 'recursos_humanos', 'operaciones', 'directiva', 'administrador', 'admin']}>
+                    <EgresadosPage />
                   </RoleRoute>
                 } />
                 
@@ -140,8 +166,8 @@ export default function App() {
                   </RoleRoute>
                 } />
 
-		<Route path="verificacion-servicios-especiales" element={
-                  <RoleRoute roles={['operaciones', 'analista', 'directiva', 'administrador', 'admin']}>
+                <Route path="verificacion-servicios-especiales" element={
+                  <RoleRoute roles={['operaciones', 'analista', 'rrhh', 'recursos_humanos', 'directiva', 'administrador', 'admin']}>
                     <VerificacionServiciosEspecialesPage />
                   </RoleRoute>
                 } />
@@ -234,6 +260,7 @@ export default function App() {
     </AuthProvider>
   );
 }
+
 function Layout() {
   const { currentUser } = useAuth();
   const [diagnosticoPush, setDiagnosticoPush] = React.useState<string | null>(null);

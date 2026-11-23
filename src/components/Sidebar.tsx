@@ -16,6 +16,9 @@ import {
   ClipboardCheck,
   Search,
   Users,
+  UserPlus,
+  UserMinus,
+  IdCard,
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -30,8 +33,10 @@ export default function Sidebar() {
   const puedeCrearReporte = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom', 'supervisor', 'lider'].includes(rol);
   const puedeVerAsistenciaLider = rol === 'lider';
   const puedeVerMonitorAsistencia = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom'].includes(rol);
-  const puedeVerPanelAnalista = ['administrador', 'admin', 'directiva', 'operaciones', 'analista'].includes(rol);
-  const puedeVerVerificacionSE = ['administrador', 'admin', 'directiva', 'operaciones', 'analista'].includes(rol);
+  const puedeVerPanelAnalista = ['administrador', 'admin', 'directiva', 'operaciones', 'analista', 'rrhh', 'recursos_humanos'].includes(rol);
+  const puedeVerVerificacionSE = ['administrador', 'admin', 'directiva', 'operaciones', 'analista', 'rrhh', 'recursos_humanos'].includes(rol);
+  const puedeVerReclutamiento = ['administrador', 'admin', 'directiva', 'reclutamiento', 'rrhh', 'recursos_humanos'].includes(rol);
+  const puedeVerFichaYEgresados = ['administrador', 'admin', 'directiva', 'operaciones', 'reclutamiento', 'rrhh', 'recursos_humanos'].includes(rol);
   const puedeVerListaReportes = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom', 'cliente'].includes(rol);
   const puedeVerAprobacionesUsuarios = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
   const puedeVerAsistenciasYSupervisiones = ['administrador', 'admin', 'directiva'].includes(rol);
@@ -104,7 +109,6 @@ export default function Sidebar() {
               <X size={20} />
             </button>
           </div>
-
           <nav className="space-y-1">
             {puedeCrearReporte && (
               <Link
@@ -164,6 +168,42 @@ export default function Sidebar() {
               >
                 <ShieldCheck size={18} /> Verificación Serv. Esp.
               </Link>
+            )}
+
+            {puedeVerReclutamiento && (
+              <Link
+                to="/home-reclutamiento"
+                onClick={cerrarMenu}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === '/home-reclutamiento' ? 'bg-violet-600 text-white' : 'hover:bg-slate-900'
+                }`}
+              >
+                <UserPlus size={18} /> Reclutamiento
+              </Link>
+            )}
+
+            {puedeVerFichaYEgresados && (
+              <>
+                <Link
+                  to="/ficha-tecnica"
+                  onClick={cerrarMenu}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    location.pathname === '/ficha-tecnica' ? 'bg-blue-600 text-white' : 'hover:bg-slate-900'
+                  }`}
+                >
+                  <IdCard size={18} /> Ficha Técnica C.I.
+                </Link>
+
+                <Link
+                  to="/egresados"
+                  onClick={cerrarMenu}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    location.pathname === '/egresados' ? 'bg-red-600 text-white' : 'hover:bg-slate-900'
+                  }`}
+                >
+                  <UserMinus size={18} /> Egresados Empresa
+                </Link>
+              </>
             )}
 
             {puedeVerListaReportes && (

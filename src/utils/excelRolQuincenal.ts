@@ -260,7 +260,6 @@ async function construirHojaExcelJS(
 
   const totalCols = encabezadosTabla.length;
 
-  // Anchos de columnas
   ws.columns = [
     { width: 8 },
     { width: 22 },
@@ -278,7 +277,6 @@ async function construirHojaExcelJS(
     { width: 22 },
   ];
 
-  // Encabezado corporativo con Logo de Seguridad VIP 3000 C.A. (Filas 1 a 3)
   ws.getRow(1).height = 24;
   ws.getRow(2).height = 22;
   ws.getRow(3).height = 18;
@@ -481,7 +479,6 @@ async function construirHojaExcelJS(
   escribirBannerSeccion('EGRESOS');
   egresadosQuincena.forEach((eg, i) => escribirPersona(i, eg, 'E', false));
 
-  // Fila Total Operativo por Día
   filaActual++;
   const rowTotal = ws.getRow(filaActual);
   rowTotal.height = 22;
@@ -501,6 +498,191 @@ async function construirHojaExcelJS(
       formula: `COUNTIF(${rng},"M")+COUNTIF(${rng},"D")+COUNTIF(${rng},"N")+COUNTIF(${rng},"RR")+COUNTIF(${rng},"R")`,
       result: 0,
     };
+  });
+}
+async function construirHojaPortadaNomina(
+  wb: ExcelJS.Workbook,
+  proyecto: string,
+  anio: number,
+  mes: number,
+  quincena: '1ERA' | '2DA',
+  logoId: number | null
+) {
+  const ws = wb.addWorksheet('PORTADA_NOMINA');
+  const ultimoDiaMes = new Date(anio, mes, 0).getDate();
+  const diaInicio = quincena === '1ERA' ? 1 : 16;
+  const diaFin = quincena === '1ERA' ? 15 : ultimoDiaMes;
+  const fechaDesde = `${anio}-${pad2(mes)}-${pad2(diaInicio)}`;
+  const fechaHasta = `${anio}-${pad2(mes)}-${pad2(diaFin)}`;
+  const nombreMes = NOMBRES_MESES[mes - 1] || '';
+
+  const { data: plantillaData } = await supabase
+    .from('plantilla_proyectos')
+    .select('*')
+    .eq('proyecto', proyecto)
+    .eq('estado', 'ACTIVO')
+    .order('apellidos', { ascending: true });
+
+  const activos = Array.isArray(plantillaData) ? plantillaData : [];
+
+  ws.columns = [
+    { width: 6 },
+    { width: 22 },
+    { width: 22 },
+    { width: 6 },
+    { width: 13 },
+    { width: 20 },
+    { width: 14 },
+    { width: 20 },
+    { width: 13 },
+    { width: 15 },
+    { width: 15 },
+    { width: 15 },
+    { width: 14 },
+    { width: 14 },
+    { width: 16 },
+    { width: 14 },
+    { width: 15 },
+    { width: 14 },
+    { width: 15 },
+    { width: 14 },
+    { width: 16 },
+  ];
+
+  for (let r = 1; r <= 3; r++) {
+    ws.getRow(r).height = 22;
+    for (let c = 1; c <= 21; c++) {
+      ws.getCell(r, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    }
+  }
+  if (logoId !== null) {
+    ws.addImage(logoId, { tl: { col: 0.15, row: 0.15 }, ext: { width: 64, height: 64 } });
+  }
+  ws.getCell(1, 3).value = `PORTADA DE NÓMINA — ${quincena} QUINCENA DE ${nombreMes} ${anio}`;
+  ws.getCell(1, 3).font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
+  ws.getCell(2, 3).value = `PROYECTO: ${proyecto.toUpperCase()}   •   PERÍODO: ${fechaDesde} AL ${fechaHasta}`;
+  ws.getCell(2, 3).font = { bold: true, size: 10, color: { argb: 'FF93C5FD' } };
+
+  ws.getCell(5, 2).value = 'PARÁMETROS DE PAGO EDITABLES (ANALISTA / RRHH)';
+  ws.getCell(5, 2).font = { bold: true, size: 10, color: { argb: 'FF1E3A8A' } };
+
+  const parametros = [
+    ['Valor Día Laborado (Bs):', 0, 'Bono Alimentación Diario (Bs):', 0],
+    ['Bono Ropa Tintorería (Bs):', 0, 'Bono Ropa Trabajo I (Bs):', 0],
+    ['Bono Jefe de Grupo (Bs):', 0, 'Bono Nocturno por Noche (Bs):', 0],
+    ['Valor Domingo / Feriado (Bs):', 0, 'Póliza A.P. Deducción (Bs):', 0],
+  ];
+
+  parametros.forEach((par, i) => {
+    const r = 6 + i;
+    ws.getCell(r, 2).value = par[0];
+    ws.getCell(r, 2).font = { bold: true, size: 9 };
+    const cVal1 = ws.getCell(r, 3);
+    cVal1.value = par[1];
+    cVal1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF9C3' } };
+    cVal1.border = BORDE_FINO;
+
+    ws.getCell(r, 5).value = par[2];
+    ws.getCell(r, 5).font = { bold: true, size: 9 };
+    const cVal2 = ws.getCell(r, 6);
+    cVal2.value = par[3];
+    cVal2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF9C3' } };
+    cVal2.border = BORDE_FINO;
+  });
+
+  const headersNomina = [
+    'Nº',
+    'NOMBRES',
+    'APELLIDOS',
+    'NAC',
+    'CÉDULA',
+    'CARGO',
+    'FECHA INGRESO',
+    'ANTIGÜEDAD',
+    'DÍAS LAB.',
+    'BONO TINTORERÍA',
+    'BONO ROPA I',
+    'ALIMENTACIÓN',
+    'JEFE GRUPO',
+    'DOMINGOS',
+    'BONO NOCTURNO',
+    'FALTAS',
+    'JUSTIF.',
+    'REDOBLES',
+    'DÍAS LIBRES',
+    'PÓLIZA A.P.',
+    'TOTAL DEVENGADO (Bs)',
+  ];
+
+  const rowHead = ws.getRow(12);
+  rowHead.height = 24;
+  headersNomina.forEach((h, idx) => {
+    const cell = rowHead.getCell(idx + 1);
+    cell.value = h;
+    cell.font = { bold: true, size: 8.5, color: { argb: 'FF0F172A' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+    cell.alignment = { horizontal: 'center', vertical: 'center', wrapText: true };
+    cell.border = BORDE_FINO;
+  });
+
+  const cantDias = diaFin - diaInicio + 1;
+  const colNochesRol = colLetra(6 + cantDias);
+  const colDomingosRol = colLetra(6 + cantDias + 1);
+  const colFaltasRol = colLetra(6 + cantDias + 2);
+  const colJustifRol = colLetra(6 + cantDias + 3);
+  const colDiasLabRol = colLetra(6 + cantDias + 4);
+  const colRedoblesRol = colLetra(6 + cantDias + 5);
+  const colLibresRol = colLetra(6 + cantDias + 6);
+
+  activos.forEach((p, idx) => {
+    const r = 13 + idx;
+    const filaRol = 6 + idx;
+    const row = ws.getRow(r);
+    row.height = 19;
+    const { nac, num } = extraerNacionalidadYCedula(p.cedula);
+    const fechaIng = p.fecha_ingreso ? String(p.fecha_ingreso).slice(0, 10) : '';
+
+    let antigTexto = 'N/A';
+    if (fechaIng) {
+      const f1 = new Date(fechaIng);
+      const f2 = new Date(fechaHasta);
+      const diffDias = Math.max(0, Math.floor((f2.getTime() - f1.getTime()) / (1000 * 60 * 60 * 24)));
+      const anios = Math.floor(diffDias / 365);
+      const meses = Math.floor((diffDias % 365) / 30);
+      const dias = (diffDias % 365) % 30;
+      antigTexto = `${anios} Año(s), ${meses} mes(es), ${dias} día(s)`;
+    }
+
+    const setC = (c: number, val: any, formula?: string) => {
+      const cell = row.getCell(c);
+      cell.value = formula ? { formula, result: 0 } : val;
+      cell.font = { size: 8.5, bold: c === 21 };
+      cell.border = BORDE_FINO;
+      cell.alignment = { horizontal: c <= 3 || c === 6 ? 'left' : 'center', vertical: 'center' };
+    };
+
+    const hojaRolRef = `${quincena}_QUINCENA`;
+    setC(1, idx + 1);
+    setC(2, p.nombres || '');
+    setC(3, p.apellidos || '');
+    setC(4, nac);
+    setC(5, num);
+    setC(6, p.cargo || 'OFICIAL');
+    setC(7, fechaIng);
+    setC(8, antigTexto);
+    setC(9, 0, `${hojaRolRef}!${colDiasLabRol}${filaRol}`);
+    setC(10, 0, `I${r}*$C$7`);
+    setC(11, 0, `I${r}*$F$7`);
+    setC(12, 0, `I${r}*$F$6`);
+    setC(13, 0, `IF(F${r}="J. GRUPO",$C$8,0)`);
+    setC(14, 0, `${hojaRolRef}!${colDomingosRol}${filaRol}`);
+    setC(15, 0, `${hojaRolRef}!${colNochesRol}${filaRol}*$F$8`);
+    setC(16, 0, `${hojaRolRef}!${colFaltasRol}${filaRol}`);
+    setC(17, 0, `${hojaRolRef}!${colJustifRol}${filaRol}`);
+    setC(18, 0, `${hojaRolRef}!${colRedoblesRol}${filaRol}`);
+    setC(19, 0, `${hojaRolRef}!${colLibresRol}${filaRol}`);
+    setC(20, 0, `$F$9`);
+    setC(21, 0, `(I${r}*$C$6)+J${r}+K${r}+L${r}+M${r}+(N${r}*$C$9)+O${r}-T${r}`);
   });
 }
 
@@ -526,6 +708,7 @@ export async function generarExcelRolQuincenal({
     }
   } else {
     await construirHojaExcelJS(wb, `${quincena}_QUINCENA`, proyecto, anio, mes, quincena, logoId);
+    await construirHojaPortadaNomina(wb, proyecto, anio, mes, quincena, logoId);
   }
 
   const buffer = await wb.xlsx.writeBuffer();
@@ -538,7 +721,7 @@ export async function generarExcelRolQuincenal({
   a.download =
     proyecto === 'TODOS'
       ? `Roles_Guardia_Por_Proyecto_${quincena}_Quincena_${nombreMes}_${anio}.xlsx`
-      : `Rol_Guardia_${proyecto.replace(/\s+/g, '_')}_${quincena}_Quincena_${nombreMes}_${anio}.xlsx`;
+      : `Rol_Guardia_y_Nomina_${proyecto.replace(/\s+/g, '_')}_${quincena}_Quincena_${nombreMes}_${anio}.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
 }
