@@ -18,7 +18,7 @@ import {
   Users,
   UserPlus,
   UserMinus,
-  IdCard,
+  Contact,
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -191,7 +191,7 @@ export default function Sidebar() {
                     location.pathname === '/ficha-tecnica' ? 'bg-blue-600 text-white' : 'hover:bg-slate-900'
                   }`}
                 >
-                  <IdCard size={18} /> Ficha Técnica C.I.
+                  <Contact size={18} /> Ficha Técnica C.I.
                 </Link>
 
                 <Link
