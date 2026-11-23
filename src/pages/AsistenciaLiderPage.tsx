@@ -1354,7 +1354,7 @@ export default function AsistenciaLiderPage() {
           )}
         </div>
 
-      {oficialOtro && (
+           {oficialOtro && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <form onSubmit={confirmarMovimientoOtro} className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
             <h3 className="text-lg font-bold text-slate-800">Registrar Novedad / Movimiento (OTRO)</h3>
@@ -1500,3 +1500,4 @@ export default function AsistenciaLiderPage() {
     </div>
   );
 }
+
