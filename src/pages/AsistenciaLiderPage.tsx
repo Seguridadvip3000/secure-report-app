@@ -150,7 +150,7 @@ export default function AsistenciaLiderPage() {
 
   const [plantillaActiva, setPlantillaActiva] = useState<OficialPlantilla[]>([]);
   const [pendientesReclutamiento, setPendientesReclutamiento] = useState<any[]>([]);
-  const [aspiranteReclutamientoId, setAspiranteReclutamientoId] = useState<string>('');
+  const [aspiranteReclutamientoId, setAspiranteReclutamientoId] = useState<string | null>(null);
   const [asistenciasHoyList, setAsistenciasHoyList] = useState<any[]>([]);
   const [asistenciasHoyMap, setAsistenciasHoyMap] = useState<Record<string, any>>({});
   const [liderActivoPorQR, setLiderActivoPorQR] = useState<boolean>(false);
@@ -255,7 +255,7 @@ export default function AsistenciaLiderPage() {
         .select('*')
         .eq('proyecto_asignado', proyectoSeleccionado)
         .eq('estatus_seleccion', 'PENDIENTE POR INGRESO')
-        .order('created_at', { ascending: false });
+        .order('fecha_aprobacion', { ascending: false });
 
       setPendientesReclutamiento(Array.isArray(dataPendReclut) ? dataPendReclut : []);
 
@@ -303,6 +303,7 @@ export default function AsistenciaLiderPage() {
   useEffect(() => {
     cargarDatosProyecto();
   }, [proyectoSeleccionado]);
+
   const marcarAsistenciaDirecta = async (
     oficial: OficialPlantilla,
     nuevoEstatus:
@@ -401,7 +402,6 @@ export default function AsistenciaLiderPage() {
       setGuardando(false);
     }
   };
-
   const manejarRegistrarAlta = async (e: React.FormEvent) => {
     e.preventDefault();
     setMensaje(null);
@@ -538,7 +538,6 @@ export default function AsistenciaLiderPage() {
           },
         ]);
 
-        // Si provenía de Reclutamiento (PENDIENTE POR INGRESO), actualizar su estatus a INGRESADO
         if (aspiranteReclutamientoId) {
           await supabase
             .from('aspirantes_reclutamiento')
@@ -778,7 +777,7 @@ export default function AsistenciaLiderPage() {
 
         setMensaje({
           tipo: 'exito',
-          texto: `✅ Movimiento ${tipoOtro} de ${oficialOtro.nombres} ${oficialOtro.apellidos} procesado${tipoOtro === 'EGRESO' ? ' y archivado en Base de Datos de Egresados' : ''}.`,
+          texto: `✅ Movimiento ${tipoOtro} de ${oficialOtro.nombres} ${oficialOtro.apellidos} procesado.`,
         });
       }
 
@@ -985,6 +984,243 @@ export default function AsistenciaLiderPage() {
       </div>
     );
   };
+  const obtenerPrioridadOrden = (estatus: string): number => {
+    const est = String(estatus || '').toUpperCase();
+    if (est === 'PRESENTE') return 1;
+    if (est === 'APOYO RECIBIDO') return 2;
+    if (
+      [
+        'SERVICIO ESPECIAL PROPIO',
+        'SERVICIO ESPECIAL MIXTO',
+        'SERVICIO ESPECIAL DIURNO/NOCTURNO',
+        'SERVICIO ESPECIAL RECIBIDO',
+      ].includes(est)
+    ) {
+      return 3;
+    }
+    return 4;
+  };
+
+  const listaOrdenadaAsistencia = [...asistenciasHoyList].sort((a, b) => {
+    const prioA = obtenerPrioridadOrden(a.estatus);
+    const prioB = obtenerPrioridadOrden(b.estatus);
+    if (prioA !== prioB) return prioA - prioB;
+
+    const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return tA - tB;
+  });
+
+  return (
+    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
+      <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border-l-4 border-blue-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Módulo Operativo</span>
+          <h1 className="text-2xl font-bold text-slate-800 mt-0.5 flex items-center gap-2">
+            <ClipboardCheck className="text-blue-600" size={26} /> Control de Asistencia y Plantilla
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Guardia Hoy ({hoyLocal}): <strong className="text-blue-700">MIXTO Grp {grupoMixtoHoy}</strong> •{' '}
+            <strong className="text-indigo-700">24X24 Grp {grupo24x24Hoy}</strong> •{' '}
+            <strong className="text-slate-700">DIURNO / NOCTURNO</strong>
+          </p>
+        </div>
+
+        <div className="w-full md:w-72">
+          <label className="block text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
+            <Building2 size={14} /> Proyecto Activo
+          </label>
+          <select
+            value={proyectoSeleccionado}
+            onChange={(e) => setProyectoSeleccionado(e.target.value)}
+            className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-800 bg-slate-50"
+          >
+            {proyectosUsuario.map((proy) => (
+              <option key={proy} value={proy}>
+                {proy}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-md space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-700 pb-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-blue-300">
+            Resumen Numérico de Plantilla Presente Hoy ({hoyLocal})
+          </span>
+          <span className="text-lg font-black text-emerald-400">
+            TOTAL: {pad2(totalPersonalPresenteDia)}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
+          <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+            <div className="text-slate-400 font-bold uppercase">Líder de Proyecto</div>
+            <div className="text-xl font-black text-white mt-0.5">{pad2(countLider)}</div>
+            <div className="text-[10px] text-slate-400">
+              {liderActivoPorQR ? 'Activo por marca QR' : 'Sin entrada QR / Con salida'}
+            </div>
+          </div>
+
+          {tieneJefeOp && (
+            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+              <div className="text-slate-400 font-bold uppercase">Jefe de Operaciones</div>
+              <div className="text-xl font-black text-white mt-0.5">{pad2(countJefeOp)}</div>
+            </div>
+          )}
+
+          <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+            <div className="text-slate-400 font-bold uppercase">Oficiales Mixtos</div>
+            <div className="text-xl font-black text-blue-300 mt-0.5">{pad2(countOficialesMixtos)}</div>
+            <div className="text-[10px] text-slate-400">Incluye MIXTO + 24X24</div>
+          </div>
+
+          {(tieneDiurno || countOficialesDiurnos > 0) && (
+            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+              <div className="text-slate-400 font-bold uppercase">Oficiales Diurnos</div>
+              <div className="text-xl font-black text-amber-300 mt-0.5">{pad2(countOficialesDiurnos)}</div>
+            </div>
+          )}
+
+          {(tieneNocturno || countOficialesNocturnos > 0) && (
+            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+              <div className="text-slate-400 font-bold uppercase">Oficiales Nocturnos</div>
+              <div className="text-xl font-black text-purple-300 mt-0.5">{pad2(countOficialesNocturnos)}</div>
+            </div>
+          )}
+        </div>
+      </div>
+      {mensaje && (
+        <div
+          className={`p-4 rounded-xl text-sm border flex items-start gap-2 ${
+            mensaje.tipo === 'exito'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-red-50 border-red-200 text-red-800'
+          }`}
+        >
+          {mensaje.tipo === 'exito' ? (
+            <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
+          ) : (
+            <AlertCircle size={18} className="shrink-0 mt-0.5" />
+          )}
+          <span>{mensaje.texto}</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
+        <button
+          type="button"
+          onClick={() => setSeccionPrincipal('PLANTILLA_GENERAL')}
+          className={`py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            seccionPrincipal === 'PLANTILLA_GENERAL' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Users size={18} /> PLANTILLA GENERAL ({plantillaActiva.length})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSeccionPrincipal('ASISTENCIA_GUARDIA')}
+          className={`py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            seccionPrincipal === 'ASISTENCIA_GUARDIA' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <ClipboardCheck size={18} /> ASISTENCIA DEL DÍA
+        </button>
+      </div>
+
+      {seccionPrincipal === 'ASISTENCIA_GUARDIA' ? (
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <Shield className="text-blue-600" size={18} /> Asistencia y Novedades Registradas Hoy
+              </h2>
+              <p className="text-xs text-slate-500">
+                Ordenado por hora de llegada: Plantilla Presente, Apoyos Recibidos, Servicios Especiales y Variables del día.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSeccionPrincipal('PLANTILLA_GENERAL');
+                setSubMenuPlantilla('REGISTRAR');
+                setTipoIngreso('SERVICIO ESPECIAL RECIBIDO');
+              }}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5 cursor-pointer self-start shadow-sm"
+            >
+              <UserPlus size={15} /> + Agregar Apoyo / Traslado / Serv. Esp. Recibido
+            </button>
+          </div>
+
+          {cargando ? (
+            <p className="text-center text-slate-500 py-8 text-sm">Cargando asistencia del día...</p>
+          ) : listaOrdenadaAsistencia.length === 0 ? (
+            <div className="text-center py-8 space-y-2">
+              <p className="text-sm text-slate-500">
+                Aún no se ha marcado asistencia desde <strong>PLANTILLA GENERAL</strong> hoy ({hoyLocal}).
+              </p>
+              <button
+                type="button"
+                onClick={() => setSeccionPrincipal('PLANTILLA_GENERAL')}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 cursor-pointer"
+              >
+                Ir a Plantilla General para pasar lista
+              </button>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {listaOrdenadaAsistencia.map((reg) => (
+                <div
+                  key={reg.id}
+                  className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                >
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded text-xs font-black bg-blue-100 text-blue-800">
+                        {reg.turno === 'DIURNO' || reg.turno === 'NOCTURNO'
+                          ? reg.turno
+                          : `${reg.turno} • GRP ${reg.grupo}`}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-xs font-black bg-teal-100 text-teal-800">
+                        {reg.cargo || 'OFICIAL'}
+                      </span>
+                      <span className="font-bold text-sm text-slate-800">{reg.nombre_completo}</span>
+                      <span className="text-xs font-mono text-slate-500">C.I. {reg.cedula}</span>
+                      {reg.hora_entrada && reg.hora_entrada !== '--:--' && (
+                        <span className="text-xs font-mono bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded font-bold">
+                          Entrada: {reg.hora_entrada}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1">
+                      {reg.proyecto_apoyo ? (
+                        <>
+                          Proyecto Relacionado: <strong className="text-amber-700">{reg.proyecto_apoyo}</strong> •{' '}
+                        </>
+                      ) : null}
+                      {reg.observacion || ''}
+                    </p>
+                  </div>
+
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-bold self-start sm:self-center ${
+                      estatusAsistentes.includes(reg.estatus)
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : reg.estatus === 'FALTA INJUSTIFICADA' || reg.estatus === 'BAJA POR SALUD'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {reg.estatus}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
         <div className="space-y-5">
           <div className="flex flex-wrap gap-2">
             <button
@@ -1225,7 +1461,6 @@ export default function AsistenciaLiderPage() {
                     className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm"
                   />
                 </div>
-
                 <div>
                   <label className="block text-xs font-bold text-blue-800 uppercase mb-1">Horario Asignado *</label>
                   <select
@@ -1353,8 +1588,9 @@ export default function AsistenciaLiderPage() {
             </div>
           )}
         </div>
+      )}
 
-           {oficialOtro && (
+      {oficialOtro && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <form onSubmit={confirmarMovimientoOtro} className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
             <h3 className="text-lg font-bold text-slate-800">Registrar Novedad / Movimiento (OTRO)</h3>
@@ -1424,7 +1660,6 @@ export default function AsistenciaLiderPage() {
                 </select>
               </div>
             )}
-
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
                 {['EGRESO', 'FALTA JUSTIFICADA', 'BAJA POR SALUD'].includes(tipoOtro)
@@ -1500,4 +1735,3 @@ export default function AsistenciaLiderPage() {
     </div>
   );
 }
-
