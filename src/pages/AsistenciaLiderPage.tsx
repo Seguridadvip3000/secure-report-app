@@ -21,6 +21,7 @@ import {
   MoreHorizontal,
   Shield,
   Calendar,
+  AlertTriangle,
 } from 'lucide-react';
 
 export type CargoOperativo =
@@ -56,6 +57,11 @@ interface OficialPlantilla {
   proyecto_origen_destino?: string | null;
   observacion?: string | null;
   fecha_ingreso?: string | null;
+  fecha_firma_contrato?: string | null;
+  botas_nuevas?: boolean;
+  botas_cuotas_totales?: number;
+  botas_cuotas_pagadas?: number;
+  botas_devueltas?: boolean;
   fecha_egreso?: string | null;
   registrado_por?: string | null;
 }
@@ -149,6 +155,7 @@ export default function AsistenciaLiderPage() {
   );
 
   const [plantillaActiva, setPlantillaActiva] = useState<OficialPlantilla[]>([]);
+  const [alertasPeriodoPrueba, setAlertasPeriodoPrueba] = useState<any[]>([]);
   const [pendientesReclutamiento, setPendientesReclutamiento] = useState<any[]>([]);
   const [aspiranteReclutamientoId, setAspiranteReclutamientoId] = useState<string | null>(null);
   const [asistenciasHoyList, setAsistenciasHoyList] = useState<any[]>([]);
@@ -162,6 +169,7 @@ export default function AsistenciaLiderPage() {
   const [grupoDesplegadoPlantilla, setGrupoDesplegadoPlantilla] = useState<'A' | 'B' | 'C'>(grupoMixtoHoy);
   const [busqueda, setBusqueda] = useState('');
 
+  // Campos de Alta
   const [cedula, setCedula] = useState('');
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
@@ -170,13 +178,19 @@ export default function AsistenciaLiderPage() {
   const [turnoAlta, setTurnoAlta] = useState<HorarioOperativo>('MIXTO');
   const [tipoIngreso, setTipoIngreso] = useState<TipoAltaPlantilla>('NUEVO INGRESO');
   const [proyectoOrigen, setProyectoOrigen] = useState('');
+  const [fechaFirmaContrato, setFechaFirmaContrato] = useState<string>(hoyLocal);
+  const [botasNuevasAsignadas, setBotasNuevasAsignadas] = useState<boolean>(false);
   const [observacionIngreso, setObservacionIngreso] = useState('');
 
+  // Campos de OTRO / EGRESO con Solvencia
   const [oficialOtro, setOficialOtro] = useState<OficialPlantilla | null>(null);
   const [tipoOtro, setTipoOtro] = useState<TipoOtroMovimiento>('APOYO ENVIADO');
   const [turnoOtro, setTurnoOtro] = useState<HorarioOperativo>('MIXTO');
   const [proyectoDestinoOtro, setProyectoDestinoOtro] = useState('');
   const [observacionOtro, setObservacionOtro] = useState('');
+  const [solvenciaUniforme, setSolvenciaUniforme] = useState<boolean>(true);
+  const [solvenciaCarnet, setSolvenciaCarnet] = useState<boolean>(true);
+  const [devuelveBotasEgreso, setDevuelveBotasEgreso] = useState<boolean>(false);
 
   const [oficialEditandoFecha, setOficialEditandoFecha] = useState<OficialPlantilla | null>(null);
   const [nuevaFechaIngresoInput, setNuevaFechaIngresoInput] = useState<string>(hoyLocal);
@@ -235,6 +249,49 @@ export default function AsistenciaLiderPage() {
     }
   };
 
+  const evaluarAlertasPeriodoPrueba = async (activos: OficialPlantilla[]) => {
+    const enRangoPrueba: any[] = [];
+    const hoyMs = new Date(`${hoyLocal}T12:00:00`).getTime();
+
+    for (const ofi of activos) {
+      const fechaRef = ofi.fecha_firma_contrato || (ofi.fecha_ingreso ? String(ofi.fecha_ingreso).slice(0, 10) : '');
+      if (!fechaRef) continue;
+
+      const firmaMs = new Date(`${fechaRef}T12:00:00`).getTime();
+      const diasTranscurridos = Math.floor((hoyMs - firmaMs) / (1000 * 60 * 60 * 24));
+
+      // Alerta preventiva entre los 25 y 30 días de período de prueba
+      if (diasTranscurridos >= 25 && diasTranscurridos <= 31) {
+        const diasRestantes = Math.max(0, 30 - diasTranscurridos);
+        enRangoPrueba.push({
+          ...ofi,
+          diasTranscurridos,
+          diasRestantes,
+          fechaRef,
+        });
+
+        const claveNotif = `prueba_30d_${ofi.cedula}_${fechaRef}`;
+        if (!localStorage.getItem(claveNotif)) {
+          localStorage.setItem(claveNotif, '1');
+          try {
+            await supabase.from('notificaciones').insert([
+              {
+                titulo: '⏳ Vencimiento Próximo Período de Prueba (30 días)',
+                mensaje: `El oficial ${ofi.nombres} ${ofi.apellidos} (C.I. ${ofi.cedula}) en ${ofi.proyecto} lleva ${diasTranscurridos} días desde firma de contrato (${fechaRef}). Faltan ${diasRestantes} día(s) para cumplir los 30 días de prueba.`,
+                tipo: 'PERIODO_PRUEBA',
+                proyecto: ofi.proyecto,
+                roles_destino: ['lider', 'operaciones', 'rrhh', 'analista', 'administrador'],
+                leida: false,
+              },
+            ]);
+          } catch {}
+        }
+      }
+    }
+
+    setAlertasPeriodoPrueba(enRangoPrueba);
+  };
+
   const cargarDatosProyecto = async () => {
     if (!proyectoSeleccionado) return;
     setCargando(true);
@@ -249,6 +306,7 @@ export default function AsistenciaLiderPage() {
       if (errActivos) throw errActivos;
       const activos = (dataActivos as OficialPlantilla[]) || [];
       setPlantillaActiva(activos);
+      await evaluarAlertasPeriodoPrueba(activos);
 
       const { data: dataPendReclut } = await supabase
         .from('aspirantes_reclutamiento')
@@ -514,6 +572,11 @@ export default function AsistenciaLiderPage() {
               proyecto_origen_destino: origenLimpio,
               observacion: obsTexto,
               fecha_ingreso: ahora,
+              fecha_firma_contrato: fechaFirmaContrato || hoyLocal,
+              botas_nuevas: tipoIngreso === 'NUEVO INGRESO' ? botasNuevasAsignadas : false,
+              botas_cuotas_totales: 4,
+              botas_cuotas_pagadas: 0,
+              botas_devueltas: false,
               registrado_por: nombreRegistrador,
             },
           ])
@@ -538,6 +601,20 @@ export default function AsistenciaLiderPage() {
           },
         ]);
 
+        if (tipoIngreso === 'NUEVO INGRESO' && botasNuevasAsignadas) {
+          await supabase.from('historial_dotacion_oficial').insert([
+            {
+              cedula: cedulaLimpia,
+              nombre_completo: `${nombresLimpios} ${apellidosLimpios}`,
+              proyecto: proyectoSeleccionado,
+              tipo_evento: 'ASIGNACION BOTAS NUEVAS',
+              detalle: 'Asignación de botas nuevas al ingresar (4 cuotas quincenales de $7.5 a tasa empresa)',
+              monto_bs: 0,
+              registrado_por: nombreRegistrador,
+            },
+          ]);
+        }
+
         if (aspiranteReclutamientoId) {
           await supabase
             .from('aspirantes_reclutamiento')
@@ -551,7 +628,9 @@ export default function AsistenciaLiderPage() {
 
         setMensaje({
           tipo: 'exito',
-          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta} • ${turnoAlta}) anexado a la plantilla fija y reflejado en Asistencia del Día.`,
+          texto: `✅ ${nombresLimpios} ${apellidosLimpios} (${cargoAlta} • ${turnoAlta}) anexado a la plantilla fija${
+            botasNuevasAsignadas ? ' con Botas Nuevas (4 cuotas de $7.5)' : ''
+          }.`,
         });
       }
 
@@ -563,6 +642,8 @@ export default function AsistenciaLiderPage() {
       setGrupo(grupoMixtoHoy);
       setTurnoAlta('MIXTO');
       setProyectoOrigen('');
+      setFechaFirmaContrato(hoyLocal);
+      setBotasNuevasAsignadas(false);
       setObservacionIngreso('');
       setSeccionPrincipal('ASISTENCIA_GUARDIA');
       await cargarDatosProyecto();
@@ -583,6 +664,7 @@ export default function AsistenciaLiderPage() {
         .from('plantilla_proyectos')
         .update({
           fecha_ingreso: fechaISO,
+          fecha_firma_contrato: nuevaFechaIngresoInput,
           updated_at: new Date().toISOString(),
         })
         .eq('id', oficialEditandoFecha.id);
@@ -591,7 +673,7 @@ export default function AsistenciaLiderPage() {
 
       setMensaje({
         tipo: 'exito',
-        texto: `✅ Fecha de ingreso de ${oficialEditandoFecha.nombres} ${oficialEditandoFecha.apellidos} actualizada a ${nuevaFechaIngresoInput}.`,
+        texto: `✅ Fecha de ingreso y firma de contrato de ${oficialEditandoFecha.nombres} ${oficialEditandoFecha.apellidos} actualizada a ${nuevaFechaIngresoInput}.`,
       });
       setOficialEditandoFecha(null);
       await cargarDatosProyecto();
@@ -681,6 +763,27 @@ export default function AsistenciaLiderPage() {
           texto: `✅ ${tipoOtro} registrado para ${oficialOtro.apellidos}, ${oficialOtro.nombres} y reflejado en Asistencia del Día.`,
         });
       } else {
+        const cuotasPag = Number(oficialOtro.botas_cuotas_pagadas || 0);
+        const cuotasTot = Number(oficialOtro.botas_cuotas_totales || 4);
+        const tieneBotasPendientes = Boolean(oficialOtro.botas_nuevas) && cuotasPag < cuotasTot;
+
+        const detalleSolvenciaEgreso =
+          tipoOtro === 'EGRESO'
+            ? ` | Solvencia Uniforme: ${solvenciaUniforme ? 'ENTREGADO' : 'NO ENTREGADO'} | Carnet: ${
+                solvenciaCarnet ? 'ENTREGADO' : 'NO ENTREGADO'
+              } | Botas: ${
+                !oficialOtro.botas_nuevas
+                  ? 'Sin botas asignadas'
+                  : cuotasPag >= cuotasTot
+                  ? 'PAGADAS (4/4)'
+                  : devuelveBotasEgreso
+                  ? `DEVUELTAS EN EGRESO (${cuotasPag}/4 pagadas - Exonerado saldo)`
+                  : `PENDIENTE ${cuotasTot - cuotasPag} CUOTA(S) DE $7.5 (${cuotasPag}/4 pagadas - Descontar en liquidación)`
+              }`
+            : '';
+
+        const obsFinal = `${motivoLimpio || ''}${detalleSolvenciaEgreso}`.trim();
+
         const { error: errUpdate } = await supabase
           .from('plantilla_proyectos')
           .update({
@@ -688,7 +791,10 @@ export default function AsistenciaLiderPage() {
             turno: turnoOtro,
             tipo_ultimo_movimiento: tipoOtro,
             proyecto_origen_destino: destinoLimpio,
-            observacion: motivoLimpio,
+            observacion: obsFinal,
+            solvencia_uniforme: tipoOtro === 'EGRESO' ? solvenciaUniforme : null,
+            solvencia_carnet: tipoOtro === 'EGRESO' ? solvenciaCarnet : null,
+            botas_devueltas: tipoOtro === 'EGRESO' && tieneBotasPendientes ? devuelveBotasEgreso : false,
             fecha_egreso: ahora,
             updated_at: ahora,
           })
@@ -707,12 +813,24 @@ export default function AsistenciaLiderPage() {
             turno: turnoOtro,
             tipo_movimiento: tipoOtro,
             proyecto_relacionado: destinoLimpio,
-            observacion: motivoLimpio,
+            observacion: obsFinal,
             registrado_por: nombreRegistrador,
           },
         ]);
 
         if (tipoOtro === 'EGRESO') {
+          await supabase.from('historial_dotacion_oficial').insert([
+            {
+              cedula: ced,
+              nombre_completo: `${oficialOtro.nombres} ${oficialOtro.apellidos}`,
+              proyecto: proyectoSeleccionado,
+              tipo_evento: 'SOLVENCIA EGRESO',
+              detalle: detalleSolvenciaEgreso.replace(/^ \| /, ''),
+              monto_bs: 0,
+              registrado_por: nombreRegistrador,
+            },
+          ]);
+
           await supabase.from('egresados_empresa').insert([
             {
               cedula: ced,
@@ -726,9 +844,9 @@ export default function AsistenciaLiderPage() {
                 ? String(oficialOtro.fecha_ingreso).slice(0, 10)
                 : null,
               fecha_egreso: momento.fechaStr,
-              motivo_egreso: motivoLimpio || 'EGRESO OPERATIVO',
+              motivo_egreso: obsFinal || 'EGRESO OPERATIVO',
               egresado_por: nombreRegistrador,
-              elegible_reingreso: 'ELEGIBLE',
+              elegible_reingreso: solvenciaUniforme && solvenciaCarnet ? 'ELEGIBLE' : 'CONDICIONADO',
             },
           ]);
         }
@@ -750,6 +868,10 @@ export default function AsistenciaLiderPage() {
                 proyecto_origen_destino: proyectoSeleccionado,
                 observacion: motivoLimpio,
                 fecha_ingreso: ahora,
+                fecha_firma_contrato: oficialOtro.fecha_firma_contrato || null,
+                botas_nuevas: oficialOtro.botas_nuevas || false,
+                botas_cuotas_totales: oficialOtro.botas_cuotas_totales || 4,
+                botas_cuotas_pagadas: oficialOtro.botas_cuotas_pagadas || 0,
                 registrado_por: nombreRegistrador,
               },
             ])
@@ -777,7 +899,7 @@ export default function AsistenciaLiderPage() {
 
         setMensaje({
           tipo: 'exito',
-          texto: `✅ Movimiento ${tipoOtro} de ${oficialOtro.nombres} ${oficialOtro.apellidos} procesado.`,
+          texto: `✅ Movimiento ${tipoOtro} de ${oficialOtro.nombres} ${oficialOtro.apellidos} procesado y registrado en su historial.`,
         });
       }
 
@@ -863,6 +985,8 @@ export default function AsistenciaLiderPage() {
     const yaMarcadoPorLider = esLider && !!marcaHoy;
     const trn = (oficial.turno || 'MIXTO').toUpperCase();
     const permiteServicioEspecial = trn === 'MIXTO' || trn === 'DIURNO' || trn === 'NOCTURNO';
+    const cuotasPag = Number(oficial.botas_cuotas_pagadas || 0);
+    const cuotasTot = Number(oficial.botas_cuotas_totales || 4);
 
     return (
       <div
@@ -883,14 +1007,33 @@ export default function AsistenciaLiderPage() {
             <span className="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
               C.I. {oficial.cedula}
             </span>
+            {oficial.botas_nuevas && (
+              <span
+                className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                  cuotasPag >= cuotasTot
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-amber-100 text-amber-800'
+                }`}
+              >
+                {cuotasPag >= cuotasTot
+                  ? '🥾 Botas Pagadas (4/4)'
+                  : `🥾 Botas: ${cuotasPag}/${cuotasTot} cuotas`}
+              </span>
+            )}
           </div>
 
           <div className="text-[11px] text-slate-500 mt-0.5">
-            Fecha de Ingreso:{' '}
+            Ingreso:{' '}
             {oficial.fecha_ingreso ? (
               <strong>{new Date(oficial.fecha_ingreso).toLocaleDateString('es-VE')}</strong>
             ) : (
-              <span className="text-amber-700 font-bold">Sin fecha (Pendiente por editar)</span>
+              <span className="text-amber-700 font-bold">Sin fecha</span>
+            )}
+            {oficial.fecha_firma_contrato && (
+              <>
+                {' '}
+                • Firma Contrato: <strong>{oficial.fecha_firma_contrato}</strong>
+              </>
             )}
           </div>
 
@@ -943,6 +1086,9 @@ export default function AsistenciaLiderPage() {
                   setTurnoOtro(oficial.turno || 'MIXTO');
                   setProyectoDestinoOtro('');
                   setObservacionOtro('');
+                  setSolvenciaUniforme(true);
+                  setSolvenciaCarnet(true);
+                  setDevuelveBotasEgreso(false);
                 }}
                 className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 text-white hover:bg-amber-600 flex items-center gap-1 cursor-pointer disabled:opacity-40"
               >
@@ -1050,6 +1196,28 @@ export default function AsistenciaLiderPage() {
           </select>
         </div>
       </div>
+
+      {alertasPeriodoPrueba.length > 0 && (
+        <div className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 space-y-2 shadow-sm">
+          <div className="flex items-center gap-2 text-amber-900 font-black text-xs uppercase">
+            <AlertTriangle size={18} className="text-amber-600 shrink-0" />
+            Alerta Preventiva: Personal por Cumplir Período de Prueba (30 Días desde Firma de Contrato)
+          </div>
+          <div className="space-y-1 text-xs text-amber-900">
+            {alertasPeriodoPrueba.map((al) => (
+              <div key={al.id} className="bg-white/80 px-3 py-1.5 rounded-lg border border-amber-200">
+                <strong>
+                  {al.nombres} {al.apellidos}
+                </strong>{' '}
+                (C.I. {al.cedula}) • Firma Contrato: <strong>{al.fechaRef}</strong> •{' '}
+                <span className="font-black text-red-700">
+                  Lleva {al.diasTranscurridos} días (faltan {al.diasRestantes} día(s) para cumplir los 30 días)
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-md space-y-3">
         <div className="flex items-center justify-between border-b border-slate-700 pb-2">
@@ -1404,6 +1572,7 @@ export default function AsistenciaLiderPage() {
                           setTurnoAlta(cargoSel === 'LIDER' ? 'DIURNO' : ((asp.turno_asignado || 'MIXTO') as HorarioOperativo));
                           setGrupo((asp.grupo_asignado || 'A') as 'A' | 'B' | 'C');
                           setTipoIngreso('NUEVO INGRESO');
+                          setFechaFirmaContrato(hoyLocal);
                           setObservacionIngreso('Ingreso aprobado por Reclutamiento');
                         }}
                         className={`px-3.5 py-2 rounded-xl text-xs font-bold border cursor-pointer transition-all ${
@@ -1526,6 +1695,21 @@ export default function AsistenciaLiderPage() {
                   </select>
                 </div>
 
+                {tipoIngreso === 'NUEVO INGRESO' && (
+                  <div>
+                    <label className="block text-xs font-bold text-indigo-800 uppercase mb-1">
+                      Fecha de Firma de Contrato (Prueba 30 días) *
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={fechaFirmaContrato}
+                      onChange={(e) => setFechaFirmaContrato(e.target.value)}
+                      className="w-full border border-indigo-300 bg-indigo-50/40 rounded-xl px-3.5 py-2.5 text-sm font-semibold"
+                    />
+                  </div>
+                )}
+
                 {tipoIngreso !== 'NUEVO INGRESO' && (
                   <div>
                     <label className="block text-xs font-bold text-emerald-800 uppercase mb-1">
@@ -1553,11 +1737,30 @@ export default function AsistenciaLiderPage() {
                     type="text"
                     value={observacionIngreso}
                     onChange={(e) => setObservacionIngreso(e.target.value)}
-                    placeholder="Detalle adicional (se reflejará en la asistencia del día)..."
+                    placeholder="Detalle adicional..."
                     className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm"
                   />
                 </div>
               </div>
+
+              {tipoIngreso === 'NUEVO INGRESO' && (
+                <label className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border-2 border-amber-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={botasNuevasAsignadas}
+                    onChange={(e) => setBotasNuevasAsignadas(e.target.checked)}
+                    className="w-5 h-5 mt-0.5 accent-amber-600"
+                  />
+                  <div className="text-xs text-amber-950">
+                    <div className="font-black uppercase">
+                      🥾 Asignar Botas Nuevas al Oficial (4 Cuotas Quincenales de $7.5 a Tasa Empresa)
+                    </div>
+                    <p className="text-amber-800 mt-0.5">
+                      Al marcar esta casilla, la nómina descontará automáticamente <strong>4 cuotas de $7.5</strong> a la tasa referencial de la empresa y enviará una alerta a Analista y Operaciones al cobrar la última cuota.
+                    </p>
+                  </div>
+                </label>
+              )}
 
               <div className="flex justify-end gap-3">
                 <button
@@ -1603,8 +1806,8 @@ export default function AsistenciaLiderPage() {
       )}
 
       {oficialOtro && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <form onSubmit={confirmarMovimientoOtro} className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <form onSubmit={confirmarMovimientoOtro} className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl my-6">
             <h3 className="text-lg font-bold text-slate-800">Registrar Novedad / Movimiento (OTRO)</h3>
             <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
               Personal: <strong>{oficialOtro.nombres} {oficialOtro.apellidos}</strong> ({oficialOtro.cargo || 'OFICIAL'})
@@ -1672,6 +1875,66 @@ export default function AsistenciaLiderPage() {
                 </select>
               </div>
             )}
+            {tipoOtro === 'EGRESO' && (
+              <div className="p-3.5 rounded-xl bg-red-50 border-2 border-red-200 space-y-3 text-xs">
+                <div className="font-black text-red-900 uppercase">
+                  📋 Verificación Obligatoria de Solvencia y Dotación
+                </div>
+
+                <label className="flex items-center gap-2 font-semibold text-slate-800 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={solvenciaUniforme}
+                    onChange={(e) => setSolvenciaUniforme(e.target.checked)}
+                    className="w-4 h-4 accent-emerald-600"
+                  />
+                  ¿Entregó Uniforme completo? ({solvenciaUniforme ? 'SÍ, DEVUELTO' : 'NO ENTREGADO'})
+                </label>
+
+                <label className="flex items-center gap-2 font-semibold text-slate-800 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={solvenciaCarnet}
+                    onChange={(e) => setSolvenciaCarnet(e.target.checked)}
+                    className="w-4 h-4 accent-emerald-600"
+                  />
+                  ¿Entregó Carnet corporativo? ({solvenciaCarnet ? 'SÍ, DEVUELTO' : 'NO ENTREGADO'})
+                </label>
+
+                <div className="pt-2 border-t border-red-200">
+                  <div className="font-bold text-slate-800 mb-1">Estado de Botas Nuevas:</div>
+                  {!oficialOtro.botas_nuevas ? (
+                    <span className="inline-block px-2.5 py-1 rounded bg-slate-200 text-slate-700 font-bold">
+                      Sin botas nuevas asignadas
+                    </span>
+                  ) : Number(oficialOtro.botas_cuotas_pagadas || 0) >= Number(oficialOtro.botas_cuotas_totales || 4) ? (
+                    <span className="inline-block px-2.5 py-1 rounded bg-emerald-100 text-emerald-800 font-black">
+                      ✅ BOTAS PAGADAS AL 100% (4/4 cuotas)
+                    </span>
+                  ) : (
+                    <div className="space-y-2 bg-amber-50 p-2.5 rounded-lg border border-amber-300 text-amber-950">
+                      <div className="font-black text-amber-900">
+                        ⚠️ Tiene {Number(oficialOtro.botas_cuotas_pagadas || 0)} de{' '}
+                        {Number(oficialOtro.botas_cuotas_totales || 4)} cuotas pagadas (Faltan{' '}
+                        {Number(oficialOtro.botas_cuotas_totales || 4) - Number(oficialOtro.botas_cuotas_pagadas || 0)}{' '}
+                        cuotas de $7.5)
+                      </div>
+                      <label className="flex items-start gap-2 font-bold cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={devuelveBotasEgreso}
+                          onChange={(e) => setDevuelveBotasEgreso(e.target.checked)}
+                          className="w-4 h-4 mt-0.5 accent-blue-600"
+                        />
+                        <span>
+                          ¿Regresa las botas en buen estado? (Marque para NO descontar el saldo pendiente de su liquidación)
+                        </span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
@@ -1712,12 +1975,12 @@ export default function AsistenciaLiderPage() {
       {oficialEditandoFecha && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <form onSubmit={guardarFechaIngresoManual} className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl">
-            <h3 className="text-base font-bold text-slate-800">Editar Fecha de Ingreso</h3>
+            <h3 className="text-base font-bold text-slate-800">Editar Fecha de Ingreso / Contrato</h3>
             <p className="text-xs text-slate-600">
               Personal: <strong>{oficialEditandoFecha.nombres} {oficialEditandoFecha.apellidos}</strong> ({oficialEditandoFecha.cedula})
             </p>
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Fecha de Ingreso *</label>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Fecha de Ingreso y Firma *</label>
               <input
                 type="date"
                 required
