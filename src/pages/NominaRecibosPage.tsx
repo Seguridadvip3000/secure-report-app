@@ -477,3 +477,292 @@ export default function NominaRecibosPage() {
       setProcesandoPago(false);
     }
   };
+  const fmtBs = (n: number) =>
+    Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const recibosFiltrados = historicoRecibos.filter((r) => {
+    const q = busquedaHistorico.toLowerCase().trim();
+    if (!q) return true;
+    return `${r.cedula} ${r.nombre_completo} ${r.proyecto}`.toLowerCase().includes(q);
+  });
+
+  return (
+    <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
+      <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border-l-4 border-emerald-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">
+            Nómina Quincenal, Cuotas de Dotación y Recibos
+          </span>
+          <h1 className="text-2xl font-bold text-slate-800 mt-0.5 flex items-center gap-2">
+            <Receipt className="text-emerald-600" size={26} /> Portada de Nómina y Recibos de Pago
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Descuenta automáticamente cuotas de botas nuevas ($7.5 x Tasa Empresa), archiva cada quincena pagada y emite los recibos oficiales con logo corporativo.
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setPestana('GENERAR')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold cursor-pointer ${
+              pestana === 'GENERAR' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'
+            }`}
+          >
+            Liquidar Quincena
+          </button>
+          <button
+            type="button"
+            onClick={() => setPestana('HISTORICO')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer ${
+              pestana === 'HISTORICO' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'
+            }`}
+          >
+            <History size={15} /> Archivo Histórico
+          </button>
+        </div>
+      </div>
+
+      {pestana === 'HISTORICO' ? (
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h2 className="text-base font-bold text-slate-800">
+              Archivo Histórico de Recibos Pagados ({recibosFiltrados.length})
+            </h2>
+            <div className="relative w-full sm:w-80">
+              <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                value={busquedaHistorico}
+                onChange={(e) => setBusquedaHistorico(e.target.value)}
+                placeholder="Buscar por cédula, nombre o proyecto..."
+                className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs"
+              />
+            </div>
+          </div>
+
+          {cargando ? (
+            <p className="text-center text-slate-500 py-8 text-sm">Cargando archivo histórico...</p>
+          ) : recibosFiltrados.length === 0 ? (
+            <p className="text-center text-slate-500 py-8 text-sm">No hay recibos pagados registrados aún.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 border-b">
+                    <th className="p-2.5">Fecha Pago</th>
+                    <th className="p-2.5">Período</th>
+                    <th className="p-2.5">Proyecto</th>
+                    <th className="p-2.5">Trabajador</th>
+                    <th className="p-2.5 text-right">Neto Pagado (Bs)</th>
+                    <th className="p-2.5 text-center">Reimprimir</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {recibosFiltrados.map((r) => (
+                    <tr key={r.id} className="hover:bg-slate-50">
+                      <td className="p-2.5 font-mono">{r.fecha_pago}</td>
+                      <td className="p-2.5 font-bold">
+                        {r.quincena} {NOMBRES_MESES[(r.mes || 1) - 1]} {r.anio}
+                      </td>
+                      <td className="p-2.5">{r.proyecto}</td>
+                      <td className="p-2.5 font-bold">
+                        {r.nombre_completo} <span className="font-mono text-slate-500">({r.cedula})</span>
+                      </td>
+                      <td className="p-2.5 text-right font-black text-emerald-700">{fmtBs(r.neto_pagado)}</td>
+                      <td className="p-2.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            generarPDFRecibosNomina(`${r.cedula}_${r.quincena}_${r.anio}`, [r.recibo_json])
+                          }
+                          className="px-3 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-bold hover:bg-slate-800 cursor-pointer inline-flex items-center gap-1"
+                        >
+                          <Printer size={12} /> PDF
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {mensaje && (
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-sm font-semibold">
+              {mensaje}
+            </div>
+          )}
+
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
+                <Building2 size={13} /> Proyecto
+              </label>
+              <select
+                value={proyecto}
+                onChange={(e) => setProyecto(e.target.value)}
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold"
+              >
+                {listaProyectos.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Mes</label>
+              <select
+                value={mes}
+                onChange={(e) => setMes(Number(e.target.value))}
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold"
+              >
+                {NOMBRES_MESES.map((m, idx) => (
+                  <option key={m} value={idx + 1}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Año</label>
+              <input
+                type="number"
+                value={anio}
+                onChange={(e) => setAnio(Number(e.target.value))}
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Quincena</label>
+              <select
+                value={quincena}
+                onChange={(e) => setQuincena(e.target.value as '1ERA' | '2DA')}
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold"
+              >
+                <option value="1ERA">1ERA QUINCENA (01-15)</option>
+                <option value="2DA">2DA QUINCENA (16-Fin)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Fecha de Pago</label>
+              <input
+                type="date"
+                value={fechaPago}
+                onChange={(e) => setFechaPago(e.target.value)}
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-black text-blue-800 uppercase mb-1">
+                Tasa Empresa (Bs/$) *
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={tasaReferencialBs}
+                onChange={(e) => setTasaReferencialBs(Number(e.target.value))}
+                placeholder="Ej: 45.50"
+                className="w-full border-2 border-blue-400 bg-blue-50/60 rounded-xl px-3 py-2 text-xs font-black text-blue-900"
+              />
+            </div>
+          </div>
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
+              <h2 className="text-sm font-black text-slate-800 uppercase flex items-center gap-2">
+                <Calculator size={16} className="text-blue-600" /> Parámetros de Devengado y Deducciones (Bs)
+              </h2>
+              <button
+                type="button"
+                onClick={marcarNominaPagadaYEmitirRecibos}
+                disabled={filas.length === 0 || cargando || procesandoPago}
+                className="px-5 py-2.5 rounded-xl text-xs font-black bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-40"
+              >
+                <CheckCircle2 size={16} />
+                {procesandoPago ? 'Procesando Pago...' : 'Marcar Nómina Pagada y Emitir Recibos'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+              <div>
+                <label className="block font-bold text-slate-600 mb-1">Valor Día Lab.</label>
+                <input type="number" step="0.01" value={valorDia} onChange={(e) => setValorDia(Number(e.target.value))} className="w-full border border-amber-300 bg-amber-50/50 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-600 mb-1">Bono Nocturno/Noche</label>
+                <input type="number" step="0.01" value={bonoNocturnoPorNoche} onChange={(e) => setBonoNocturnoPorNoche(Number(e.target.value))} className="w-full border border-amber-300 bg-amber-50/50 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-600 mb-1">Doceava Hora/Día</label>
+                <input type="number" step="0.01" value={doceavaHoraPorDia} onChange={(e) => setDoceavaHoraPorDia(Number(e.target.value))} className="w-full border border-amber-300 bg-amber-50/50 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-600 mb-1">Ropa Trabajo I</label>
+                <input type="number" step="0.01" value={ropaTrabajo1} onChange={(e) => setRopaTrabajo1(Number(e.target.value))} className="w-full border border-amber-300 bg-amber-50/50 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-600 mb-1">Ropa Tintorería</label>
+                <input type="number" step="0.01" value={ropaTintoreria} onChange={(e) => setRopaTintoreria(Number(e.target.value))} className="w-full border border-amber-300 bg-amber-50/50 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-600 mb-1">Bono Jefe Grupo</label>
+                <input type="number" step="0.01" value={bonoJefeGrupo} onChange={(e) => setBonoJefeGrupo(Number(e.target.value))} className="w-full border border-amber-300 bg-amber-50/50 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-600 mb-1">Bono Líder Proyecto</label>
+                <input type="number" step="0.01" value={bonoLiderProyecto} onChange={(e) => setBonoLiderProyecto(Number(e.target.value))} className="w-full border border-amber-300 bg-amber-50/50 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-600 mb-1">Descanso/Fer. Lab.</label>
+                <input type="number" step="0.01" value={valorDescansoLab} onChange={(e) => setValorDescansoLab(Number(e.target.value))} className="w-full border border-amber-300 bg-amber-50/50 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-600 mb-1">Descanso/Fer. No Lab.</label>
+                <input type="number" step="0.01" value={valorDescansoNoLab} onChange={(e) => setValorDescansoNoLab(Number(e.target.value))} className="w-full border border-amber-300 bg-amber-50/50 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-600 mb-1">Día 31</label>
+                <input type="number" step="0.01" value={valorDia31} onChange={(e) => setValorDia31(Number(e.target.value))} className="w-full border border-amber-300 bg-amber-50/50 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-600 mb-1">Ropa Trabajo 2</label>
+                <input type="number" step="0.01" value={ropaTrabajo2} onChange={(e) => setRopaTrabajo2(Number(e.target.value))} className="w-full border border-amber-300 bg-amber-50/50 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-600 mb-1">Alimentación/Día</label>
+                <input type="number" step="0.01" value={alimentacionDiaria} onChange={(e) => setAlimentacionDiaria(Number(e.target.value))} className="w-full border border-amber-300 bg-amber-50/50 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-red-700 mb-1">Seguro Social (Ded.)</label>
+                <input type="number" step="0.01" value={seguroSocialBase} onChange={(e) => setSeguroSocialBase(Number(e.target.value))} className="w-full border border-red-200 bg-red-50/40 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-red-700 mb-1">Paro Forzoso (Ded.)</label>
+                <input type="number" step="0.01" value={paroForzosoBase} onChange={(e) => setParoForzosoBase(Number(e.target.value))} className="w-full border border-red-200 bg-red-50/40 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-red-700 mb-1">Ahorro Hab. (Ded.)</label>
+                <input type="number" step="0.01" value={ahorroHabBase} onChange={(e) => setAhorroHabBase(Number(e.target.value))} className="w-full border border-red-200 bg-red-50/40 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-red-700 mb-1">Fideicomiso (Ded.)</label>
+                <input type="number" step="0.01" value={fideicomisoBase} onChange={(e) => setFideicomisoBase(Number(e.target.value))} className="w-full border border-red-200 bg-red-50/40 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-red-700 mb-1">Póliza A.P. (Ded.)</label>
+                <input type="number" step="0.01" value={polizaApBase} onChange={(e) => setPolizaApBase(Number(e.target.value))} className="w-full border border-red-200 bg-red-50/40 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+              <div>
+                <label className="block font-bold text-red-700 mb-1">Desc. por Falta</label>
+                <input type="number" step="0.01" value={descuentoPorFalta} onChange={(e) => setDescuentoPorFalta(Number(e.target.value))} className="w-full border border-red-200 bg-red-50/40 rounded-lg px-2.5 py-1.5 font-bold" />
+              </div>
+            </div>
+          </div>
