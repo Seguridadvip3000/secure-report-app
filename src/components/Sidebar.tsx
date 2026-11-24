@@ -19,6 +19,7 @@ import {
   UserPlus,
   UserMinus,
   Contact,
+  Receipt,
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -34,6 +35,7 @@ export default function Sidebar() {
   const puedeVerAsistenciaLider = rol === 'lider';
   const puedeVerMonitorAsistencia = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom'].includes(rol);
   const puedeVerPanelAnalista = ['administrador', 'admin', 'directiva', 'operaciones', 'analista', 'rrhh', 'recursos_humanos'].includes(rol);
+  const puedeVerNominaRecibos = ['administrador', 'admin', 'directiva', 'analista', 'rrhh', 'recursos_humanos'].includes(rol);
   const puedeVerVerificacionSE = ['administrador', 'admin', 'directiva', 'operaciones', 'analista', 'rrhh', 'recursos_humanos'].includes(rol);
   const puedeVerReclutamiento = ['administrador', 'admin', 'directiva', 'reclutamiento', 'rrhh', 'recursos_humanos'].includes(rol);
   const puedeVerFichaYEgresados = ['administrador', 'admin', 'directiva', 'operaciones', 'reclutamiento', 'rrhh', 'recursos_humanos'].includes(rol);
@@ -155,6 +157,18 @@ export default function Sidebar() {
                 }`}
               >
                 <Search size={18} /> Control Analista
+              </Link>
+            )}
+
+            {puedeVerNominaRecibos && (
+              <Link
+                to="/nomina-recibos"
+                onClick={cerrarMenu}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === '/nomina-recibos' ? 'bg-emerald-600 text-white' : 'hover:bg-slate-900'
+                }`}
+              >
+                <Receipt size={18} /> Nómina y Recibos
               </Link>
             )}
 

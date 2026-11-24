@@ -29,6 +29,7 @@ const VerificacionServiciosEspecialesPage = lazy(() => import('./pages/Verificac
 const ReclutamientoHome = lazy(() => import('./pages/ReclutamientoHome'));
 const EgresadosPage = lazy(() => import('./pages/EgresadosPage'));
 const ConsultaFichaTecnicaPage = lazy(() => import('./pages/ConsultaFichaTecnicaPage'));
+const NominaRecibosPage = lazy(() => import('./pages/NominaRecibosPage'));
 
 function LoadingScreen() {
   return (
@@ -139,6 +140,12 @@ export default function App() {
                 <Route path="home-analista" element={
                   <RoleRoute roles={['analista', 'rrhh', 'recursos_humanos', 'operaciones', 'directiva', 'administrador', 'admin']}>
                     <AnalistaHome />
+                  </RoleRoute>
+                } />
+
+                <Route path="nomina-recibos" element={
+                  <RoleRoute roles={['analista', 'rrhh', 'recursos_humanos', 'directiva', 'administrador', 'admin']}>
+                    <NominaRecibosPage />
                   </RoleRoute>
                 } />
 
