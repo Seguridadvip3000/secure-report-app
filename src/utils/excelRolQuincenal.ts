@@ -132,6 +132,15 @@ async function construirHojaExcelJS(
 
   const movimientos = Array.isArray(movsData) ? movsData : [];
 
+  const { data: logsQrData } = await supabase
+    .from('attendance_logs')
+    .select('*')
+    .eq('project_name', proyecto)
+    .gte('created_at', `${fechaDesde}T00:00:00`)
+    .lte('created_at', `${fechaHasta}T23:59:59`);
+
+  const logsQr = Array.isArray(logsQrData) ? logsQrData : [];
+
   const cedulasActivas = new Set<string>();
   const activos = plantillaAll.filter((p) => {
     if (p.estado === 'ACTIVO') {
@@ -181,7 +190,10 @@ async function construirHojaExcelJS(
     turnoBase: string,
     grupoBase: 'A' | 'B' | 'C',
     fechaISO: string,
-    esApoyoExterno = false
+    esApoyoExterno = false,
+    cargoBase = 'OFICIAL',
+    nombresBase = '',
+    apellidosBase = ''
   ): string => {
     if (!diasCerradosSet.has(fechaISO)) return '';
 
@@ -233,6 +245,25 @@ async function construirHojaExcelJS(
     }
 
     if (esApoyoExterno) return '';
+
+    // Líder de Proyecto (DIURNO 12x2): se toma de su marcación QR (attendance_logs), y días sin marca son Libre ('L')
+    if (String(cargoBase || '').toUpperCase() === 'LIDER') {
+      const primerNombre = String(nombresBase || '').trim().toLowerCase().split(' ').at(0) || '';
+      const primerApellido = String(apellidosBase || '').trim().toLowerCase().split(' ').at(0) || '';
+      const tuvoMarcaQR = logsQr.some((lg: any) => {
+        const fechaLog = new Date(lg.created_at).toLocaleDateString('en-CA', {
+          timeZone: 'America/Caracas',
+        });
+        if (fechaLog !== fechaISO) return false;
+        const uName = String(lg.user_name || lg.userName || lg.nombre_completo || '').toLowerCase();
+        if (!uName) return true;
+        return (
+          (primerNombre && uName.includes(primerNombre)) ||
+          (primerApellido && uName.includes(primerApellido))
+        );
+      });
+      return tuvoMarcaQR ? 'D' : 'L';
+    }
 
     const toca = leTocaGuardiaHoy(grupoBase, turnoBase as any, fechaISO);
     if (!toca) return 'L';
@@ -405,7 +436,10 @@ async function construirHojaExcelJS(
         persona.turno || 'MIXTO',
         (persona.grupo || 'A') as 'A' | 'B' | 'C',
         fechaISO,
-        esApoyoExterno
+        esApoyoExterno,
+        persona.cargo || 'OFICIAL',
+        persona.nombres || '',
+        persona.apellidos || ''
       );
       const cell = row.getCell(6 + iDia);
       cell.value = cod;
@@ -571,6 +605,7 @@ async function construirHojaPortadaNomina(
     ['Bono Ropa Tintorería (Bs):', 0, 'Bono Ropa Trabajo I (Bs):', 0],
     ['Bono Jefe de Grupo (Bs):', 0, 'Bono Nocturno por Noche (Bs):', 0],
     ['Valor Domingo / Feriado (Bs):', 0, 'Póliza A.P. Deducción (Bs):', 0],
+    ['Bono Líder de Proyecto (Bs):', 0, 'Otros Bonos / Ajustes (Bs):', 0],
   ];
 
   parametros.forEach((par, i) => {
@@ -603,7 +638,7 @@ async function construirHojaPortadaNomina(
     'BONO TINTORERÍA',
     'BONO ROPA I',
     'ALIMENTACIÓN',
-    'JEFE GRUPO',
+    'BONO CARGO',
     'DOMINGOS',
     'BONO NOCTURNO',
     'FALTAS',
@@ -614,7 +649,7 @@ async function construirHojaPortadaNomina(
     'TOTAL DEVENGADO (Bs)',
   ];
 
-  const rowHead = ws.getRow(12);
+  const rowHead = ws.getRow(13);
   rowHead.height = 24;
   headersNomina.forEach((h, idx) => {
     const cell = rowHead.getCell(idx + 1);
@@ -635,7 +670,7 @@ async function construirHojaPortadaNomina(
   const colLibresRol = colLetra(6 + cantDias + 6);
 
   activos.forEach((p, idx) => {
-    const r = 13 + idx;
+    const r = 14 + idx;
     const filaRol = 6 + idx;
     const row = ws.getRow(r);
     row.height = 19;
@@ -674,7 +709,7 @@ async function construirHojaPortadaNomina(
     setC(10, 0, `I${r}*$C$7`);
     setC(11, 0, `I${r}*$F$7`);
     setC(12, 0, `I${r}*$F$6`);
-    setC(13, 0, `IF(F${r}="J. GRUPO",$C$8,0)`);
+    setC(13, 0, `IF(F${r}="J. GRUPO",$C$8,IF(F${r}="LIDER",$C$10,0))`);
     setC(14, 0, `${hojaRolRef}!${colDomingosRol}${filaRol}`);
     setC(15, 0, `${hojaRolRef}!${colNochesRol}${filaRol}*$F$8`);
     setC(16, 0, `${hojaRolRef}!${colFaltasRol}${filaRol}`);
@@ -682,7 +717,7 @@ async function construirHojaPortadaNomina(
     setC(18, 0, `${hojaRolRef}!${colRedoblesRol}${filaRol}`);
     setC(19, 0, `${hojaRolRef}!${colLibresRol}${filaRol}`);
     setC(20, 0, `$F$9`);
-    setC(21, 0, `(I${r}*$C$6)+J${r}+K${r}+L${r}+M${r}+(N${r}*$C$9)+O${r}-T${r}`);
+    setC(21, 0, `(I${r}*$C$6)+J${r}+K${r}+L${r}+M${r}+(N${r}*$C$9)+O${r}+$F$10-T${r}`);
   });
 }
 

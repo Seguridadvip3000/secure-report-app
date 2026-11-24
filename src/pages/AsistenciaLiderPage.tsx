@@ -809,7 +809,11 @@ export default function AsistenciaLiderPage() {
   const tieneDiurno = PROYECTOS_CON_DIURNO.includes(proyUpper);
   const tieneNocturno = PROYECTOS_CON_NOCTURNO.includes(proyUpper);
 
-  const countLider = liderActivoPorQR ? 1 : 0;
+  const liderMarcadoEnLista = asistentesHoy.some(
+    (a) => String(a.cargo || '').toUpperCase() === 'LIDER'
+  );
+  const countLider = liderActivoPorQR || liderMarcadoEnLista ? 1 : 0;
+
   const countJefeOp = tieneJefeOp
     ? asistentesHoy.filter((a) => String(a.cargo || '').toUpperCase() === 'J. OPERACIONES').length
     : 0;
@@ -844,6 +848,9 @@ export default function AsistenciaLiderPage() {
   const proyectosParaTraslado = listaProyectosGlobales.filter((p) => p !== proyectoSeleccionado);
 
   const formatearBadgeHorario = (of: OficialPlantilla) => {
+    if (String(of.cargo || '').toUpperCase() === 'LIDER') {
+      return `DIURNO • LIDER 12x2 (QR)`;
+    }
     const trn = (of.turno || 'MIXTO').toUpperCase();
     if (trn === 'DIURNO' || trn === 'NOCTURNO') return trn;
     if (trn === '24X24') return `24X24 • GRP ${of.grupo}`;
@@ -1392,8 +1399,9 @@ export default function AsistenciaLiderPage() {
                           setCedula(`${asp.nacionalidad || 'V'}-${asp.cedula}`);
                           setNombres(asp.nombres || '');
                           setApellidos(asp.apellidos || '');
-                          setCargoAlta((asp.cargo_asignado || 'OFICIAL') as CargoOperativo);
-                          setTurnoAlta((asp.turno_asignado || 'MIXTO') as HorarioOperativo);
+                          const cargoSel = (asp.cargo_asignado || 'OFICIAL') as CargoOperativo;
+                          setCargoAlta(cargoSel);
+                          setTurnoAlta(cargoSel === 'LIDER' ? 'DIURNO' : ((asp.turno_asignado || 'MIXTO') as HorarioOperativo));
                           setGrupo((asp.grupo_asignado || 'A') as 'A' | 'B' | 'C');
                           setTipoIngreso('NUEVO INGRESO');
                           setObservacionIngreso('Ingreso aprobado por Reclutamiento');
@@ -1429,7 +1437,11 @@ export default function AsistenciaLiderPage() {
                   <select
                     required
                     value={cargoAlta}
-                    onChange={(e) => setCargoAlta(e.target.value as CargoOperativo)}
+                    onChange={(e) => {
+                      const val = e.target.value as CargoOperativo;
+                      setCargoAlta(val);
+                      if (val === 'LIDER') setTurnoAlta('DIURNO');
+                    }}
                     className="w-full border border-teal-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-teal-900 bg-teal-50/40"
                   >
                     {LISTA_CARGOS_OPERATIVOS.map((c) => (
@@ -1568,170 +1580,3 @@ export default function AsistenciaLiderPage() {
               </div>
             </form>
           )}
-          {subMenuPlantilla === 'HISTORIAL' && (
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-3">
-              <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3">
-                Historial de Movimientos ({movimientos.length})
-              </h2>
-              <div className="divide-y divide-slate-100">
-                {movimientos.map((mov) => (
-                  <div key={mov.id} className="py-2.5 text-xs flex justify-between gap-2">
-                    <div>
-                      <strong>[{mov.tipo_movimiento}]</strong> ({mov.cargo || 'OFICIAL'}) {mov.nombre_completo} ({mov.cedula})
-                      {mov.proyecto_relacionado ? ` ↔ ${mov.proyecto_relacionado}` : ''}
-                      {mov.observacion ? ` • ${mov.observacion}` : ''}
-                    </div>
-                    <span className="text-slate-400">{new Date(mov.created_at).toLocaleString('es-VE')}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {oficialOtro && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <form onSubmit={confirmarMovimientoOtro} className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
-            <h3 className="text-lg font-bold text-slate-800">Registrar Novedad / Movimiento (OTRO)</h3>
-            <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
-              Personal: <strong>{oficialOtro.nombres} {oficialOtro.apellidos}</strong> ({oficialOtro.cargo || 'OFICIAL'})
-              <br />
-              Cédula: <strong>{oficialOtro.cedula}</strong>
-            </p>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Seleccione Opción *</label>
-                <select
-                  value={tipoOtro}
-                  onChange={(e) => {
-                    setTipoOtro(e.target.value as TipoOtroMovimiento);
-                    setProyectoDestinoOtro('');
-                    setObservacionOtro('');
-                  }}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-bold text-amber-800 bg-amber-50/50"
-                >
-                  <option value="APOYO ENVIADO">APOYO ENVIADO</option>
-                  <option value="TRASLADO ENVIADO">TRASLADO ENVIADO</option>
-                  <option value="VACACIONES">VACACIONES</option>
-                  <option value="REPOSO MEDICO">REPOSO MÉDICO</option>
-                  <option value="BAJA POR SALUD">BAJA POR SALUD</option>
-                  <option value="FALTA JUSTIFICADA">FALTA JUSTIFICADA</option>
-                  <option value="PERMISO">PERMISO</option>
-                  <option value="DESCANSO">LIBRE / DESCANSO</option>
-                  <option value="EGRESO">EGRESO</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Horario *</label>
-                <select
-                  required
-                  value={turnoOtro}
-                  onChange={(e) => setTurnoOtro(e.target.value as HorarioOperativo)}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-bold text-blue-800 bg-blue-50/40"
-                >
-                  <option value="MIXTO">MIXTO</option>
-                  <option value="24X24">24X24</option>
-                  <option value="DIURNO">DIURNO</option>
-                  <option value="NOCTURNO">NOCTURNO</option>
-                </select>
-              </div>
-            </div>
-
-            {(tipoOtro === 'TRASLADO ENVIADO' || tipoOtro === 'APOYO ENVIADO') && (
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                  Proyecto Destino *
-                </label>
-                <select
-                  required
-                  value={proyectoDestinoOtro}
-                  onChange={(e) => setProyectoDestinoOtro(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-semibold"
-                >
-                  <option value="">-- Seleccione Proyecto Destino --</option>
-                  {proyectosParaTraslado.map((proy) => (
-                    <option key={proy} value={proy}>
-                      {proy}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                {['EGRESO', 'FALTA JUSTIFICADA', 'BAJA POR SALUD'].includes(tipoOtro)
-                  ? 'Motivo * (Obligatorio)'
-                  : 'Observación (Opcional)'}
-              </label>
-              <textarea
-                required={['EGRESO', 'FALTA JUSTIFICADA', 'BAJA POR SALUD'].includes(tipoOtro)}
-                rows={2}
-                value={observacionOtro}
-                onChange={(e) => setObservacionOtro(e.target.value)}
-                placeholder="Detalle o motivo..."
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setOficialOtro(null)}
-                className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={guardando}
-                className="px-5 py-2 rounded-xl text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 cursor-pointer disabled:opacity-40"
-              >
-                {guardando ? 'Guardando...' : `Confirmar ${tipoOtro}`}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {oficialEditandoFecha && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <form onSubmit={guardarFechaIngresoManual} className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl">
-            <h3 className="text-base font-bold text-slate-800">Editar Fecha de Ingreso</h3>
-            <p className="text-xs text-slate-600">
-              Personal: <strong>{oficialEditandoFecha.nombres} {oficialEditandoFecha.apellidos}</strong> ({oficialEditandoFecha.cedula})
-            </p>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Fecha de Ingreso *</label>
-              <input
-                type="date"
-                required
-                value={nuevaFechaIngresoInput}
-                onChange={(e) => setNuevaFechaIngresoInput(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setOficialEditandoFecha(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={guardando}
-                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 cursor-pointer"
-              >
-                {guardando ? 'Guardando...' : 'Guardar Fecha'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-    </div>
-  );
-}
