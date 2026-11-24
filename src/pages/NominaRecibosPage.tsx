@@ -766,3 +766,97 @@ export default function NominaRecibosPage() {
               </div>
             </div>
           </div>
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 overflow-x-auto">
+            <h2 className="text-sm font-black text-slate-800 uppercase mb-3">
+              Resumen de Nómina del Proyecto ({filas.length} trabajadores)
+            </h2>
+
+            {cargando ? (
+              <p className="text-center text-slate-500 py-8 text-sm">Calculando días y devengados...</p>
+            ) : filas.length === 0 ? (
+              <p className="text-center text-slate-500 py-8 text-sm">No hay personal activo en este proyecto.</p>
+            ) : (
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 border-b border-slate-200">
+                    <th className="p-2.5">Personal</th>
+                    <th className="p-2.5">Cargo</th>
+                    <th className="p-2.5 text-center">Días</th>
+                    <th className="p-2.5 text-center">Cuota Botas</th>
+                    <th className="p-2.5 text-center">Otros (Bs)</th>
+                    <th className="p-2.5 text-center">Desc. Extra</th>
+                    <th className="p-2.5 text-right">Devengado</th>
+                    <th className="p-2.5 text-right">Deducciones</th>
+                    <th className="p-2.5 text-right">Neto a Pagar</th>
+                    <th className="p-2.5 text-center">Recibo</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filas.map((f, idx) => {
+                    const rec = calcularItemRecibo(f);
+                    return (
+                      <tr key={f.id || idx} className="hover:bg-slate-50">
+                        <td className="p-2.5 font-bold text-slate-800">
+                          {f.nombres} {f.apellidos}
+                          <div className="text-[11px] font-mono text-slate-500">C.I. {f.cedula}</div>
+                        </td>
+                        <td className="p-2.5 font-semibold text-teal-800">{f.cargo || 'OFICIAL'}</td>
+                        <td className="p-2.5 text-center font-black">{f.diasLab}</td>
+                        <td className="p-2.5 text-center">
+                          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 font-bold text-[11px]">
+                            {rec.cuotaBotasDetalle}
+                          </span>
+                          {rec.cuotaBotasMonto > 0 && (
+                            <div className="text-[11px] text-red-700 font-bold">-{fmtBs(rec.cuotaBotasMonto)}</div>
+                          )}
+                        </td>
+                        <td className="p-2.5 text-center">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={f.otrosExtra}
+                            onChange={(e) => {
+                              const copia = [...filas];
+                              copia[idx] = { ...f, otrosExtra: Number(e.target.value) };
+                              setFilas(copia);
+                            }}
+                            className="w-20 border border-slate-300 rounded px-1.5 py-1 text-right font-semibold"
+                          />
+                        </td>
+                        <td className="p-2.5 text-center">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={f.descuentoExtra}
+                            onChange={(e) => {
+                              const copia = [...filas];
+                              copia[idx] = { ...f, descuentoExtra: Number(e.target.value) };
+                              setFilas(copia);
+                            }}
+                            className="w-20 border border-slate-300 rounded px-1.5 py-1 text-right font-semibold"
+                          />
+                        </td>
+                        <td className="p-2.5 text-right font-bold text-slate-800">{fmtBs(rec.totalDevengado)}</td>
+                        <td className="p-2.5 text-right font-bold text-red-700">{fmtBs(rec.totalDeducciones)}</td>
+                        <td className="p-2.5 text-right font-black text-emerald-700">{fmtBs(rec.netoPagado)}</td>
+                        <td className="p-2.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => generarPDFRecibosNomina(`${f.cedula}_${f.apellidos}`, [rec])}
+                            className="px-2.5 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-bold hover:bg-slate-800 cursor-pointer"
+                          >
+                            PDF
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
