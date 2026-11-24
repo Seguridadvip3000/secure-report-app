@@ -280,7 +280,7 @@ export async function generarPDFRecibosNomina(
   items.forEach((item, index) => {
     if (index > 0) doc.addPage();
     doc.setDrawColor(203, 213, 225);
-    doc.setLineDashPattern(, 0);
+    doc.setLineDashPattern([2, 2], 0);
     doc.line(halfWidth, 5, halfWidth, 210);
     doc.setLineDashPattern([], 0);
 
