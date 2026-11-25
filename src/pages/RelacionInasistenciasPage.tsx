@@ -1,297 +1,7 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
-import { PROYECTOS } from '../data/constants';
-import { leTocaGuardiaHoy } from '../utils/rotacionGuardia';
-import ExcelJS from 'exceljs';
-import { jsPDF } from 'jspdf';
-import {
-  FileSpreadsheet,
-  FileText,
-  Building2,
-  Save,
-  ClipboardList,
-} from 'lucide-react';
-
-const NOMBRES_MESES = [
-  'ENERO',
-  'FEBRERO',
-  'MARZO',
-  'ABRIL',
-  'MAYO',
-  'JUNIO',
-  'JULIO',
-  'AGOSTO',
-  'SEPTIEMBRE',
-  'OCTUBRE',
-  'NOVIEMBRE',
-  'DICIEMBRE',
-];
-
-const pad2 = (n: number) => String(n).padStart(2, '0');
-
-const cargarLogoBase64 = async (): Promise<string | null> => {
-  try {
-    const resp = await fetch('/logo-vip3000.jpg');
-    if (!resp.ok) return null;
-    const blob = await resp.blob();
-    return await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : null);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
-};
-
-interface FilaDiaInasistencia {
-  dia: number;
-  plazaDiurna: number;
-  plazaNocturna: number;
-  asistDiurna: number;
-  asistNocturna: number;
-  faltasDiurnas: number;
-  faltasNocturnas: number;
-  totalFaltas: number;
-}
-
-export default function RelacionInasistenciasPage() {
-  const { currentUser } = useAuth();
-  const usuarioNombre = currentUser?.nombre_completo || currentUser?.username || 'Operaciones';
-
-  const hoy = new Date();
-  const [listaProyectos, setListaProyectos] = useState<string[]>([]);
-  const [proyecto, setProyecto] = useState<string>('');
-  const [anio, setAnio] = useState<number>(hoy.getFullYear());
-  const [mes, setMes] = useState<number>(hoy.getMonth() + 1);
-
-  const [plazaDiurnaConfig, setPlazaDiurnaConfig] = useState<number>(0);
-  const [plazaNocturnaConfig, setPlazaNocturnaConfig] = useState<number>(0);
-  const [guardandoPlazas, setGuardandoPlazas] = useState<boolean>(false);
-
-  const [filas1ra, setFilas1ra] = useState<FilaDiaInasistencia[]>([]);
-  const [filas2da, setFilas2da] = useState<FilaDiaInasistencia[]>([]);
-  const [cargando, setCargando] = useState<boolean>(false);
-  const [mensaje, setMensaje] = useState<string | null>(null);
-
-  useEffect(() => {
-    const cargarProy = async () => {
-      const setP = new Set<string>(Array.isArray(PROYECTOS) ? PROYECTOS : []);
-      const { data } = await supabase.from('projects').select('*');
-      if (Array.isArray(data)) {
-        data.forEach((p: any) => {
-          const val = p?.nombre || p?.name || p?.proyecto;
-          if (val) setP.add(String(val).trim());
-        });
-      }
-      const arr = Array.from(setP).sort();
-      setListaProyectos(arr);
-      if (arr.length > 0 && !proyecto) setProyecto(arr.at(0) || '');
-    };
-    cargarProy();
-  }, []);
-    const cargarRelacionMes = async () => {
-    if (!proyecto) return;
-    setCargando(true);
-    setMensaje(null);
-
-    try {
-      const ultimoDiaMes = new Date(anio, mes, 0).getDate();
-      const fechaDesde = `${anio}-${pad2(mes)}-01`;
-      const fechaHasta = `${anio}-${pad2(mes)}-${pad2(ultimoDiaMes)}`;
-
-      const { data: cierresData } = await supabase
-        .from('cierres_asistencia_diaria')
-        .select('fecha, cerrado')
-        .eq('proyecto', proyecto)
-        .eq('cerrado', true)
-        .gte('fecha', fechaDesde)
-        .lte('fecha', fechaHasta);
-
-      const diasCerradosSet = new Set<string>(
-        (Array.isArray(cierresData) ? cierresData : []).map((c: any) => String(c.fecha))
-      );
-
-      const { data: configData } = await supabase
-        .from('plazas_proyecto_config')
-        .select('*')
-        .eq('proyecto', proyecto)
-        .maybeSingle();
-
-      const { data: plantillaData } = await supabase
-        .from('plantilla_proyectos')
-        .select('*')
-        .eq('proyecto', proyecto)
-        .eq('estado', 'ACTIVO');
-
-      const activos = Array.isArray(plantillaData) ? plantillaData : [];
-
-      let pDiurna = configData?.plazas_diurnas ?? 0;
-      let pNocturna = configData?.plazas_nocturnas ?? 0;
-
-      if (!configData && activos.length > 0) {
-        const hoyISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Caracas' });
-        activos.forEach((of) => {
-          const cargoUp = String(of.cargo || 'OFICIAL').toUpperCase();
-          const trnUp = String(of.turno || 'MIXTO').toUpperCase();
-          if (cargoUp === 'LIDER') {
-            pDiurna += 1;
-          } else if (leTocaGuardiaHoy(of.grupo || 'A', of.turno || 'MIXTO', hoyISO)) {
-            if (trnUp === 'DIURNO') pDiurna += 1;
-            else pNocturna += 1;
-          }
-        });
-      }
-
-      setPlazaDiurnaConfig(pDiurna);
-      setPlazaNocturnaConfig(pNocturna);
-
-      const { data: asistData } = await supabase
-        .from('asistencias_diarias_oficiales')
-        .select('*')
-        .eq('proyecto', proyecto)
-        .gte('fecha', fechaDesde)
-        .lte('fecha', fechaHasta);
-
-      const asistencias = Array.isArray(asistData) ? asistData : [];
-
-      const { data: logsQrData } = await supabase
-        .from('attendance_logs')
-        .select('*')
-        .eq('project_name', proyecto)
-        .gte('created_at', `${fechaDesde}T00:00:00`)
-        .lte('created_at', `${fechaHasta}T23:59:59`);
-
-      const logsQr = Array.isArray(logsQrData) ? logsQrData : [];
-
-      const estatusAsistentes = [
-        'PRESENTE',
-        'APOYO RECIBIDO',
-        'SERVICIO ESPECIAL MIXTO',
-        'SERVICIO ESPECIAL DIURNO/NOCTURNO',
-        'SERVICIO ESPECIAL PROPIO',
-        'SERVICIO ESPECIAL RECIBIDO',
-      ];
-
-      const q1: FilaDiaInasistencia[] = [];
-      const q2: FilaDiaInasistencia[] = [];
-
-      for (let d = 1; d <= ultimoDiaMes; d++) {
-        const fechaISO = `${anio}-${pad2(mes)}-${pad2(d)}`;
-        const diaCerradoPorAnalista = diasCerradosSet.has(fechaISO);
-
-        if (!diaCerradoPorAnalista) {
-          const filaPendiente: FilaDiaInasistencia = {
-            dia: d,
-            plazaDiurna: pDiurna,
-            plazaNocturna: pNocturna,
-            asistDiurna: 0,
-            asistNocturna: 0,
-            faltasDiurnas: 0,
-            faltasNocturnas: 0,
-            totalFaltas: 0,
-          };
-          if (d <= 15) q1.push(filaPendiente);
-          else q2.push(filaPendiente);
-          continue;
-        }
-
-        const marcasDia = asistencias.filter((a) => a.fecha === fechaISO);
-
-        let asistDiurna = 0;
-        let asistNocturna = 0;
-        let liderYaContadoEnDia = false;
-
-        marcasDia.forEach((m) => {
-          const est = String(m.estatus || '').toUpperCase();
-          if (!estatusAsistentes.includes(est)) return;
-
-          const cargoUp = String(m.cargo || 'OFICIAL').toUpperCase();
-          const turnoUp = String(m.turno || 'MIXTO').toUpperCase();
-
-          if (cargoUp === 'LIDER') {
-            liderYaContadoEnDia = true;
-            asistDiurna += 1;
-          } else if (turnoUp === 'DIURNO') {
-            asistDiurna += 1;
-          } else {
-            asistNocturna += 1;
-          }
-        });
-
-        if (!liderYaContadoEnDia) {
-          const logsDia = logsQr.filter((lg: any) => {
-            const fLog = new Date(lg.created_at).toLocaleDateString('en-CA', {
-              timeZone: 'America/Caracas',
-            });
-            return fLog === fechaISO;
-          });
-          if (logsDia.length > 0) {
-            asistDiurna += 1;
-          }
-        }
-
-        const faltasDiurnas = pDiurna - asistDiurna;
-        const faltasNocturnas = pNocturna - asistNocturna;
-        const totalFaltas = faltasDiurnas + faltasNocturnas;
-
-        const fila: FilaDiaInasistencia = {
-          dia: d,
-          plazaDiurna: pDiurna,
-          plazaNocturna: pNocturna,
-          asistDiurna,
-          asistNocturna,
-          faltasDiurnas,
-          faltasNocturnas,
-          totalFaltas,
-        };
-
-        if (d <= 15) q1.push(fila);
-        else q2.push(fila);
-      }
-
-      setFilas1ra(q1);
-      setFilas2da(q2);
-    } catch (err) {
-      console.error('Error cargando relación de inasistencias:', err);
-    } finally {
-      setCargando(false);
-    }
-  };
-
-  useEffect(() => {
-    if (proyecto) cargarRelacionMes();
-  }, [proyecto, anio, mes]);
-
-  const guardarConfigPlazas = async () => {
-    if (!proyecto) return;
-    setGuardandoPlazas(true);
-    try {
-      await supabase.from('plazas_proyecto_config').upsert(
-        [
-          {
-            proyecto,
-            plazas_diurnas: plazaDiurnaConfig,
-            plazas_nocturnas: plazaNocturnaConfig,
-            updated_by: usuarioNombre,
-            updated_at: new Date().toISOString(),
-          },
-        ],
-        { onConflict: 'proyecto' }
-      );
-      setMensaje(`✅ Plazas contratadas de ${proyecto} guardadas (${plazaDiurnaConfig} Diurnas / ${plazaNocturnaConfig} Nocturnas-Mixtas).`);
-      await cargarRelacionMes();
-    } catch (err) {
-      console.error('Error guardando plazas:', err);
-    } finally {
-      setGuardandoPlazas(false);
-    }
-  };
   const rolActual = (currentUser?.role || '').toLowerCase();
   const puedeEditarTodo = ['directiva', 'administrador', 'admin'].includes(rolActual);
   const [modoEdicionTotal, setModoEdicionTotal] = useState<boolean>(false);
+  const [modalExportarFormato, setModalExportarFormato] = useState<'EXCEL' | 'PDF' | null>(null);
 
   const actualizarCeldaDia = (
     quincena: '1RA' | '2DA',
@@ -312,22 +22,105 @@ export default function RelacionInasistenciasPage() {
     );
   };
 
-  const exportarExcelInasistencias = async () => {
+  const exportarExcelInasistencias = async (alcance: '1RA' | '2DA' | 'MES') => {
+    setModalExportarFormato(null);
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet(proyecto.slice(0, 28) || 'INASISTENCIAS');
+    const ws = wb.addWorksheet(proyecto.slice(0, 28) || 'INASISTENCIAS', {
+      views: [{ showGridLines: true }],
+    });
+
+    ws.columns = [
+      { width: 10 },
+      { width: 15 },
+      { width: 15 },
+      { width: 16 },
+      { width: 17 },
+      { width: 15 },
+      { width: 16 },
+      { width: 15 },
+    ];
+
+    try {
+      const respLogo = await fetch('/logo-vip3000.jpg');
+      if (respLogo.ok) {
+        const arrayBuf = await respLogo.arrayBuffer();
+        const imageId = wb.addImage({
+          buffer: arrayBuf,
+          extension: 'jpeg',
+        });
+        ws.addImage(imageId, {
+          tl: { col: 0.2, row: 0.2 },
+          ext: { width: 85, height: 75 },
+        });
+      }
+    } catch {}
+
+    ws.getRow(1).height = 24;
+    ws.getRow(2).height = 22;
+    ws.getRow(3).height = 22;
+    ws.getRow(4).height = 14;
+
+    ws.mergeCells('C1:H1');
+    ws.getCell('C1').value = 'SEGURIDAD VIP 3000 C.A. — RIF: J-29491549-3';
+    ws.getCell('C1').font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+    ws.getCell('C1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    ws.getCell('C1').alignment = { vertical: 'middle', horizontal: 'center' };
+
+    ws.mergeCells('C2:H2');
+    ws.getCell('C2').value = 'RELACIÓN DE INASISTENCIAS (FALTAS ADMINISTRATIVAS)';
+    ws.getCell('C2').font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF93C5FD' } };
+    ws.getCell('C2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    ws.getCell('C2').alignment = { vertical: 'middle', horizontal: 'center' };
+
+    const etiquetaAlcance =
+      alcance === '1RA' ? '1RA QUINCENA' : alcance === '2DA' ? '2DA QUINCENA' : 'MES COMPLETO';
+
+    ws.mergeCells('C3:H3');
+    ws.getCell('C3').value = `PROYECTO: ${proyecto.toUpperCase()}   |   ${etiquetaAlcance} — ${NOMBRES_MESES[mes - 1]} ${anio}`;
+    ws.getCell('C3').font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF1E293B' } };
+    ws.getCell('C3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+    ws.getCell('C3').alignment = { vertical: 'middle', horizontal: 'center' };
+
+    const bordeFino: Partial<ExcelJS.Borders> = {
+      top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+      left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+      bottom: { style: 'thin', color: { argb: 'FF94A3B8' } },
+      right: { style: 'thin', color: { argb: 'FF94A3B8' } },
+    };
 
     const escribirBloqueQuincena = (tituloQuincena: string, filas: FilaDiaInasistencia[]) => {
-      ws.addRow(['', '', proyecto.toUpperCase()]);
-      ws.addRow(['', '', 'RELACION DE INASISTENCIAS']);
-      ws.addRow(['', '', 'SEGURIDAD VIP 3000', '', proyecto.toUpperCase()]);
-      ws.addRow([`${tituloQuincena} ${NOMBRES_MESES[mes - 1]}`, '', '', '', anio]);
-      const h1 = ws.addRow(['Día', 'PLAZA', 'PLAZA', 'ASISTENTES', 'ASISTENTES', 'Faltas', 'Faltas', 'TOTAL']);
-      const h2 = ws.addRow(['', 'Diurnas', 'Nocturna', 'Diurna', 'Nocturna', 'Diurnas', 'Nocturnas', '']);
-      h1.font = { bold: true };
-      h2.font = { bold: true };
+      const rBanner = ws.addRow([`${tituloQuincena} QUINCENA ${NOMBRES_MESES[mes - 1]} ${anio}`]);
+      const idxBanner = rBanner.number;
+      ws.mergeCells(`A${idxBanner}:H${idxBanner}`);
+      rBanner.height = 22;
+      const cellBanner = ws.getCell(`A${idxBanner}`);
+      cellBanner.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      cellBanner.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      cellBanner.alignment = { vertical: 'middle', horizontal: 'center' };
+
+      const rH1 = ws.addRow(['Día', 'PLAZA', '', 'ASISTENTES', '', 'Faltas', '', 'TOTAL']);
+      const rH2 = ws.addRow(['', 'Diurnas', 'Nocturna', 'Diurna', 'Nocturna', 'Diurnas', 'Nocturnas', '']);
+      const n1 = rH1.number;
+      const n2 = rH2.number;
+
+      ws.mergeCells(`A${n1}:A${n2}`);
+      ws.mergeCells(`B${n1}:C${n1}`);
+      ws.mergeCells(`D${n1}:E${n1}`);
+      ws.mergeCells(`F${n1}:G${n1}`);
+      ws.mergeCells(`H${n1}:H${n2}`);
+
+      [rH1, rH2].forEach((row) => {
+        row.height = 20;
+        row.eachCell((cell) => {
+          cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCBD5E1' } };
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.border = bordeFino;
+        });
+      });
 
       filas.forEach((f) => {
-        ws.addRow([
+        const r = ws.addRow([
           f.dia,
           f.plazaDiurna,
           f.plazaNocturna,
@@ -337,16 +130,35 @@ export default function RelacionInasistenciasPage() {
           f.faltasNocturnas,
           f.totalFaltas,
         ]);
+        r.height = 18;
+        r.eachCell((cell, colNum) => {
+          cell.font = { name: 'Calibri', size: 10, bold: colNum === 1 || colNum === 8 };
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.border = bordeFino;
+          if (colNum >= 6 && Number(cell.value || 0) > 0) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+            cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF991B1B' } };
+          }
+        });
       });
 
       const sumaTotal = filas.reduce((acc, x) => acc + x.totalFaltas, 0);
-      const rTot = ws.addRow(['', '', '', '', '', '', '', sumaTotal]);
-      rTot.font = { bold: true };
+      const rTot = ws.addRow(['', '', '', '', '', '', `TOTAL ${tituloQuincena}:`, sumaTotal]);
+      rTot.height = 21;
+      rTot.eachCell((cell, colNum) => {
+        cell.font = { name: 'Calibri', size: 10.5, bold: true, color: { argb: 'FF0F172A' } };
+        cell.alignment = { vertical: 'middle', horizontal: colNum === 7 ? 'right' : 'center' };
+        if (colNum >= 7) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+          cell.border = bordeFino;
+        }
+      });
+
       ws.addRow([]);
     };
 
-    escribirBloqueQuincena('1RA', filas1ra);
-    escribirBloqueQuincena('2DA', filas2da);
+    if (alcance === '1RA' || alcance === 'MES') escribirBloqueQuincena('1RA', filas1ra);
+    if (alcance === '2DA' || alcance === 'MES') escribirBloqueQuincena('2DA', filas2da);
 
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], {
@@ -355,13 +167,17 @@ export default function RelacionInasistenciasPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Relacion_Inasistencias_${proyecto.replace(/\s+/g, '_')}_${NOMBRES_MESES[mes - 1]}_${anio}.xlsx`;
+    a.download = `Relacion_Inasistencias_${proyecto.replace(/\s+/g, '_')}_${alcance}_${NOMBRES_MESES[mes - 1]}_${anio}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   };
-  const exportarPDFInasistencias = async () => {
+  const exportarPDFInasistencias = async (alcance: '1RA' | '2DA' | 'MES') => {
+    setModalExportarFormato(null);
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
     const logo = await cargarLogoBase64();
+
+    const etiquetaAlcance =
+      alcance === '1RA' ? '1RA QUINCENA' : alcance === '2DA' ? '2DA QUINCENA' : 'MES COMPLETO';
 
     doc.setFillColor(15, 23, 42);
     doc.rect(0, 0, 216, 25, 'F');
@@ -376,7 +192,7 @@ export default function RelacionInasistenciasPage() {
     doc.text('SEGURIDAD VIP 3000 C.A. — RELACIÓN DE INASISTENCIAS', 35, 11);
     doc.setFontSize(9.5);
     doc.setTextColor(147, 197, 253);
-    doc.text(`Proyecto: ${proyecto}  |  Período: ${NOMBRES_MESES[mes - 1]} ${anio}`, 35, 18);
+    doc.text(`Proyecto: ${proyecto}  |  ${etiquetaAlcance} — ${NOMBRES_MESES[mes - 1]} ${anio}`, 35, 18);
 
     let y = 32;
     const dibujarTablaQuincena = (titulo: string, filas: FilaDiaInasistencia[]) => {
@@ -426,10 +242,10 @@ export default function RelacionInasistenciasPage() {
       y += 9;
     };
 
-    dibujarTablaQuincena('1RA QUINCENA', filas1ra);
-    dibujarTablaQuincena('2DA QUINCENA', filas2da);
+    if (alcance === '1RA' || alcance === 'MES') dibujarTablaQuincena('1RA QUINCENA', filas1ra);
+    if (alcance === '2DA' || alcance === 'MES') dibujarTablaQuincena('2DA QUINCENA', filas2da);
 
-    doc.save(`Relacion_Inasistencias_${proyecto.replace(/\s+/g, '_')}_${NOMBRES_MESES[mes - 1]}_${anio}.pdf`);
+    doc.save(`Relacion_Inasistencias_${proyecto.replace(/\s+/g, '_')}_${alcance}_${NOMBRES_MESES[mes - 1]}_${anio}.pdf`);
   };
 
   const renderTablaQuincena = (titulo: '1RA' | '2DA', filas: FilaDiaInasistencia[]) => {
@@ -542,7 +358,7 @@ export default function RelacionInasistenciasPage() {
             <ClipboardList className="text-amber-600" size={26} /> Relación de Inasistencias por Proyecto
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Compara plazas contratadas vs. asistencia real diaria (Diurna con Líder QR y Nocturna/Mixta) por quincena.
+            Refleja los días cerrados por la analista comparando plazas contratadas vs. asistencia real (Diurna con Líder QR y Nocturna/Mixta).
           </p>
         </div>
 
@@ -562,14 +378,14 @@ export default function RelacionInasistenciasPage() {
           )}
           <button
             type="button"
-            onClick={exportarExcelInasistencias}
+            onClick={() => setModalExportarFormato('EXCEL')}
             className="px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1.5 cursor-pointer"
           >
             <FileSpreadsheet size={16} /> Exportar Excel
           </button>
           <button
             type="button"
-            onClick={exportarPDFInasistencias}
+            onClick={() => setModalExportarFormato('PDF')}
             className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
           >
             <FileText size={16} /> Exportar PDF
@@ -664,6 +480,63 @@ export default function RelacionInasistenciasPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {renderTablaQuincena('1RA', filas1ra)}
           {renderTablaQuincena('2DA', filas2da)}
+        </div>
+      )}
+
+      {modalExportarFormato && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-slate-800">
+              Exportar Relación en {modalExportarFormato}
+            </h3>
+            <p className="text-xs text-slate-600">
+              Seleccione qué período de <strong>{proyecto}</strong> ({NOMBRES_MESES[mes - 1]} {anio}) desea descargar:
+            </p>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() =>
+                  modalExportarFormato === 'EXCEL'
+                    ? exportarExcelInasistencias('1RA')
+                    : exportarPDFInasistencias('1RA')
+                }
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 cursor-pointer"
+              >
+                1RA Quincena (Días 01 al 15)
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  modalExportarFormato === 'EXCEL'
+                    ? exportarExcelInasistencias('2DA')
+                    : exportarPDFInasistencias('2DA')
+                }
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer"
+              >
+                2DA Quincena (Días 16 al Fin de Mes)
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  modalExportarFormato === 'EXCEL'
+                    ? exportarExcelInasistencias('MES')
+                    : exportarPDFInasistencias('MES')
+                }
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer"
+              >
+                Todo el Mes (1RA y 2DA Quincena)
+              </button>
+            </div>
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => setModalExportarFormato(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
