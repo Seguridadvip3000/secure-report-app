@@ -156,13 +156,13 @@ export default function App() {
                 } />
 
                 <Route path="ficha-tecnica" element={
-                  <RoleRoute roles={['reclutamiento', 'rrhh', 'recursos_humanos', 'operaciones', 'directiva', 'administrador', 'admin']}>
+                  <RoleRoute roles={['analista', 'reclutamiento', 'rrhh', 'recursos_humanos', 'operaciones', 'directiva', 'administrador', 'admin']}>
                     <ConsultaFichaTecnicaPage />
                   </RoleRoute>
                 } />
 
                 <Route path="egresados" element={
-                  <RoleRoute roles={['reclutamiento', 'rrhh', 'recursos_humanos', 'operaciones', 'directiva', 'administrador', 'admin']}>
+                  <RoleRoute roles={['analista', 'reclutamiento', 'rrhh', 'recursos_humanos', 'directiva', 'administrador', 'admin']}>
                     <EgresadosPage />
                   </RoleRoute>
                 } />

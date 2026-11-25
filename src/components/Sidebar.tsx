@@ -38,7 +38,8 @@ export default function Sidebar() {
   const puedeVerNominaRecibos = ['administrador', 'admin', 'directiva', 'analista', 'rrhh', 'recursos_humanos'].includes(rol);
   const puedeVerVerificacionSE = ['administrador', 'admin', 'directiva', 'operaciones', 'analista', 'rrhh', 'recursos_humanos'].includes(rol);
   const puedeVerReclutamiento = ['administrador', 'admin', 'directiva', 'reclutamiento', 'rrhh', 'recursos_humanos'].includes(rol);
-  const puedeVerFichaYEgresados = ['administrador', 'admin', 'directiva', 'operaciones', 'reclutamiento', 'rrhh', 'recursos_humanos'].includes(rol);
+  const puedeVerFichaTecnica = ['administrador', 'admin', 'directiva', 'operaciones', 'analista', 'reclutamiento', 'rrhh', 'recursos_humanos'].includes(rol);
+  const puedeVerEgresadosYLiquidaciones = ['administrador', 'admin', 'directiva', 'analista', 'reclutamiento', 'rrhh', 'recursos_humanos'].includes(rol);
   const puedeVerListaReportes = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom', 'cliente'].includes(rol);
   const puedeVerAprobacionesUsuarios = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
   const puedeVerAsistenciasYSupervisiones = ['administrador', 'admin', 'directiva'].includes(rol);
@@ -196,28 +197,28 @@ export default function Sidebar() {
               </Link>
             )}
 
-            {puedeVerFichaYEgresados && (
-              <>
-                <Link
-                  to="/ficha-tecnica"
-                  onClick={cerrarMenu}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    location.pathname === '/ficha-tecnica' ? 'bg-blue-600 text-white' : 'hover:bg-slate-900'
-                  }`}
-                >
-                  <Contact size={18} /> Ficha Técnica C.I.
-                </Link>
+            {puedeVerFichaTecnica && (
+              <Link
+                to="/ficha-tecnica"
+                onClick={cerrarMenu}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === '/ficha-tecnica' ? 'bg-blue-600 text-white' : 'hover:bg-slate-900'
+                }`}
+              >
+                <Contact size={18} /> Ficha Técnica C.I.
+              </Link>
+            )}
 
-                <Link
-                  to="/egresados"
-                  onClick={cerrarMenu}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    location.pathname === '/egresados' ? 'bg-red-600 text-white' : 'hover:bg-slate-900'
-                  }`}
-                >
-                  <UserMinus size={18} /> Egresados Empresa
-                </Link>
-              </>
+            {puedeVerEgresadosYLiquidaciones && (
+              <Link
+                to="/egresados"
+                onClick={cerrarMenu}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === '/egresados' ? 'bg-red-600 text-white' : 'hover:bg-slate-900'
+                }`}
+              >
+                <UserMinus size={18} /> Egresados Empresa
+              </Link>
             )}
 
             {puedeVerListaReportes && (
