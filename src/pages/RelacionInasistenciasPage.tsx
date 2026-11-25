@@ -92,7 +92,7 @@ export default function RelacionInasistenciasPage() {
     };
     cargarProy();
   }, []);
-  const cargarRelacionMes = async () => {
+    const cargarRelacionMes = async () => {
     if (!proyecto) return;
     setCargando(true);
     setMensaje(null);
@@ -101,6 +101,18 @@ export default function RelacionInasistenciasPage() {
       const ultimoDiaMes = new Date(anio, mes, 0).getDate();
       const fechaDesde = `${anio}-${pad2(mes)}-01`;
       const fechaHasta = `${anio}-${pad2(mes)}-${pad2(ultimoDiaMes)}`;
+
+      const { data: cierresData } = await supabase
+        .from('cierres_asistencia_diaria')
+        .select('fecha, cerrado')
+        .eq('proyecto', proyecto)
+        .eq('cerrado', true)
+        .gte('fecha', fechaDesde)
+        .lte('fecha', fechaHasta);
+
+      const diasCerradosSet = new Set<string>(
+        (Array.isArray(cierresData) ? cierresData : []).map((c: any) => String(c.fecha))
+      );
 
       const { data: configData } = await supabase
         .from('plazas_proyecto_config')
@@ -168,22 +180,37 @@ export default function RelacionInasistenciasPage() {
 
       for (let d = 1; d <= ultimoDiaMes; d++) {
         const fechaISO = `${anio}-${pad2(mes)}-${pad2(d)}`;
+        const diaCerradoPorAnalista = diasCerradosSet.has(fechaISO);
+
+        if (!diaCerradoPorAnalista) {
+          const filaPendiente: FilaDiaInasistencia = {
+            dia: d,
+            plazaDiurna: pDiurna,
+            plazaNocturna: pNocturna,
+            asistDiurna: 0,
+            asistNocturna: 0,
+            faltasDiurnas: 0,
+            faltasNocturnas: 0,
+            totalFaltas: 0,
+          };
+          if (d <= 15) q1.push(filaPendiente);
+          else q2.push(filaPendiente);
+          continue;
+        }
+
         const marcasDia = asistencias.filter((a) => a.fecha === fechaISO);
 
         let asistDiurna = 0;
         let asistNocturna = 0;
-        const cedulasContadas = new Set<string>();
         let liderYaContadoEnDia = false;
 
         marcasDia.forEach((m) => {
           const est = String(m.estatus || '').toUpperCase();
           if (!estatusAsistentes.includes(est)) return;
 
-          const ced = String(m.cedula || '').toUpperCase();
           const cargoUp = String(m.cargo || 'OFICIAL').toUpperCase();
           const turnoUp = String(m.turno || 'MIXTO').toUpperCase();
 
-          cedulasContadas.add(ced);
           if (cargoUp === 'LIDER') {
             liderYaContadoEnDia = true;
             asistDiurna += 1;
