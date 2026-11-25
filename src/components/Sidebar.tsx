@@ -20,6 +20,9 @@ import {
   UserMinus,
   Contact,
   Receipt,
+  Activity,
+  PhoneCall,
+  ClipboardList,
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -30,22 +33,26 @@ export default function Sidebar() {
 
   const rol = currentUser?.role?.toLowerCase() || '';
   const nombreElemento = currentUser?.nombre_completo || '';
+  const esAdminTotal = rol === 'administrador' || rol === 'admin';
 
-  const puedeCrearReporte = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom', 'supervisor', 'lider'].includes(rol);
-  const puedeVerAsistenciaLider = rol === 'lider';
-  const puedeVerMonitorAsistencia = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom'].includes(rol);
-  const puedeVerPanelAnalista = ['administrador', 'admin', 'directiva', 'operaciones', 'analista', 'rrhh', 'recursos_humanos'].includes(rol);
-  const puedeVerNominaRecibos = ['administrador', 'admin', 'directiva', 'analista', 'rrhh', 'recursos_humanos'].includes(rol);
-  const puedeVerVerificacionSE = ['administrador', 'admin', 'directiva', 'operaciones', 'analista', 'rrhh', 'recursos_humanos'].includes(rol);
-  const puedeVerReclutamiento = ['administrador', 'admin', 'directiva', 'reclutamiento', 'rrhh', 'recursos_humanos'].includes(rol);
-  const puedeVerFichaTecnica = ['administrador', 'admin', 'directiva', 'operaciones', 'analista', 'reclutamiento', 'rrhh', 'recursos_humanos'].includes(rol);
-  const puedeVerEgresadosYLiquidaciones = ['administrador', 'admin', 'directiva', 'analista', 'reclutamiento', 'rrhh', 'recursos_humanos'].includes(rol);
-  const puedeVerListaReportes = ['administrador', 'admin', 'directiva', 'operaciones', 'cecom', 'cliente'].includes(rol);
-  const puedeVerAprobacionesUsuarios = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
-  const puedeVerAsistenciasYSupervisiones = ['administrador', 'admin', 'directiva'].includes(rol);
-  const puedeVerEstadisticas = ['administrador', 'admin', 'directiva', 'operaciones'].includes(rol);
-  const puedeVerSeguimientoRutas = ['administrador', 'admin'].includes(rol) && nombreElemento.includes('Matthías');
-  const puedeVerConfiguracion = ['administrador', 'admin', 'directiva'].includes(rol);
+  const puedeCrearReporte = esAdminTotal || ['directiva', 'operaciones', 'cecom', 'supervisor', 'lider'].includes(rol);
+  const puedeVerAsistenciaLider = esAdminTotal || rol === 'lider';
+  const puedeVerTableroCobertura = esAdminTotal || ['directiva', 'operaciones'].includes(rol);
+  const puedeVerLlamadasCecom = esAdminTotal || ['cecom', 'operaciones', 'directiva'].includes(rol);
+  const puedeVerRelacionInasistencias = esAdminTotal || ['operaciones', 'directiva'].includes(rol);
+  const puedeVerMonitorAsistencia = esAdminTotal || ['directiva', 'operaciones', 'cecom'].includes(rol);
+  const puedeVerPanelAnalista = esAdminTotal || ['directiva', 'operaciones', 'analista', 'rrhh', 'recursos_humanos'].includes(rol);
+  const puedeVerNominaRecibos = esAdminTotal || ['directiva', 'analista', 'rrhh', 'recursos_humanos'].includes(rol);
+  const puedeVerVerificacionSE = esAdminTotal || ['directiva', 'operaciones', 'analista', 'rrhh', 'recursos_humanos'].includes(rol);
+  const puedeVerReclutamiento = esAdminTotal || ['directiva', 'reclutamiento', 'rrhh', 'recursos_humanos'].includes(rol);
+  const puedeVerFichaTecnica = esAdminTotal || ['directiva', 'operaciones', 'analista', 'reclutamiento', 'rrhh', 'recursos_humanos'].includes(rol);
+  const puedeVerEgresadosYLiquidaciones = esAdminTotal || ['directiva', 'analista', 'reclutamiento', 'rrhh', 'recursos_humanos'].includes(rol);
+  const puedeVerListaReportes = esAdminTotal || ['directiva', 'operaciones', 'cecom', 'cliente'].includes(rol);
+  const puedeVerAprobacionesUsuarios = esAdminTotal || ['directiva', 'operaciones'].includes(rol);
+  const puedeVerAsistenciasYSupervisiones = esAdminTotal || ['directiva'].includes(rol);
+  const puedeVerEstadisticas = esAdminTotal || ['directiva', 'operaciones'].includes(rol);
+  const puedeVerSeguimientoRutas = esAdminTotal;
+  const puedeVerConfiguracion = esAdminTotal || ['directiva'].includes(rol);
 
   const cerrarMenu = () => setMenuAbierto(false);
 
@@ -90,7 +97,7 @@ export default function Sidebar() {
         />
       )}
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-950 min-h-screen text-slate-300 p-4 pt-10 md:pt-4 flex flex-col justify-between transform transition-transform duration-200 ease-out ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-950 min-h-screen text-slate-300 p-4 pt-10 md:pt-4 flex flex-col justify-between transform transition-transform duration-200 ease-out overflow-y-auto ${
           menuAbierto ? 'translate-x-0' : '-translate-x-full'
         } md:relative md:translate-x-0`}
       >
@@ -134,6 +141,42 @@ export default function Sidebar() {
                 }`}
               >
                 <ClipboardCheck size={18} /> ASISTENCIA
+              </Link>
+            )}
+
+            {puedeVerTableroCobertura && (
+              <Link
+                to="/tablero-cobertura"
+                onClick={cerrarMenu}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === '/tablero-cobertura' ? 'bg-cyan-600 text-white' : 'hover:bg-slate-900'
+                }`}
+              >
+                <Activity size={18} /> Cobertura en Vivo
+              </Link>
+            )}
+
+            {puedeVerLlamadasCecom && (
+              <Link
+                to="/llamadas-control"
+                onClick={cerrarMenu}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === '/llamadas-control' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-900'
+                }`}
+              >
+                <PhoneCall size={18} /> Llamadas Control CECOM
+              </Link>
+            )}
+
+            {puedeVerRelacionInasistencias && (
+              <Link
+                to="/relacion-inasistencias"
+                onClick={cerrarMenu}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === '/relacion-inasistencias' ? 'bg-amber-600 text-white' : 'hover:bg-slate-900'
+                }`}
+              >
+                <ClipboardList size={18} /> Relación Inasistencias
               </Link>
             )}
 
@@ -196,7 +239,6 @@ export default function Sidebar() {
                 <UserPlus size={18} /> Reclutamiento
               </Link>
             )}
-
             {puedeVerFichaTecnica && (
               <Link
                 to="/ficha-tecnica"
@@ -307,7 +349,7 @@ export default function Sidebar() {
           </nav>
         </div>
 
-        <div className="border-t border-slate-800 pt-4 space-y-3">
+        <div className="border-t border-slate-800 pt-4 space-y-3 mt-4">
           <div className="text-xs space-y-1 px-1">
             <div className="font-semibold text-white truncate">{nombreElemento}</div>
             <div className="text-slate-500 uppercase font-bold tracking-wider">{rol}</div>

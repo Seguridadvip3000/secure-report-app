@@ -30,6 +30,9 @@ const ReclutamientoHome = lazy(() => import('./pages/ReclutamientoHome'));
 const EgresadosPage = lazy(() => import('./pages/EgresadosPage'));
 const ConsultaFichaTecnicaPage = lazy(() => import('./pages/ConsultaFichaTecnicaPage'));
 const NominaRecibosPage = lazy(() => import('./pages/NominaRecibosPage'));
+const TableroCoberturaPage = lazy(() => import('./pages/TableroCoberturaPage'));
+const CecomLlamadasControlPage = lazy(() => import('./pages/CecomLlamadasControlPage'));
+const RelacionInasistenciasPage = lazy(() => import('./pages/RelacionInasistenciasPage'));
 
 function LoadingScreen() {
   return (
@@ -53,6 +56,9 @@ function RoleRoute({ roles, children }: { roles: string[]; children: ReactNode }
   const { currentUser } = useAuth();
   if (!currentUser) return <Navigate to="/auth" replace />;
   const rolNormalizado = currentUser.role ? currentUser.role.toLowerCase() : '';
+  if (rolNormalizado === 'administrador' || rolNormalizado === 'admin') {
+    return <>{children}</>;
+  }
   const rolesPermitidosNormalizados = roles.map(r => r.toLowerCase());
   if (!rolesPermitidosNormalizados.includes(rolNormalizado)) {
     return <Navigate to="/" replace />;
@@ -134,6 +140,24 @@ export default function App() {
                 <Route path="asistencia" element={
                   <RoleRoute roles={['lider', 'operaciones', 'directiva', 'administrador', 'admin']}>
                     <AsistenciaLiderPage />
+                  </RoleRoute>
+                } />
+
+                <Route path="tablero-cobertura" element={
+                  <RoleRoute roles={['operaciones', 'directiva', 'administrador', 'admin']}>
+                    <TableroCoberturaPage />
+                  </RoleRoute>
+                } />
+
+                <Route path="llamadas-control" element={
+                  <RoleRoute roles={['cecom', 'operaciones', 'directiva', 'administrador', 'admin']}>
+                    <CecomLlamadasControlPage />
+                  </RoleRoute>
+                } />
+
+                <Route path="relacion-inasistencias" element={
+                  <RoleRoute roles={['operaciones', 'directiva', 'administrador', 'admin']}>
+                    <RelacionInasistenciasPage />
                   </RoleRoute>
                 } />
 
