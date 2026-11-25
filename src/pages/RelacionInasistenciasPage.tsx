@@ -1,7 +1,298 @@
+import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
+import { PROYECTOS } from '../data/constants';
+import { leTocaGuardiaHoy } from '../utils/rotacionGuardia';
+import ExcelJS from 'exceljs';
+import { jsPDF } from 'jspdf';
+import {
+  FileSpreadsheet,
+  FileText,
+  Building2,
+  Save,
+  ClipboardList,
+} from 'lucide-react';
+
+const NOMBRES_MESES = [
+  'ENERO',
+  'FEBRERO',
+  'MARZO',
+  'ABRIL',
+  'MAYO',
+  'JUNIO',
+  'JULIO',
+  'AGOSTO',
+  'SEPTIEMBRE',
+  'OCTUBRE',
+  'NOVIEMBRE',
+  'DICIEMBRE',
+];
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+const cargarLogoBase64 = async (): Promise<string | null> => {
+  try {
+    const resp = await fetch('/logo-vip3000.jpg');
+    if (!resp.ok) return null;
+    const blob = await resp.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+};
+
+interface FilaDiaInasistencia {
+  dia: number;
+  plazaDiurna: number;
+  plazaNocturna: number;
+  asistDiurna: number;
+  asistNocturna: number;
+  faltasDiurnas: number;
+  faltasNocturnas: number;
+  totalFaltas: number;
+}
+
+export default function RelacionInasistenciasPage() {
+  const { currentUser } = useAuth();
+  const usuarioNombre = currentUser?.nombre_completo || currentUser?.username || 'Operaciones';
   const rolActual = (currentUser?.role || '').toLowerCase();
   const puedeEditarTodo = ['directiva', 'administrador', 'admin'].includes(rolActual);
+
+  const hoy = new Date();
+  const [listaProyectos, setListaProyectos] = useState<string[]>([]);
+  const [proyecto, setProyecto] = useState<string>('');
+  const [anio, setAnio] = useState<number>(hoy.getFullYear());
+  const [mes, setMes] = useState<number>(hoy.getMonth() + 1);
+
+  const [plazaDiurnaConfig, setPlazaDiurnaConfig] = useState<number>(0);
+  const [plazaNocturnaConfig, setPlazaNocturnaConfig] = useState<number>(0);
+  const [guardandoPlazas, setGuardandoPlazas] = useState<boolean>(false);
+
+  const [filas1ra, setFilas1ra] = useState<FilaDiaInasistencia[]>([]);
+  const [filas2da, setFilas2da] = useState<FilaDiaInasistencia[]>([]);
+  const [cargando, setCargando] = useState<boolean>(false);
+  const [mensaje, setMensaje] = useState<string | null>(null);
   const [modoEdicionTotal, setModoEdicionTotal] = useState<boolean>(false);
   const [modalExportarFormato, setModalExportarFormato] = useState<'EXCEL' | 'PDF' | null>(null);
+
+  useEffect(() => {
+    const cargarProy = async () => {
+      const setP = new Set<string>(Array.isArray(PROYECTOS) ? PROYECTOS : []);
+      const { data } = await supabase.from('projects').select('*');
+      if (Array.isArray(data)) {
+        data.forEach((p: any) => {
+          const val = p?.nombre || p?.name || p?.proyecto;
+          if (val) setP.add(String(val).trim());
+        });
+      }
+      const arr = Array.from(setP).sort();
+      setListaProyectos(arr);
+      if (arr.length > 0 && !proyecto) setProyecto(arr.at(0) || '');
+    };
+    cargarProy();
+  }, []);
+  const cargarRelacionMes = async () => {
+    if (!proyecto) return;
+    setCargando(true);
+    setMensaje(null);
+
+    try {
+      const ultimoDiaMes = new Date(anio, mes, 0).getDate();
+      const fechaDesde = `${anio}-${pad2(mes)}-01`;
+      const fechaHasta = `${anio}-${pad2(mes)}-${pad2(ultimoDiaMes)}`;
+
+      const { data: cierresData } = await supabase
+        .from('cierres_asistencia_diaria')
+        .select('fecha, cerrado')
+        .eq('proyecto', proyecto)
+        .eq('cerrado', true)
+        .gte('fecha', fechaDesde)
+        .lte('fecha', fechaHasta);
+
+      const diasCerradosSet = new Set<string>(
+        (Array.isArray(cierresData) ? cierresData : []).map((c: any) => String(c.fecha))
+      );
+
+      const { data: configData } = await supabase
+        .from('plazas_proyecto_config')
+        .select('*')
+        .eq('proyecto', proyecto)
+        .maybeSingle();
+
+      const { data: plantillaData } = await supabase
+        .from('plantilla_proyectos')
+        .select('*')
+        .eq('proyecto', proyecto)
+        .eq('estado', 'ACTIVO');
+
+      const activos = Array.isArray(plantillaData) ? plantillaData : [];
+
+      let pDiurna = configData?.plazas_diurnas ?? 0;
+      let pNocturna = configData?.plazas_nocturnas ?? 0;
+
+      if (!configData && activos.length > 0) {
+        const hoyISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Caracas' });
+        activos.forEach((of) => {
+          const cargoUp = String(of.cargo || 'OFICIAL').toUpperCase();
+          const trnUp = String(of.turno || 'MIXTO').toUpperCase();
+          if (cargoUp === 'LIDER') {
+            pDiurna += 1;
+          } else if (leTocaGuardiaHoy(of.grupo || 'A', of.turno || 'MIXTO', hoyISO)) {
+            if (trnUp === 'DIURNO') pDiurna += 1;
+            else pNocturna += 1;
+          }
+        });
+      }
+
+      setPlazaDiurnaConfig(pDiurna);
+      setPlazaNocturnaConfig(pNocturna);
+
+      const { data: asistData } = await supabase
+        .from('asistencias_diarias_oficiales')
+        .select('*')
+        .eq('proyecto', proyecto)
+        .gte('fecha', fechaDesde)
+        .lte('fecha', fechaHasta);
+
+      const asistencias = Array.isArray(asistData) ? asistData : [];
+
+      const { data: logsQrData } = await supabase
+        .from('attendance_logs')
+        .select('*')
+        .eq('project_name', proyecto)
+        .gte('created_at', `${fechaDesde}T00:00:00`)
+        .lte('created_at', `${fechaHasta}T23:59:59`);
+
+      const logsQr = Array.isArray(logsQrData) ? logsQrData : [];
+
+      const estatusAsistentes = [
+        'PRESENTE',
+        'APOYO RECIBIDO',
+        'SERVICIO ESPECIAL MIXTO',
+        'SERVICIO ESPECIAL DIURNO/NOCTURNO',
+        'SERVICIO ESPECIAL PROPIO',
+        'SERVICIO ESPECIAL RECIBIDO',
+      ];
+
+      const q1: FilaDiaInasistencia[] = [];
+      const q2: FilaDiaInasistencia[] = [];
+
+      for (let d = 1; d <= ultimoDiaMes; d++) {
+        const fechaISO = `${anio}-${pad2(mes)}-${pad2(d)}`;
+        const diaCerradoPorAnalista = diasCerradosSet.has(fechaISO);
+
+        if (!diaCerradoPorAnalista) {
+          const filaPendiente: FilaDiaInasistencia = {
+            dia: d,
+            plazaDiurna: pDiurna,
+            plazaNocturna: pNocturna,
+            asistDiurna: 0,
+            asistNocturna: 0,
+            faltasDiurnas: 0,
+            faltasNocturnas: 0,
+            totalFaltas: 0,
+          };
+          if (d <= 15) q1.push(filaPendiente);
+          else q2.push(filaPendiente);
+          continue;
+        }
+
+        const marcasDia = asistencias.filter((a) => a.fecha === fechaISO);
+
+        let asistDiurna = 0;
+        let asistNocturna = 0;
+        let liderYaContadoEnDia = false;
+
+        marcasDia.forEach((m) => {
+          const est = String(m.estatus || '').toUpperCase();
+          if (!estatusAsistentes.includes(est)) return;
+
+          const cargoUp = String(m.cargo || 'OFICIAL').toUpperCase();
+          const turnoUp = String(m.turno || 'MIXTO').toUpperCase();
+
+          if (cargoUp === 'LIDER') {
+            liderYaContadoEnDia = true;
+            asistDiurna += 1;
+          } else if (turnoUp === 'DIURNO') {
+            asistDiurna += 1;
+          } else {
+            asistNocturna += 1;
+          }
+        });
+
+        if (!liderYaContadoEnDia) {
+          const logsDia = logsQr.filter((lg: any) => {
+            const fLog = new Date(lg.created_at).toLocaleDateString('en-CA', {
+              timeZone: 'America/Caracas',
+            });
+            return fLog === fechaISO;
+          });
+          if (logsDia.length > 0) {
+            asistDiurna += 1;
+          }
+        }
+
+        const faltasDiurnas = pDiurna - asistDiurna;
+        const faltasNocturnas = pNocturna - asistNocturna;
+        const totalFaltas = faltasDiurnas + faltasNocturnas;
+
+        const fila: FilaDiaInasistencia = {
+          dia: d,
+          plazaDiurna: pDiurna,
+          plazaNocturna: pNocturna,
+          asistDiurna,
+          asistNocturna,
+          faltasDiurnas,
+          faltasNocturnas,
+          totalFaltas,
+        };
+
+        if (d <= 15) q1.push(fila);
+        else q2.push(fila);
+      }
+
+      setFilas1ra(q1);
+      setFilas2da(q2);
+    } catch (err) {
+      console.error('Error cargando relación de inasistencias:', err);
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  useEffect(() => {
+    if (proyecto) cargarRelacionMes();
+  }, [proyecto, anio, mes]);
+
+  const guardarConfigPlazas = async () => {
+    if (!proyecto) return;
+    setGuardandoPlazas(true);
+    try {
+      await supabase.from('plazas_proyecto_config').upsert(
+        [
+          {
+            proyecto,
+            plazas_diurnas: plazaDiurnaConfig,
+            plazas_nocturnas: plazaNocturnaConfig,
+            updated_by: usuarioNombre,
+            updated_at: new Date().toISOString(),
+          },
+        ],
+        { onConflict: 'proyecto' }
+      );
+      setMensaje(`✅ Plazas contratadas de ${proyecto} guardadas (${plazaDiurnaConfig} Diurnas / ${plazaNocturnaConfig} Nocturnas-Mixtas).`);
+      await cargarRelacionMes();
+    } catch (err) {
+      console.error('Error guardando plazas:', err);
+    } finally {
+      setGuardandoPlazas(false);
+    }
+  };
 
   const actualizarCeldaDia = (
     quincena: '1RA' | '2DA',
@@ -21,7 +312,6 @@
       })
     );
   };
-
   const exportarExcelInasistencias = async (alcance: '1RA' | '2DA' | 'MES') => {
     setModalExportarFormato(null);
     const wb = new ExcelJS.Workbook();
@@ -171,6 +461,7 @@
     a.click();
     URL.revokeObjectURL(url);
   };
+
   const exportarPDFInasistencias = async (alcance: '1RA' | '2DA' | 'MES') => {
     setModalExportarFormato(null);
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
@@ -247,7 +538,6 @@
 
     doc.save(`Relacion_Inasistencias_${proyecto.replace(/\s+/g, '_')}_${alcance}_${NOMBRES_MESES[mes - 1]}_${anio}.pdf`);
   };
-
   const renderTablaQuincena = (titulo: '1RA' | '2DA', filas: FilaDiaInasistencia[]) => {
     const totalQ = filas.reduce((acc, x) => acc + x.totalFaltas, 0);
     return (
