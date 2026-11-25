@@ -312,7 +312,7 @@ export default function RelacionInasistenciasPage() {
       })
     );
   };
-  const exportarExcelInasistencias = async (alcance: '1RA' | '2DA' | 'MES') => {
+    const exportarExcelInasistencias = async (alcance: '1RA' | '2DA' | 'MES') => {
     setModalExportarFormato(null);
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet(proyecto.slice(0, 28) || 'INASISTENCIAS', {
@@ -450,6 +450,48 @@ export default function RelacionInasistenciasPage() {
     if (alcance === '1RA' || alcance === 'MES') escribirBloqueQuincena('1RA', filas1ra);
     if (alcance === '2DA' || alcance === 'MES') escribirBloqueQuincena('2DA', filas2da);
 
+    // Bloque de firmas inferior izquierda (Entrega) y derecha (Recibido Cliente)
+    ws.addRow([]);
+    const rTitFirmas = ws.addRow([
+      'ENTREGADO POR (SEGURIDAD VIP 3000 C.A.)',
+      '',
+      '',
+      '',
+      'RECIBIDO CONFORME (CLIENTE)',
+      '',
+      '',
+      '',
+    ]);
+    const fTit = rTitFirmas.number;
+    ws.mergeCells(`A${fTit}:D${fTit}`);
+    ws.mergeCells(`E${fTit}:H${fTit}`);
+    rTitFirmas.height = 20;
+    ['A', 'E'].forEach((col) => {
+      const c = ws.getCell(`${col}${fTit}`);
+      c.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+      c.alignment = { vertical: 'middle', horizontal: 'center' };
+    });
+
+    const lineasFirmas: [string, string][] = [
+      ['Nombre: ____________________________________', 'Nombre: ____________________________________'],
+      ['Cargo:  ____________________________________', 'Firma:  ____________________________________'],
+      ['Fecha:  ____________________________________', 'Fecha:  ____________________________________'],
+      ['Firma:  ____________________________________', 'Sello:  ____________________________________'],
+    ];
+
+    lineasFirmas.forEach(([izq, der]) => {
+      const rL = ws.addRow([izq, '', '', '', der, '', '', '']);
+      const nL = rL.number;
+      ws.mergeCells(`A${nL}:D${nL}`);
+      ws.mergeCells(`E${nL}:H${nL}`);
+      rL.height = 22;
+      ws.getCell(`A${nL}`).font = { name: 'Calibri', size: 10 };
+      ws.getCell(`A${nL}`).alignment = { vertical: 'bottom', horizontal: 'left' };
+      ws.getCell(`E${nL}`).font = { name: 'Calibri', size: 10 };
+      ws.getCell(`E${nL}`).alignment = { vertical: 'bottom', horizontal: 'left' };
+    });
+
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -462,7 +504,7 @@ export default function RelacionInasistenciasPage() {
     URL.revokeObjectURL(url);
   };
 
-  const exportarPDFInasistencias = async (alcance: '1RA' | '2DA' | 'MES') => {
+    const exportarPDFInasistencias = async (alcance: '1RA' | '2DA' | 'MES') => {
     setModalExportarFormato(null);
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
     const logo = await cargarLogoBase64();
@@ -487,7 +529,7 @@ export default function RelacionInasistenciasPage() {
 
     let y = 32;
     const dibujarTablaQuincena = (titulo: string, filas: FilaDiaInasistencia[]) => {
-      if (y > 220) {
+      if (y > 215) {
         doc.addPage();
         y = 18;
       }
@@ -535,6 +577,38 @@ export default function RelacionInasistenciasPage() {
 
     if (alcance === '1RA' || alcance === 'MES') dibujarTablaQuincena('1RA QUINCENA', filas1ra);
     if (alcance === '2DA' || alcance === 'MES') dibujarTablaQuincena('2DA QUINCENA', filas2da);
+
+    // Bloque de firmas inferior izquierda (Entrega) y derecha (Recibido Cliente)
+    if (y > 220) {
+      doc.addPage();
+      y = 22;
+    } else {
+      y += 6;
+    }
+
+    doc.setFillColor(226, 232, 240);
+    doc.rect(14, y, 86, 6, 'F');
+    doc.rect(116, y, 86, 6, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(15, 23, 42);
+    doc.text('ENTREGADO POR (SEGURIDAD VIP 3000)', 57, y + 4.2, { align: 'center' });
+    doc.text('RECIBIDO CONFORME (CLIENTE)', 159, y + 4.2, { align: 'center' });
+    y += 12;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    const camposIzq = ['Nombre:', 'Cargo:', 'Fecha:', 'Firma:'];
+    const camposDer = ['Nombre:', 'Firma:', 'Fecha:', 'Sello:'];
+
+    for (let i = 0; i < 4; i++) {
+      doc.text(camposIzq[i], 14, y);
+      doc.line(30, y, 98, y);
+
+      doc.text(camposDer[i], 116, y);
+      doc.line(132, y, 200, y);
+      y += 8;
+    }
 
     doc.save(`Relacion_Inasistencias_${proyecto.replace(/\s+/g, '_')}_${alcance}_${NOMBRES_MESES[mes - 1]}_${anio}.pdf`);
   };
