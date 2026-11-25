@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { generarPDFReciboLiquidacionLOTTT } from '../utils/pdfFiniquitosOficiales';
 import { jsPDF } from 'jspdf';
 import ExcelJS from 'exceljs';
 import {
@@ -32,6 +33,40 @@ const cargarLogoBase64 = async (): Promise<string | null> => {
 const fmtBs = (n: number) =>
   Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const calcularTiempoServiciosLOTTT = (fIng: string, fEgr: string) => {
+  if (!fIng || !fEgr || !fIng.includes('-') || !fEgr.includes('-')) {
+    return { anios: 0, meses: 0, dias: 0, mesesTotales: 0, texto: '0 Año(s), 0 mes(es), 0 día(s)' };
+  }
+  const d1 = new Date(`${fIng}T12:00:00`);
+  const d2 = new Date(`${fEgr}T12:00:00`);
+  if (d2 < d1) {
+    return { anios: 0, meses: 0, dias: 0, mesesTotales: 0, texto: '0 Año(s), 0 mes(es), 0 día(s)' };
+  }
+
+  let anios = d2.getFullYear() - d1.getFullYear();
+  let meses = d2.getMonth() - d1.getMonth();
+  let dias = d2.getDate() - d1.getDate();
+
+  if (dias < 0) {
+    meses -= 1;
+    const ultimoDiaMesAnterior = new Date(d2.getFullYear(), d2.getMonth(), 0).getDate();
+    dias += ultimoDiaMesAnterior;
+  }
+  if (meses < 0) {
+    anios -= 1;
+    meses += 12;
+  }
+
+  const mesesTotales = anios * 12 + meses + dias / 30;
+  return {
+    anios,
+    meses,
+    dias,
+    mesesTotales,
+    texto: `${anios} Año(s), ${meses} mes(es), ${dias} día(s)`,
+  };
+};
+
 export default function EgresadosPage() {
   const { currentUser } = useAuth();
   const puedeLiquidar = ['analista', 'rrhh', 'recursos_humanos', 'directiva', 'administrador', 'admin'].includes(
@@ -47,13 +82,16 @@ export default function EgresadosPage() {
   const [historialDotacion, setHistorialDotacion] = useState<any[]>([]);
   const [infoBotasPlantilla, setInfoBotasPlantilla] = useState<any | null>(null);
 
-  const [salarioDiarioBase, setSalarioDiarioBase] = useState<number>(43.33);
-  const [diasAntiguedad, setDiasAntiguedad] = useState<number>(0);
-  const [diasVacaciones, setDiasVacaciones] = useState<number>(0);
-  const [diasBonoVacacional, setDiasBonoVacacional] = useState<number>(0);
-  const [diasUtilidades, setDiasUtilidades] = useState<number>(0);
-  const [diasPendientesPago, setDiasPendientesPago] = useState<number>(0);
-  const [otrosDevengadosLiq, setOtrosDevengadosLiq] = useState<number>(0);
+  const [salarioMensual, setSalarioMensual] = useState<number>(130);
+  const [diasBonoVacAnual, setDiasBonoVacAnual] = useState<number>(15);
+  const [diasUtilidadesAnual, setDiasUtilidadesAnual] = useState<number>(30);
+  const [montoGarantiaPrestaciones, setMontoGarantiaPrestaciones] = useState<number>(0);
+  const [montoInteresesPrestaciones, setMontoInteresesPrestaciones] = useState<number>(0);
+  const [diasVacacionesLiq, setDiasVacacionesLiq] = useState<number>(0);
+  const [diasBonoVacLiq, setDiasBonoVacLiq] = useState<number>(0);
+  const [diasUtilidadesLiq, setDiasUtilidadesLiq] = useState<number>(0);
+  const [montoPagoPendiente, setMontoPagoPendiente] = useState<number>(0);
+  const [motivoLiquidacion, setMotivoLiquidacion] = useState<string>('Renuncia');
 
   const [cuotasBotasPendientes, setCuotasBotasPendientes] = useState<number>(0);
   const [tasaEmpresaLiq, setTasaEmpresaLiq] = useState<number>(0);
@@ -97,21 +135,27 @@ export default function EgresadosPage() {
     setHistorialDotacion([]);
     setInfoBotasPlantilla(null);
 
-    let diasTotales = 0;
-    if (eg.fecha_ingreso && eg.fecha_egreso) {
-      const f1 = new Date(eg.fecha_ingreso);
-      const f2 = new Date(eg.fecha_egreso);
-      diasTotales = Math.max(1, Math.round((f2.getTime() - f1.getTime()) / (1000 * 60 * 60 * 24)));
-    }
-    const mesesAprox = diasTotales / 30;
+    const tiempo = calcularTiempoServiciosLOTTT(eg.fecha_ingreso || '', eg.fecha_egreso || '');
+    const salMensualInit = 130;
+    const salDiario = salMensualInit / 30;
+    const alicBonoVac = (salDiario * 15) / 360;
+    const salOrdinario = salDiario + alicBonoVac;
+    const alicUtilidades = (salOrdinario * 30) / 360;
+    const salIntegral = salOrdinario + alicUtilidades;
 
-    setSalarioDiarioBase(43.33);
-    setDiasAntiguedad(Number((mesesAprox * 5).toFixed(2)));
-    setDiasVacaciones(Number(((mesesAprox / 12) * 15).toFixed(2)));
-    setDiasBonoVacacional(Number(((mesesAprox / 12) * 15).toFixed(2)));
-    setDiasUtilidades(Number(((mesesAprox / 12) * 30).toFixed(2)));
-    setDiasPendientesPago(0);
-    setOtrosDevengadosLiq(0);
+    const trimestres = Math.max(1, Math.ceil(tiempo.mesesTotales / 3));
+    const diasGarantia = trimestres * 15;
+
+    setSalarioMensual(salMensualInit);
+    setDiasBonoVacAnual(15);
+    setDiasUtilidadesAnual(30);
+    setMontoGarantiaPrestaciones(Number((diasGarantia * salIntegral).toFixed(2)));
+    setMontoInteresesPrestaciones(0);
+    setDiasVacacionesLiq(Number(((tiempo.mesesTotales / 12) * 15).toFixed(2)));
+    setDiasBonoVacLiq(Number(((tiempo.mesesTotales / 12) * 15).toFixed(2)));
+    setDiasUtilidadesLiq(Number(((tiempo.mesesTotales / 12) * 30).toFixed(2)));
+    setMontoPagoPendiente(0);
+    setMotivoLiquidacion(eg.motivo_egreso?.split('|')?.at(0)?.trim() || 'Renuncia');
     setOtrasDeduccionesLiq(0);
 
     try {
@@ -144,150 +188,80 @@ export default function EgresadosPage() {
     } catch {}
   };
 
-  const calcularTotalesLiquidacion = () => {
-    const montoAntiguedad = diasAntiguedad * salarioDiarioBase;
-    const montoVacaciones = diasVacaciones * salarioDiarioBase;
-    const montoBonoVac = diasBonoVacacional * salarioDiarioBase;
-    const montoUtilidades = diasUtilidades * salarioDiarioBase;
-    const montoDiasPend = diasPendientesPago * salarioDiarioBase;
-    const totalAsignaciones =
-      montoAntiguedad +
-      montoVacaciones +
-      montoBonoVac +
-      montoUtilidades +
-      montoDiasPend +
-      Number(otrosDevengadosLiq || 0);
+  const calcularSalariosYNeto = () => {
+    const salarioDiario = salarioMensual / 30;
+    const alicuotaBonoVac = (salarioDiario * diasBonoVacAnual) / 360;
+    const salarioOrdinarioDiario = salarioDiario + alicuotaBonoVac;
+    const alicuotaUtilidades = (salarioOrdinarioDiario * diasUtilidadesAnual) / 360;
+    const salarioIntegralDiario = salarioOrdinarioDiario + alicuotaUtilidades;
 
-    const montoBotasDescuento = cuotasBotasPendientes * 7.5 * tasaEmpresaLiq;
-    const totalDeducciones = montoBotasDescuento + Number(otrasDeduccionesLiq || 0);
-    const netoLiquidacion = Math.max(0, totalAsignaciones - totalDeducciones);
+    const montoVacaciones = diasVacacionesLiq * salarioDiario;
+    const montoBonoVacacional = diasBonoVacLiq * salarioDiario;
+    const montoUtilidades = diasUtilidadesLiq * salarioDiario;
+
+    const totalAsignaciones =
+      Number(montoGarantiaPrestaciones || 0) +
+      Number(montoInteresesPrestaciones || 0) +
+      montoVacaciones +
+      montoBonoVacacional +
+      montoUtilidades +
+      Number(montoPagoPendiente || 0);
+
+    const montoDeduccionesBotas = cuotasBotasPendientes * 7.5 * tasaEmpresaLiq;
+    const totalDeducciones = montoDeduccionesBotas + Number(otrasDeduccionesLiq || 0);
+    const totalPagar = Math.max(0, totalAsignaciones - totalDeducciones);
 
     return {
-      montoAntiguedad,
+      salarioDiario,
+      alicuotaBonoVac,
+      salarioOrdinarioDiario,
+      alicuotaUtilidades,
+      salarioIntegralDiario,
       montoVacaciones,
-      montoBonoVac,
+      montoBonoVacacional,
       montoUtilidades,
-      montoDiasPend,
       totalAsignaciones,
-      montoBotasDescuento,
+      montoDeduccionesBotas,
       totalDeducciones,
-      netoLiquidacion,
+      totalPagar,
     };
   };
-  const descargarPDFLiquidacion = async () => {
+
+  const descargarReciboOficialLOTTT = async () => {
     if (!egresadoLiquidar || !puedeLiquidar) return;
-    const tot = calcularTotalesLiquidacion();
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
-    const logo = await cargarLogoBase64();
-
-    doc.setFillColor(15, 23, 42);
-    doc.rect(0, 0, 216, 28, 'F');
-    if (logo) {
-      try {
-        doc.addImage(logo, 'JPEG', 12, 4, 20, 20);
-      } catch {}
-    }
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.text('SEGURIDAD VIP 3000 C.A. — RIF: J-29491549-3', 38, 12);
-    doc.setFontSize(10);
-    doc.setTextColor(147, 197, 253);
-    doc.text('PLANILLA DE LIQUIDACIÓN DE PRESTACIONES SOCIALES', 38, 19);
-
-    let y = 38;
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(9.5);
-    doc.text(`TRABAJADOR: ${egresadoLiquidar.nombres} ${egresadoLiquidar.apellidos}`, 14, y);
-    doc.text(`C.I.: ${egresadoLiquidar.cedula}`, 150, y);
-    y += 6;
-    doc.text(`CARGO: ${egresadoLiquidar.cargo || 'OFICIAL'}`, 14, y);
-    doc.text(`PROYECTO EGRESO: ${egresadoLiquidar.proyecto_egreso || ''}`, 95, y);
-    y += 6;
-    doc.text(`FECHA INGRESO: ${egresadoLiquidar.fecha_ingreso || 'N/A'}`, 14, y);
-    doc.text(`FECHA EGRESO: ${egresadoLiquidar.fecha_egreso || 'N/A'}`, 95, y);
-    y += 6;
-    doc.text(`SALARIO DIARIO BASE: Bs. ${fmtBs(salarioDiarioBase)}`, 14, y);
-    y += 8;
-
-    doc.setFillColor(226, 232, 240);
-    doc.rect(14, y, 188, 6, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.text('ASIGNACIONES / CONCEPTOS DEVENGADOS', 16, y + 4.2);
-    doc.text('DÍAS', 135, y + 4.2, { align: 'right' });
-    doc.text('MONTO (Bs)', 199, y + 4.2, { align: 'right' });
-    y += 10;
-
-    const filasAsig: [string, string, string][] = [
-      ['Garantía de Prestaciones Sociales / Antigüedad', String(diasAntiguedad), fmtBs(tot.montoAntiguedad)],
-      ['Vacaciones Vencidas / Fraccionadas', String(diasVacaciones), fmtBs(tot.montoVacaciones)],
-      ['Bono Vacacional Fraccionado', String(diasBonoVacacional), fmtBs(tot.montoBonoVac)],
-      ['Utilidades Fraccionadas', String(diasUtilidades), fmtBs(tot.montoUtilidades)],
-      ['Días Laborados Pendientes de Pago', String(diasPendientesPago), fmtBs(tot.montoDiasPend)],
-      ['Otros Devengados / Bonificaciones', '-', fmtBs(otrosDevengadosLiq)],
-    ];
-
-    doc.setFont('helvetica', 'normal');
-    filasAsig.forEach(([c, d, m]) => {
-      doc.text(c, 16, y);
-      doc.text(d, 135, y, { align: 'right' });
-      doc.text(m, 199, y, { align: 'right' });
-      y += 6;
-    });
-
-    doc.setFont('helvetica', 'bold');
-    doc.line(14, y - 2, 202, y - 2);
-    doc.text('TOTAL ASIGNACIONES', 16, y + 2);
-    doc.text(`Bs. ${fmtBs(tot.totalAsignaciones)}`, 199, y + 2, { align: 'right' });
-    y += 10;
-
-    doc.setFillColor(254, 226, 226);
-    doc.rect(14, y, 188, 6, 'F');
-    doc.text('DEDUCCIONES Y SOLVENCIA DE DOTACIÓN', 16, y + 4.2);
-    doc.text('MONTO (Bs)', 199, y + 4.2, { align: 'right' });
-    y += 10;
-
-    doc.setFont('helvetica', 'normal');
-    doc.text(
-      `Cuotas de Botas Pendientes (${cuotasBotasPendientes} cuota(s) x $7.5 x ${tasaEmpresaLiq} Bs/$)`,
-      16,
-      y
+    const calc = calcularSalariosYNeto();
+    const tiempo = calcularTiempoServiciosLOTTT(
+      egresadoLiquidar.fecha_ingreso || '',
+      egresadoLiquidar.fecha_egreso || ''
     );
-    doc.text(fmtBs(tot.montoBotasDescuento), 199, y, { align: 'right' });
-    y += 6;
-    doc.text('Otras Deducciones / Adelantos', 16, y);
-    doc.text(fmtBs(otrasDeduccionesLiq), 199, y, { align: 'right' });
-    y += 6;
 
-    doc.setFont('helvetica', 'bold');
-    doc.line(14, y - 2, 202, y - 2);
-    doc.text('TOTAL DEDUCCIONES', 16, y + 2);
-    doc.text(`Bs. ${fmtBs(tot.totalDeducciones)}`, 199, y + 2, { align: 'right' });
-    y += 12;
-
-    doc.setFillColor(220, 252, 231);
-    doc.rect(14, y - 3, 188, 9, 'F');
-    doc.setFontSize(11);
-    doc.setTextColor(22, 101, 52);
-    doc.text('NETO TOTAL A PAGAR POR LIQUIDACIÓN:', 16, y + 3);
-    doc.text(`Bs. ${fmtBs(tot.netoLiquidacion)}`, 199, y + 3, { align: 'right' });
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(8.5);
-    doc.setFont('helvetica', 'normal');
-    y += 18;
-    const obsTexto = doc.splitTextToSize(`Observaciones y Solvencia: ${egresadoLiquidar.motivo_egreso || ''}`, 185);
-    doc.text(obsTexto, 14, y);
-
-    doc.line(25, 248, 85, 248);
-    doc.text('RRHH / Administración', 55, 253, { align: 'center' });
-
-    doc.line(125, 248, 190, 248);
-    doc.text('Recibí Conforme (Trabajador)', 157, 253, { align: 'center' });
-
-    doc.save(`Liquidacion_${egresadoLiquidar.cedula}_${egresadoLiquidar.apellidos}.pdf`);
+    await generarPDFReciboLiquidacionLOTTT({
+      nombresApellidos: `${egresadoLiquidar.nombres} ${egresadoLiquidar.apellidos}`,
+      cedula: egresadoLiquidar.cedula,
+      fechaIngreso: egresadoLiquidar.fecha_ingreso || 'N/A',
+      fechaEgreso: egresadoLiquidar.fecha_egreso || 'N/A',
+      tiempoServiciosTexto: tiempo.texto,
+      motivo: motivoLiquidacion,
+      cargo: egresadoLiquidar.cargo || 'OFICIAL DE SEGURIDAD',
+      salarioMensual,
+      salarioDiario: calc.salarioDiario,
+      salarioOrdinarioDiario: calc.salarioOrdinarioDiario,
+      salarioIntegralDiario: calc.salarioIntegralDiario,
+      montoGarantiaPrestaciones,
+      montoInteresesPrestaciones,
+      diasVacaciones: diasVacacionesLiq,
+      montoVacaciones: calc.montoVacaciones,
+      diasBonoVacacional: diasBonoVacLiq,
+      montoBonoVacacional: calc.montoBonoVacacional,
+      diasUtilidades: diasUtilidadesLiq,
+      montoUtilidades: calc.montoUtilidades,
+      montoPagoPendiente,
+      montoDeduccionesBotas: calc.montoDeduccionesBotas,
+      detalleDeduccionesBotas: `${cuotasBotasPendientes} cuota(s) botas x $7.5 x ${tasaEmpresaLiq} Bs/$`,
+      otrasDeducciones: otrasDeduccionesLiq,
+      totalPagar: calc.totalPagar,
+    });
   };
-
   const filtrados = egresados.filter((eg) => {
     if (filtroElegibilidad !== 'TODOS' && (eg.elegible_reingreso || 'ELEGIBLE') !== filtroElegibilidad) {
       return false;
@@ -361,20 +335,20 @@ export default function EgresadosPage() {
     });
     doc.save(`Egresados_VIP3000_${new Date().toLocaleDateString('en-CA')}.pdf`);
   };
-  const totLiq = calcularTotalesLiquidacion();
 
+  const calc = calcularSalariosYNeto();
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
       <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border-l-4 border-red-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <span className="text-xs font-bold text-red-600 uppercase tracking-wider">
-            Histórico Corporativo {puedeLiquidar ? 'y Liquidaciones' : 'de Personal'}
+            Histórico Corporativo {puedeLiquidar ? 'y Liquidaciones LOTTT' : 'de Personal'}
           </span>
           <h1 className="text-2xl font-bold text-slate-800 mt-0.5 flex items-center gap-2">
             <UserMinus className="text-red-600" size={26} /> Base de Datos de Egresados de la Empresa
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Registro unificado de bajas, solvencia de uniforme/carnet/botas y elegibilidad de reingreso.
+            Registro unificado de bajas, solvencia de uniforme/carnet/botas, elegibilidad de reingreso y recibos de liquidación LOTTT.
           </p>
         </div>
 
@@ -485,17 +459,25 @@ export default function EgresadosPage() {
       </div>
       {puedeLiquidar && egresadoLiquidar && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 space-y-5 shadow-2xl my-8">
+          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 space-y-4 shadow-2xl my-8">
             <div className="flex items-center justify-between border-b pb-3">
               <div>
                 <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                  <Calculator className="text-blue-600" size={20} /> Cálculo de Liquidación Editable
+                  <Calculator className="text-blue-600" size={20} /> Recibo de Liquidación LOTTT Art. 142 (Editable)
                 </h3>
                 <p className="text-xs text-slate-500">
                   <strong>
                     {egresadoLiquidar.nombres} {egresadoLiquidar.apellidos}
                   </strong>{' '}
-                  • C.I. {egresadoLiquidar.cedula} • Egreso: {egresadoLiquidar.fecha_egreso}
+                  • C.I. {egresadoLiquidar.cedula} • Tiempo:{' '}
+                  <strong>
+                    {
+                      calcularTiempoServiciosLOTTT(
+                        egresadoLiquidar.fecha_ingreso || '',
+                        egresadoLiquidar.fecha_egreso || ''
+                      ).texto
+                    }
+                  </strong>
                 </p>
               </div>
               <button
@@ -521,28 +503,71 @@ export default function EgresadosPage() {
                   ? 'Botas devueltas al egresar (0 cuotas por descontar).'
                   : Number(infoBotasPlantilla.botas_cuotas_pagadas || 0) >= 4
                   ? 'Botas pagadas al 100% (4/4 cuotas).'
-                  : `Pagó ${infoBotasPlantilla.botas_cuotas_pagadas || 0}/4 cuotas. Quedan ${cuotasBotasPendientes} cuota(s) de $7.5 pendientes por descontar.`}
+                  : `Pagó ${infoBotasPlantilla.botas_cuotas_pagadas || 0}/4 cuotas. Quedan ${cuotasBotasPendientes} cuota(s) de $7.5 pendientes.`}
               </div>
             )}
 
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-50 p-3 rounded-xl border text-xs">
+              <div>
+                <span className="text-slate-500 block">Salario Diario:</span>
+                <strong>Bs. {fmtBs(calc.salarioDiario)}</strong>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Salario Ordinario Diario:</span>
+                <strong>Bs. {fmtBs(calc.salarioOrdinarioDiario)}</strong>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Salario Integral Diario:</span>
+                <strong className="text-blue-800">Bs. {fmtBs(calc.salarioIntegralDiario)}</strong>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Motivo Extinción:</span>
+                <input
+                  type="text"
+                  value={motivoLiquidacion}
+                  onChange={(e) => setMotivoLiquidacion(e.target.value)}
+                  className="w-full border border-slate-300 rounded px-2 py-0.5 font-bold bg-white"
+                />
+              </div>
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Salario Diario Base (Bs)</label>
+                <label className="block font-bold text-slate-700 mb-1">Salario Mensual (Bs)</label>
                 <input
                   type="number"
                   step="0.01"
-                  value={salarioDiarioBase}
-                  onChange={(e) => setSalarioDiarioBase(Number(e.target.value))}
+                  value={salarioMensual}
+                  onChange={(e) => setSalarioMensual(Number(e.target.value))}
                   className="w-full border border-blue-300 bg-blue-50/40 rounded-lg px-2.5 py-1.5 font-bold"
                 />
               </div>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Días Antigüedad</label>
+                <label className="block font-bold text-slate-700 mb-1">Garantía Prest. Art. 142 (Bs)</label>
                 <input
                   type="number"
                   step="0.01"
-                  value={diasAntiguedad}
-                  onChange={(e) => setDiasAntiguedad(Number(e.target.value))}
+                  value={montoGarantiaPrestaciones}
+                  onChange={(e) => setMontoGarantiaPrestaciones(Number(e.target.value))}
+                  className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Intereses Prestaciones (Bs)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={montoInteresesPrestaciones}
+                  onChange={(e) => setMontoInteresesPrestaciones(Number(e.target.value))}
+                  className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Pago Pendiente / Otros (Bs)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={montoPagoPendiente}
+                  onChange={(e) => setMontoPagoPendiente(Number(e.target.value))}
                   className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                 />
               </div>
@@ -551,8 +576,8 @@ export default function EgresadosPage() {
                 <input
                   type="number"
                   step="0.01"
-                  value={diasVacaciones}
-                  onChange={(e) => setDiasVacaciones(Number(e.target.value))}
+                  value={diasVacacionesLiq}
+                  onChange={(e) => setDiasVacacionesLiq(Number(e.target.value))}
                   className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                 />
               </div>
@@ -561,38 +586,18 @@ export default function EgresadosPage() {
                 <input
                   type="number"
                   step="0.01"
-                  value={diasBonoVacacional}
-                  onChange={(e) => setDiasBonoVacacional(Number(e.target.value))}
+                  value={diasBonoVacLiq}
+                  onChange={(e) => setDiasBonoVacLiq(Number(e.target.value))}
                   className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                 />
               </div>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Días Utilidades</label>
+                <label className="block font-bold text-slate-700 mb-1">Días Utilidades Fracc.</label>
                 <input
                   type="number"
                   step="0.01"
-                  value={diasUtilidades}
-                  onChange={(e) => setDiasUtilidades(Number(e.target.value))}
-                  className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
-                />
-              </div>
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Días Pendientes Pago</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={diasPendientesPago}
-                  onChange={(e) => setDiasPendientesPago(Number(e.target.value))}
-                  className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
-                />
-              </div>
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Otros Devengados (Bs)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={otrosDevengadosLiq}
-                  onChange={(e) => setOtrosDevengadosLiq(Number(e.target.value))}
+                  value={diasUtilidadesLiq}
+                  onChange={(e) => setDiasUtilidadesLiq(Number(e.target.value))}
                   className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                 />
               </div>
@@ -630,24 +635,24 @@ export default function EgresadosPage() {
             <div className="bg-slate-900 text-white p-4 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
               <div>
                 <span className="text-slate-400">Asignaciones:</span>{' '}
-                <strong className="text-blue-300">Bs. {fmtBs(totLiq.totalAsignaciones)}</strong>
+                <strong className="text-blue-300">Bs. {fmtBs(calc.totalAsignaciones)}</strong>
               </div>
               <div>
                 <span className="text-slate-400">Deducciones:</span>{' '}
-                <strong className="text-red-300">Bs. {fmtBs(totLiq.totalDeducciones)}</strong>
+                <strong className="text-red-300">Bs. {fmtBs(calc.totalDeducciones)}</strong>
               </div>
               <div className="text-base font-black text-emerald-400">
-                NETO LIQUIDACIÓN: Bs. {fmtBs(totLiq.netoLiquidacion)}
+                TOTAL A PAGAR: Bs. {fmtBs(calc.totalPagar)}
               </div>
             </div>
 
             {historialDotacion.length > 0 && (
-              <div className="border-t pt-3 space-y-1.5 max-h-36 overflow-y-auto">
+              <div className="border-t pt-2 space-y-1 max-h-28 overflow-y-auto">
                 <div className="text-xs font-black text-slate-700 uppercase flex items-center gap-1">
-                  <History size={14} /> Trazabilidad de Dotación y Cuotas del Oficial
+                  <History size={14} /> Trazabilidad de Dotación del Oficial
                 </div>
                 {historialDotacion.map((h) => (
-                  <div key={h.id} className="text-[11px] bg-slate-50 px-2.5 py-1.5 rounded border flex justify-between">
+                  <div key={h.id} className="text-[11px] bg-slate-50 px-2.5 py-1 rounded border flex justify-between">
                     <span>
                       <strong>[{h.tipo_evento}]</strong> {h.detalle}
                     </span>
@@ -667,10 +672,10 @@ export default function EgresadosPage() {
               </button>
               <button
                 type="button"
-                onClick={descargarPDFLiquidacion}
+                onClick={descargarReciboOficialLOTTT}
                 className="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1.5 cursor-pointer"
               >
-                <FileText size={15} /> Emitir Planilla Liquidación PDF
+                <FileText size={15} /> Emitir Recibo Liquidación LOTTT PDF
               </button>
             </div>
           </div>

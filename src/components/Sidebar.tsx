@@ -23,6 +23,7 @@ import {
   Activity,
   PhoneCall,
   ClipboardList,
+  Palmtree,
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -206,7 +207,7 @@ export default function Sidebar() {
 
             {puedeVerNominaRecibos && (
               <Link
-                to="/nomina-recibos"
+		to="/nomina-recibos"
                 onClick={cerrarMenu}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   location.pathname === '/nomina-recibos' ? 'bg-emerald-600 text-white' : 'hover:bg-slate-900'
@@ -215,6 +216,18 @@ export default function Sidebar() {
                 <Receipt size={18} /> Nómina y Recibos
               </Link>
             )}
+
+	    {puedeVerNominaRecibos && (
+  	      <Link
+		to="/vacaciones"
+    		onClick={cerrarMenu}
+    		className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+      		  location.pathname === '/vacaciones' ? 'bg-emerald-600 text-white' : 'hover:bg-slate-900'
+    		}`}
+  	      >
+    		<Palmtree size={18} /> Vacaciones y Finiquito
+  	      </Link>
+	    )}
 
             {puedeVerVerificacionSE && (
               <Link

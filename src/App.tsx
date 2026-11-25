@@ -33,6 +33,7 @@ const NominaRecibosPage = lazy(() => import('./pages/NominaRecibosPage'));
 const TableroCoberturaPage = lazy(() => import('./pages/TableroCoberturaPage'));
 const CecomLlamadasControlPage = lazy(() => import('./pages/CecomLlamadasControlPage'));
 const RelacionInasistenciasPage = lazy(() => import('./pages/RelacionInasistenciasPage'));
+const VacacionesPage = lazy(() => import('./pages/VacacionesPage'));
 
 function LoadingScreen() {
   return (
@@ -172,6 +173,12 @@ export default function App() {
                     <NominaRecibosPage />
                   </RoleRoute>
                 } />
+
+		<Route path="vacaciones" element={
+  		  <RoleRoute roles={['analista', 'rrhh', 'recursos_humanos', 'directiva', 'administrador', 'admin']}>
+   		    <VacacionesPage />
+  		  </RoleRoute>
+		} />
 
                 <Route path="home-reclutamiento" element={
                   <RoleRoute roles={['reclutamiento', 'rrhh', 'recursos_humanos', 'directiva', 'administrador', 'admin']}>
