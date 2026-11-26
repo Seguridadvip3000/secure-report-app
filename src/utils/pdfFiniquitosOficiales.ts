@@ -49,144 +49,157 @@ export const generarPDFFiniquitoVacaciones = async (d: DatosFiniquitoVacaciones)
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
   const logo = await cargarLogoBase64();
 
-  // Logo superior izquierdo + Membrete corporativo
+  const cedulaLimpia = String(d.cedula || '')
+    .replace(/^V-?\s*/i, '')
+    .trim();
+
+  // ================= HOJA 1: NOTIFICACIÓN Y LIQUIDACIÓN DE VACACIONES =================
   if (logo) {
     try {
-      doc.addImage(logo, 'JPEG', 14, 10, 34, 20);
+      doc.addImage(logo, 'JPEG', 14, 12, 42, 24);
     } catch {}
   }
 
   doc.setTextColor(15, 23, 42);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text('SEGURIDAD VIP3000, C.A.', 54, 18);
-  doc.setFontSize(9.5);
-  doc.text('RIF: J-29491549-3', 54, 24);
+  doc.setFontSize(12);
+  doc.text('SEGURIDAD VIP3000, C.A.', 62, 21);
+  doc.setFontSize(10);
+  doc.text('RIF: J-29491549-3', 62, 27);
 
-  let y = 36;
-  doc.setFontSize(9.5);
+  let y = 44;
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text(`Sr. ${d.nombreCompleto.toUpperCase()}`, 14, y);
-  y += 5;
-  doc.text(`C.I V- ${d.cedula}`, 14, y);
-  y += 5;
+  y += 5.5;
+  doc.text(`C.I V- ${cedulaLimpia}`, 14, y);
+  y += 5.5;
   doc.text('Presente. -', 14, y);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Fecha: ${d.fechaNotificacion}`, 160, y);
+  doc.text(`Fecha: ${d.fechaNotificacion}`, 162, y);
 
-  y += 7;
+  y += 9;
   const parrafoNotif = `Por medio de la presente, se le notifica que las vacaciones correspondientes al año ${d.periodoAnio} quedan autorizadas por la empresa, las mismas serán disfrutadas en el siguiente periodo desde ${d.fechaInicio} hasta ${d.fechaFin} siendo la fecha de reintegro el día ${d.fechaReintegro}.`;
   const lineasNotif = doc.splitTextToSize(parrafoNotif, 188);
   doc.text(lineasNotif, 14, y);
-  y += lineasNotif.length * 4.5 + 3;
+  y += lineasNotif.length * 5 + 4;
 
   doc.setFont('helvetica', 'bold');
-  doc.text(`Sueldo: Bs. ${fmtBs(d.sueldoMensual)}`, 14, y);
-  doc.text(`Fecha de Ingreso: ${d.fechaIngreso}`, 110, y);
+  doc.text(`Sueldo: ${fmtBs(d.sueldoMensual)}`, 14, y);
   y += 5.5;
+  doc.text(`Fecha de Ingreso: ${d.fechaIngreso || ''}`, 14, y);
+  y += 6.5;
 
   doc.setFont('helvetica', 'normal');
   doc.text(`Cantidad de Días de Disfrute de Vacaciones: ${d.diasDisfruteBase}`, 14, y);
-  y += 4.8;
-  doc.text(`Cantidad de Días de Disfrute adicionales de Vacaciones: ${d.diasDisfruteAdicionales}`, 14, y);
-  y += 4.8;
-  doc.text(`Cantidad de días de Bono Vacacional que se cancelan: ${d.diasBonoBase}`, 14, y);
-  y += 4.8;
-  doc.text(`Cantidad de días de Bono Vacacional adicionales que se cancelan: ${d.diasBonoAdicionales}`, 14, y);
   y += 5.5;
+  doc.text(`Cantidad de Días de Disfrute adicionales de Vacaciones: ${d.diasDisfruteAdicionales}`, 14, y);
+  y += 5.5;
+  doc.text(`Cantidad de días de Bono Vacacional que se cancelan: ${d.diasBonoBase}`, 14, y);
+  y += 5.5;
+  doc.text(`Cantidad de días de Bono Vacacional adicionales que se cancelan: ${d.diasBonoAdicionales}`, 14, y);
+  y += 7;
 
   doc.setFont('helvetica', 'bold');
   doc.text('Feriados y días Descanso dentro del periodo vacacional:', 14, y);
-  y += 4.8;
+  y += 5.5;
   doc.setFont('helvetica', 'normal');
   if (d.textoSabados) {
-    doc.text(`Sábados: ${d.textoSabados}`, 14, y);
-    y += 4.5;
+    doc.text(`Sábados ${d.textoSabados}`, 14, y);
+    y += 5.2;
   }
   if (d.textoDomingos) {
-    doc.text(`Domingos: ${d.textoDomingos}`, 14, y);
-    y += 4.5;
+    doc.text(`Domingos ${d.textoDomingos}`, 14, y);
+    y += 5.2;
   }
   doc.text(`Feriados adicionales dentro del periodo vacacional: ${d.cantidadFeriadosAdicionales}`, 14, y);
-  y += 4.5;
+  y += 5.2;
   if (d.textoFeriadosAdicionales) {
     doc.text(d.textoFeriadosAdicionales, 14, y);
-    y += 5;
+    y += 6;
   }
 
+  y += 2;
   const parrafoPago = `Se cancelan Bs. ${fmtBs(d.montoVacaciones)} por concepto de vacaciones y Bs. ${fmtBs(
     d.montoBonoVacacional
-  )} Por concepto de Bono Vacacional, Feriados y días Descanso Bs. ${fmtBs(
+  )} Por concepto de Bono Vacacional, Feriados y días Descanso Bs ${fmtBs(
     d.montoFeriadosDescanso
   )} para un total de Bs. ${fmtBs(d.totalPagar)} cantidades que declara recibir conforme el trabajador.`;
   const lineasPago = doc.splitTextToSize(parrafoPago, 188);
   doc.setFont('helvetica', 'bold');
   doc.text(lineasPago, 14, y);
-  y += lineasPago.length * 4.5 + 5;
+  y += lineasPago.length * 5 + 10;
 
-  // Firma y dos recuadros de huellas del trabajador (Parte Superior)
+  // Firma y dos recuadros de huellas del trabajador (Hoja 1)
   doc.setFont('helvetica', 'normal');
-  doc.text('Nombre: ______________________________', 14, y + 5);
-  doc.text('Firma:   ______________________________', 14, y + 13);
-  doc.setFontSize(8);
-  doc.text('Huellas:', 125, y + 2);
-  doc.rect(140, y - 2, 18, 18);
-  doc.rect(162, y - 2, 18, 18);
+  doc.text('Nombre: ____________________', 14, y + 6);
+  doc.text('Firma: ______________________', 14, y + 15);
+  doc.text('Huellas:', 118, y + 4);
+  doc.rect(136, y - 2, 20, 22);
+  doc.rect(160, y - 2, 20, 22);
 
-  y += 21;
+  y += 28;
 
-  // Tabla institucional de 3 firmas (Analista de RRHH | Gte. De Proyecto | Recursos Humanos)
+  // Tabla institucional de 3 firmas con espacio superior para firmar
   doc.setDrawColor(30, 41, 59);
-  doc.rect(14, y, 62, 16);
-  doc.rect(76, y, 64, 16);
-  doc.rect(140, y, 62, 16);
-  doc.line(14, y + 10, 202, y + 10);
+  doc.rect(14, y, 62, 18);
+  doc.rect(76, y, 64, 18);
+  doc.rect(140, y, 62, 18);
+  doc.line(14, y + 11, 202, y + 11);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.text('Analista de RRHH', 45, y + 14, { align: 'center' });
-  doc.text('Gte. De Proyecto', 108, y + 14, { align: 'center' });
-  doc.text('Recursos Humanos', 171, y + 14, { align: 'center' });
-
-  y += 21;
-  (doc as any).setLineDashPattern([2, 2], 0);
-  doc.line(14, y, 202, y);
-  (doc as any).setLineDashPattern([], 0);
-  y += 7;
-
-  // Sección Inferior: Carta de Solicitud Formal del Trabajador
   doc.setFontSize(9.5);
+  doc.text('Analista de RRHH', 45, y + 15.8, { align: 'center' });
+  doc.text('Gte. De Proyecto', 108, y + 15.8, { align: 'center' });
+  doc.text('Recursos Humanos', 171, y + 15.8, { align: 'center' });
+
+  // ================= HOJA 2: CARTA DE SOLICITUD DEL TRABAJADOR =================
+  doc.addPage();
+
+  if (logo) {
+    try {
+      doc.addImage(logo, 'JPEG', 14, 12, 42, 24);
+    } catch {}
+  }
+
+  doc.setTextColor(15, 23, 42);
   doc.setFont('helvetica', 'bold');
-  doc.text(`Sra. ${d.gerenteRRHH || 'Yenire Paredes'}.`, 14, y);
+  doc.setFontSize(12);
+  doc.text('SEGURIDAD VIP3000, C.A.', 62, 21);
+  doc.setFontSize(10);
+  doc.text('RIF: J-29491549-3', 62, 27);
+
+  let y2 = 48;
+  doc.setFontSize(10.5);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Sra. ${d.gerenteRRHH || 'Yenire Paredes'}.`, 14, y2);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Caracas, ${d.fechaSolicitud}`, 155, y);
-  y += 4.8;
+  doc.text(`Caracas ${d.fechaSolicitud}`, 152, y2);
+  y2 += 6;
   doc.setFont('helvetica', 'bold');
-  doc.text('Gerencia de Recursos Humanos.', 14, y);
-  y += 4.8;
-  doc.text('Presente.-', 14, y);
-  y += 6;
+  doc.text('Gerencia de Recursos Humanos.', 14, y2);
+  y2 += 6;
+  doc.text('Presente.-', 14, y2);
+  y2 += 12;
 
   doc.setFont('helvetica', 'normal');
-  const parrafoSol = `Yo: ${d.nombreCompleto.toUpperCase()}, C.I ${
-    d.cedula
-  }, solicito a la sociedad Mercantil Seguridad Vip 3000, C.A. El disfrute y pago de mis vacaciones correspondiente al año ${
+  const parrafoSol = `Yo: ${d.nombreCompleto.toUpperCase()}, C.I ${cedulaLimpia}, solicito a la sociedad Mercantil Seguridad Vip 3000, C.A. El disfrute y pago de mis vacaciones correspondiente al año ${
     d.periodoAnio
   }, en el siguiente periodo desde ${d.fechaInicio} hasta ${
     d.fechaFin
   }, esperando que mi solicitud sea aprobada por su representada.`;
   const lineasSol = doc.splitTextToSize(parrafoSol, 188);
-  doc.text(lineasSol, 14, y);
-  y += lineasSol.length * 4.5 + 6;
+  doc.text(lineasSol, 14, y2);
+  y2 += lineasSol.length * 5.5 + 16;
 
-  doc.text('Nombre: ______________________________', 14, y + 4);
-  doc.text('Firma:   ______________________________', 14, y + 12);
-  doc.setFontSize(8);
-  doc.text('Huellas:', 125, y + 2);
-  doc.rect(140, y - 2, 18, 18);
-  doc.rect(162, y - 2, 18, 18);
+  doc.text('Nombre: ____________________', 14, y2 + 6);
+  doc.text('Firma: ______________________', 14, y2 + 15);
+  doc.text('Huellas:', 118, y2 + 4);
+  doc.rect(136, y2 - 2, 20, 22);
+  doc.rect(160, y2 - 2, 20, 22);
 
-  doc.save(`Finiquito_Vacaciones_${d.cedula}_${d.nombreCompleto.replace(/\s+/g, '_')}.pdf`);
+  doc.save(`Finiquito_Vacaciones_${cedulaLimpia}_${d.nombreCompleto.replace(/\s+/g, '_')}.pdf`);
 };
+
 export interface DatosReciboLiquidacionLOTTT {
   nombresApellidos: string;
   cedula: string;
